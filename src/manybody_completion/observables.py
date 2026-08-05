@@ -152,3 +152,38 @@ def angular_cosine_moments(
     numerator = jnp.sum(weights[..., None] * features, axis=(-4, -3, -2))
     denominator = jnp.sum(weights, axis=(-3, -2, -1))
     return numerator / jnp.maximum(denominator[..., None], epsilon)
+
+
+def ensemble_angular_cosine_moments(
+    coordinates: Array,
+    box: Array,
+    orders: Array,
+    neighbor_scale: float,
+    epsilon: float = 1e-8,
+) -> Array:
+    """Average held-out angular descriptors across an ensemble.
+
+    Args:
+        coordinates: Periodic ensemble with shape ``(M, N, 2)``.
+
+    Returns:
+        One descriptor vector with shape ``(K,)``, where ``K`` is the number
+        of requested angular orders.  Keeping this ensemble reduction explicit
+        mirrors :func:`ensemble_pair_moments` and prevents accidental use of
+        per-replica held-out statistics in evaluation code.
+    """
+    coordinates = jnp.asarray(coordinates)
+    if coordinates.ndim != 3 or coordinates.shape[-1] != 2:
+        raise ValueError(
+            f"coordinates must have shape (M, N, 2); got {coordinates.shape}"
+        )
+    return jnp.mean(
+        angular_cosine_moments(
+            coordinates,
+            box,
+            orders,
+            neighbor_scale,
+            epsilon,
+        ),
+        axis=0,
+    )

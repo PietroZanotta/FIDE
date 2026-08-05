@@ -28,6 +28,10 @@ solver Tesseract build contexts for the many-body completion methodology.
   difference checks, gradient clipping, correction-burden metrics, and reproducible output archives.
 - A common Base/Post-hoc/Relax-E2E/Full-E2E ablation API with compute-minimal solver routing, matched
   initialization, fair serving-stage evaluation, and deterministic comparison archives.
+- Leakage-safe calibration training with stratified train/validation splits, deterministic fixed-shape
+  minibatches, train-only normalization, and isolated JAX workers for solver-heavy modes.
+- Evaluation-only angular distribution metrics, including whitened RMSE, RBF MMD, and hidden-regime
+  centroid separation at the generated, relaxed, projected, and serving stages.
 
 ## Environment
 
@@ -323,12 +327,58 @@ Outputs:
 - `generator_ablation_smoke_outputs.npz`: generated, relaxed, and projected arrays for each mode;
 - `generator_ablation_smoke_parameters.npz`: path-keyed parameter archives for each mode.
 
+## Run calibration-scale minibatch ablations
+
+The calibration experiment uses all 16 samples in `calibration_smoke.npz`, with a deterministic
+stratified split of 12 training and 4 validation samples. Each hidden regime contributes six training
+and two validation samples. Condition normalization, projection scales, and angular descriptor scales
+are fitted from the training split only. Hidden labels and angular moments never enter `GeneratorBatch`,
+the condition vector, the projection constraints, or the optimizer objective.
+
+Run the complete isolated-worker experiment:
+
+```bash
+./scripts/run_calibration_ablations.sh
+cat artifacts/calibration_ablations.json
+```
+
+The driver trains Base, Relax-E2E, and Full-E2E in separate JAX processes, evaluates Post-hoc from the
+exact Base parameter archive, and runs the Full-E2E finite-difference check in a fourth isolated
+process. This bounds XLA compilation memory without changing initialization, minibatch order, or model
+parameters. `--skip-workers` can re-aggregate completed worker artifacts after an interrupted reporting
+step.
+
+The default run uses two epochs and six total optimizer updates. Current validation results are:
+
+- all relaxation and projection evaluations converge and all projection Jacobians remain full rank;
+- projected pair-moment errors are approximately `1.30e-4` for Post-hoc, `1.21e-4` for Relax-E2E,
+  and `9.40e-5` for Full-E2E;
+- Full-E2E validation correction RMS is approximately `0.075575`, versus `0.075611` for Post-hoc,
+  a small improvement of about `0.048%`;
+- the Full-E2E parameter directional derivative agrees with centered finite differences to about
+  `1.63e-4` relative error;
+- held-out angular MMD and regime-separation diagnostics are reported but are not optimized.
+
+This result validates the minibatch/data/evaluation machinery. The correction-burden separation is too
+small to support a scientific claim, and the four-sample validation split is too small for a definitive
+higher-order distribution comparison.
+
+Artifacts:
+
+- `calibration_ablations.json`: split metadata, train-only scales, solver metrics, angular diagnostics,
+  gradient check, and four-mode summaries;
+- `calibration_ablations_trace.csv`: minibatch optimization traces for all four named modes;
+- `calibration_ablations_outputs.npz`: train/validation coordinates, pair moments, and angular moments
+  at every pipeline stage;
+- `calibration_ablations_parameters.npz`: path-keyed parameter archives for every mode.
+
 ## Next milestones
 
-1. Run the native generator and four modes through the Docker-backed Tesseracts and retain runtime
-   reports.
-2. Train the ablations on `calibration_smoke.npz` with minibatching and report correction burden,
-   convergence, and wall-clock cost.
-3. Add held-out angular/triplet metrics without allowing them into the projection objective.
+1. Run the calibration experiment through the Docker-backed Tesseracts and retain per-stage runtime
+   and orchestration-overhead reports.
+2. Increase the calibration population and train for enough epochs to estimate correction-burden and
+   held-out distribution differences with uncertainty intervals.
+3. Add multiple latent draws per condition and distributional population losses without putting held-out
+   descriptors into projection constraints.
 4. Add the optional implicit KKT VJP as an ablation while retaining the validated unrolled baseline.
 5. Calibrate the pair/angular families at `N=32, M=8` for the final ambiguity showcase.

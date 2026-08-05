@@ -37,6 +37,7 @@ from .projection import project_ensemble_moments
 from .relaxation import relax_proximal
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class GeneratorBatch:
     """Fixed latent inputs and reduced-statistic targets for one training batch."""
@@ -76,6 +77,46 @@ class GeneratorBatch:
         if self.basis_mask.shape != (self.target_moments.shape[1],):
             raise ValueError("basis_mask must have shape (R,)")
 
+    def tree_flatten(self):
+        """Represent the batch as a JAX pytree for compiled minibatch steps."""
+        children = (
+            self.anchor_coordinates,
+            self.node_latents,
+            self.conditions,
+            self.target_moments,
+            self.box,
+            self.basis.centers,
+            self.basis.widths,
+            self.moment_scales,
+            self.basis_mask,
+        )
+        return children, None
+
+    @classmethod
+    def tree_unflatten(cls, auxiliary_data, children):
+        del auxiliary_data
+        (
+            anchor_coordinates,
+            node_latents,
+            conditions,
+            target_moments,
+            box,
+            basis_centers,
+            basis_widths,
+            moment_scales,
+            basis_mask,
+        ) = children
+        return cls(
+            anchor_coordinates=anchor_coordinates,
+            node_latents=node_latents,
+            conditions=conditions,
+            target_moments=target_moments,
+            box=box,
+            basis=PairBasis(centers=basis_centers, widths=basis_widths),
+            moment_scales=moment_scales,
+            basis_mask=basis_mask,
+        )
+
     def validate_numerics(self) -> None:
         """Validate array values outside JAX transformations."""
         moment_scales = np.asarray(jax.device_get(self.moment_scales))
@@ -84,6 +125,23 @@ class GeneratorBatch:
             raise ValueError("moment_scales must be finite and strictly positive")
         if not np.all(np.isfinite(basis_mask)) or np.any((basis_mask < 0) | (basis_mask > 1)):
             raise ValueError("basis_mask entries must be finite and lie in [0, 1]")
+
+
+def subset_generator_batch(batch: GeneratorBatch, indices: Array | np.ndarray) -> GeneratorBatch:
+    """Select samples while preserving the shared geometry and basis metadata."""
+    indices = jnp.asarray(indices, dtype=jnp.int32)
+    if indices.ndim != 1 or indices.size < 1:
+        raise ValueError("indices must be a nonempty one-dimensional array")
+    return GeneratorBatch(
+        anchor_coordinates=batch.anchor_coordinates[indices],
+        node_latents=batch.node_latents[indices],
+        conditions=batch.conditions[indices],
+        target_moments=batch.target_moments[indices],
+        box=batch.box,
+        basis=batch.basis,
+        moment_scales=batch.moment_scales,
+        basis_mask=batch.basis_mask,
+    )
 
 
 @dataclass(frozen=True)
@@ -749,6 +807,96 @@ def train_equivariant_generator(
     if history is None or metric_names is None:
         raise RuntimeError("training loop produced no optimization steps")
     (final_loss, final_metrics), final_gradients = evaluator(parameters)
+    if tuple(final_metrics.keys()) != metric_names:
+        raise KeyError("objective metric keys changed at final evaluation")
+    history["loss"].append(final_loss)
+    history["gradient_norm"].append(_tree_global_norm(final_gradients))
+    history["update_norm"].append(jnp.asarray(0.0, dtype=final_loss.dtype))
+    for name in metric_names:
+        history[name].append(final_metrics[name])
+
+    return GeneratorTrainingResult(
+        parameters=parameters,
+        final_loss=final_loss,
+        final_metrics=final_metrics,
+        history={name: jnp.stack(values) for name, values in history.items()},
+    )
+
+
+def train_equivariant_generator_minibatches(
+    objective: Callable[[GeneratorParameters, GeneratorBatch], tuple[Array, Mapping[str, Array]]],
+    initial_parameters: GeneratorParameters,
+    minibatches: Sequence[GeneratorBatch],
+    evaluation_batch: GeneratorBatch,
+    options: AdamOptions | None = None,
+) -> GeneratorTrainingResult:
+    """Train with deterministic, fixed-shape minibatches and persistent Adam state.
+
+    ``minibatches`` defines the complete update schedule.  Every batch must have
+    the same array shapes so one compiled update function can be reused.  The
+    final loss and metrics are evaluated on ``evaluation_batch`` rather than on
+    the final optimization minibatch.
+    """
+    if options is None:
+        options = AdamOptions(num_steps=len(minibatches))
+    options.validate()
+    if len(minibatches) != options.num_steps:
+        raise ValueError(
+            "options.num_steps must equal the number of supplied minibatches; "
+            f"got {options.num_steps} and {len(minibatches)}"
+        )
+    if not minibatches:
+        raise ValueError("at least one minibatch is required")
+    expected_shape = minibatches[0].anchor_coordinates.shape
+    for index, batch in enumerate(minibatches):
+        if batch.anchor_coordinates.shape != expected_shape:
+            raise ValueError(
+                "all minibatches must have the same anchor shape; "
+                f"batch 0 has {expected_shape}, batch {index} has "
+                f"{batch.anchor_coordinates.shape}"
+            )
+
+    parameters = initial_parameters
+    first_moment = jax.tree_util.tree_map(jnp.zeros_like, parameters)
+    second_moment = jax.tree_util.tree_map(jnp.zeros_like, parameters)
+    value_and_grad = jax.value_and_grad(objective, argnums=0, has_aux=True)
+    evaluator = jax.jit(value_and_grad) if options.jit_objective else value_and_grad
+    history: dict[str, list[Array]] | None = None
+    metric_names: tuple[str, ...] | None = None
+
+    for step, batch in enumerate(minibatches, start=1):
+        (loss, metrics), gradients = evaluator(parameters, batch)
+        current_metric_names = tuple(metrics.keys())
+        if history is None:
+            metric_names = current_metric_names
+            history = {
+                "loss": [],
+                "gradient_norm": [],
+                "update_norm": [],
+                **{name: [] for name in metric_names},
+            }
+        elif current_metric_names != metric_names:
+            raise KeyError(
+                "objective metric keys changed during minibatch training: "
+                f"expected {metric_names}, got {current_metric_names}"
+            )
+        parameters, first_moment, second_moment, gradient_norm, update_norm = _adam_update(
+            parameters, gradients, first_moment, second_moment, step, options
+        )
+        history["loss"].append(loss)
+        history["gradient_norm"].append(gradient_norm)
+        history["update_norm"].append(update_norm)
+        for name in metric_names:
+            history[name].append(metrics[name])
+
+    if history is None or metric_names is None:
+        raise RuntimeError("minibatch training produced no optimization steps")
+    # Evaluate aggregate train metrics without differentiating through the much
+    # larger evaluation batch.  The final gradient norm is measured on the last
+    # fixed-shape minibatch, reusing the already compiled update graph.
+    value_evaluator = jax.jit(objective) if options.jit_objective else objective
+    final_loss, final_metrics = value_evaluator(parameters, evaluation_batch)
+    (_, _), final_gradients = evaluator(parameters, minibatches[-1])
     if tuple(final_metrics.keys()) != metric_names:
         raise KeyError("objective metric keys changed at final evaluation")
     history["loss"].append(final_loss)
