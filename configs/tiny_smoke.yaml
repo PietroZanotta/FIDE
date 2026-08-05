@@ -1,0 +1,42 @@
+seed: 7
+dtype: float64
+box: [1.0, 1.0]
+num_particles: 6
+num_replicas: 4
+samples_per_regime: 2
+overlap_threshold: 0.10
+angular_orders: [1, 2, 4]
+
+pair_basis:
+  num_basis: 6
+  r_min: 0.05
+  r_max: 0.55
+  width: 0.10
+
+simulator:
+  num_steps: 80
+  time_step: 0.0005
+  temperature: 0.015
+  max_drift_norm: 0.04
+  record_every: 0
+
+regimes:
+  - name: pair_only
+    family: pair
+    energy:
+      r0: 0.16
+      kappa: 35.0
+      pair_strength: 1.0
+      angular_strength: 0.0
+      angular_target_cosine: 0.0
+      angular_neighbor_scale: 0.24
+
+  - name: right_angle
+    family: angular
+    energy:
+      r0: 0.16
+      kappa: 35.0
+      pair_strength: 1.0
+      angular_strength: 0.4
+      angular_target_cosine: 0.0
+      angular_neighbor_scale: 0.24

@@ -1,0 +1,112 @@
+{
+  "dtype": "float64",
+  "jax_backend": "gpu",
+  "jax_version": "0.8.1",
+  "num_particles": 8,
+  "num_replicas": 8,
+  "parameter_vector_fields": [
+    "r0",
+    "kappa",
+    "pair_strength",
+    "angular_strength",
+    "angular_target_cosine",
+    "angular_neighbor_scale",
+    "temperature"
+  ],
+  "regimes": [
+    {
+      "energy": {
+        "angular_neighbor_scale": 0.22,
+        "angular_strength": 0.0,
+        "angular_target_cosine": 0.0,
+        "kappa": 38.0,
+        "pair_strength": 1.0,
+        "r0": 0.14
+      },
+      "family": "pair",
+      "label": 0,
+      "name": "pair_only"
+    },
+    {
+      "energy": {
+        "angular_neighbor_scale": 0.22,
+        "angular_strength": 0.25,
+        "angular_target_cosine": 0.0,
+        "kappa": 38.0,
+        "pair_strength": 1.0,
+        "r0": 0.14
+      },
+      "family": "angular",
+      "label": 1,
+      "name": "right_angle"
+    }
+  ],
+  "samples_per_regime": 8,
+  "schema_version": 1,
+  "seed": 20260805,
+  "simulator": {
+    "max_drift_norm": 0.035,
+    "num_steps": 300,
+    "record_every": 0,
+    "temperature": 0.012,
+    "time_step": 0.00035
+  },
+  "source_config": {
+    "angular_orders": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "box": [
+      1.0,
+      1.0
+    ],
+    "dtype": "float64",
+    "num_particles": 8,
+    "num_replicas": 8,
+    "overlap_threshold": 0.09,
+    "pair_basis": {
+      "num_basis": 6,
+      "r_max": 0.62,
+      "r_min": 0.05,
+      "width": 0.11
+    },
+    "regimes": [
+      {
+        "energy": {
+          "angular_neighbor_scale": 0.22,
+          "angular_strength": 0.0,
+          "angular_target_cosine": 0.0,
+          "kappa": 38.0,
+          "pair_strength": 1.0,
+          "r0": 0.14
+        },
+        "family": "pair",
+        "name": "pair_only"
+      },
+      {
+        "energy": {
+          "angular_neighbor_scale": 0.22,
+          "angular_strength": 0.25,
+          "angular_target_cosine": 0.0,
+          "kappa": 38.0,
+          "pair_strength": 1.0,
+          "r0": 0.14
+        },
+        "family": "angular",
+        "name": "right_angle"
+      }
+    ],
+    "samples_per_regime": 8,
+    "seed": 20260805,
+    "simulator": {
+      "max_drift_norm": 0.035,
+      "num_steps": 300,
+      "record_every": 0,
+      "temperature": 0.012,
+      "time_step": 0.00035
+    }
+  }
+}

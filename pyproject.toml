@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "manybody-completion"
+version = "0.4.0"
+description = "Reusable JAX simulators and reduced-statistic datasets for differentiable many-body completion."
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "numpy>=2.0,<3",
+  "PyYAML>=6.0.2,<7",
+]
+
+[project.optional-dependencies]
+cpu = [
+  "jax==0.8.1",
+  "tesseract-core==1.10.0",
+  "tesseract-jax==0.2.3",
+]
+cuda = [
+  "jax[cuda]==0.8.1",
+  "tesseract-core==1.10.0",
+  "tesseract-jax==0.2.3",
+]
+dev = [
+  "pytest>=8.3,<9",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+mbc-generate-data = "manybody_completion.cli_generate_data:main"
+mbc-generate-problems = "manybody_completion.cli_generate_problems:main"
+mbc-match-regimes = "manybody_completion.cli_match_regimes:main"
+mbc-check-env = "manybody_completion.cli_check_env:main"
+mbc-validate-data = "manybody_completion.cli_validate_data:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

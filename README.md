@@ -1,1 +1,334 @@
-# DiffPOP
+# Differentiable many-body completion
+
+Reusable JAX simulators, reduced-statistic datasets, validation tooling, and two differentiable
+solver Tesseract build contexts for the many-body completion methodology.
+
+## Implemented components
+
+- Smooth periodic chord distances for the pair energy and pair observables.
+- A separate full-period oriented bond feature for local angular quantities. This is necessary because
+  the half-period chord displacement is periodic only after squaring and cannot be used directly as a
+  translation-invariant oriented bond vector.
+- Pair-only and explicit exchangeable three-body/angular synthetic regimes.
+- Fixed-step differentiable overdamped Langevin simulation.
+- Gaussian radial pair coefficients averaged over replicas at the ensemble level.
+- Held-out angular moments kept separate from the observed projection constraints.
+- Deterministic S1--S3 problem fixtures.
+- Dataset recomputation, wrapping, translation, permutation, rank, and ambiguity diagnostics.
+- A proximal physical-relaxation solver with backtracking and an unrolled reverse-mode derivative.
+- A complete physical-relaxation Tesseract build context with `apply`, `abstract_eval`, Jacobian, JVP,
+  and VJP endpoints.
+- A ridge-regularized SQP ensemble moment projector with diagonal whitening, exact-norm merit
+  backtracking, rank monitoring, explicit basis pruning, correction clipping, and unrolled gradients.
+- A complete moment-projection Tesseract build context with gradients with respect to both input
+  coordinates and target moments.
+- A compact pure-JAX conditional message-passing generator with permutation, toroidal translation,
+  and square-box D4 equivariance.
+- Explicit full-batch Adam training through both local solvers, including parameter-space finite-
+  difference checks, gradient clipping, correction-burden metrics, and reproducible output archives.
+- A common Base/Post-hoc/Relax-E2E/Full-E2E ablation API with compute-minimal solver routing, matched
+  initialization, fair serving-stage evaluation, and deterministic comparison archives.
+
+## Environment
+
+CUDA host environment:
+
+```bash
+./scripts/bootstrap_cuda.sh
+source .venv/bin/activate
+```
+
+CPU development environment:
+
+```bash
+./scripts/bootstrap_cpu.sh
+source .venv/bin/activate
+```
+
+The repository deliberately retains the working integration pins:
+
+```text
+jax[cuda]==0.8.1
+tesseract-core==1.10.0
+tesseract-jax==0.2.3
+```
+
+Docker is required to build and serve Tesseracts.
+
+> **CLI name collision:** some Linux distributions install the OCR program as `tesseract`. Always activate `.venv` before building. The build script verifies that it found Pasteur Labs Tesseract Core rather than the OCR executable.
+
+## Generate and validate data
+
+Run the statistically inspectable calibration configuration:
+
+```bash
+./scripts/generate_and_validate_data.sh
+```
+
+Equivalent explicit commands:
+
+```bash
+mbc-generate-data \
+  --config configs/calibration_smoke.yaml \
+  --output data/calibration_smoke.npz
+
+mbc-validate-data data/calibration_smoke.npz \
+  --output artifacts/calibration_validation.json
+
+mbc-match-regimes data/calibration_smoke.npz \
+  --output artifacts/calibration_matches.json
+```
+
+The included calibration archive has shape `(S, M, N, 2) = (16, 8, 8, 2)`. Its stored moments,
+energies, distances, and overlap fractions recompute exactly; periodic translation and permutation
+errors are at floating-point precision; and the six-dimensional pair basis has effective rank six.
+The best current cross-regime match has whitened pair distance about `0.713` and standardized angular
+distance about `3.431`. This is suitable for solver development and regime-calibration work, but it is
+not yet the final paper-scale ambiguity showcase.
+
+The CI fixture remains:
+
+```bash
+mbc-generate-data --config configs/tiny_smoke.yaml --output data/tiny_smoke.npz
+mbc-validate-data data/tiny_smoke.npz --output artifacts/tiny_validation.json
+```
+
+Because it has only four samples for six pair coefficients, its covariance is intentionally rank
+limited and the validation report marks it `calibration_required` rather than treating it as evidence
+of matched hidden regimes.
+
+## Dataset contract
+
+- `coordinates`: `(S, M, N, 2)`
+- `pair_moments`: `(S, R)`, averaged over ordered pairs and then replicas
+- `angular_moments`: `(S, Q)`, held out from projection constraints
+- `energy_per_replica`, `minimum_pair_distance`, `overlap_fraction`: `(S, M)`
+- exact simulator, basis, regime, seed, backend, and schema metadata in the adjacent JSON file
+
+Generate the fixed S1--S3 inputs with:
+
+```bash
+mbc-generate-problems --output data/smoke_problems.npz
+```
+
+## Test the local physical relaxation solver
+
+```bash
+pytest -q
+```
+
+The S1 test verifies increased separation, lower repulsive energy, lower proximal objective, retained
+center of mass, translation/permutation equivariance, and a directional-derivative sweep against
+centered finite differences.
+
+## Build the physical-relaxation Tesseract
+
+```bash
+./scripts/build_physical_relaxation_tesseract.sh
+
+tesseract run manybody-physical-relaxation check
+
+tesseract run manybody-physical-relaxation apply \
+  @tesseracts/physical_relaxation/examples/s1_payload.json
+```
+
+Check the exposed derivative endpoints:
+
+```bash
+tesseract run \
+  --runtime-args "--input-paths coordinates --output-paths relaxed_coordinates --eps 1e-5" \
+  manybody-physical-relaxation check-gradients \
+  @tesseracts/physical_relaxation/examples/s1_payload.json
+```
+
+Then test host-side `tesseract-jax` composition and `jax.grad`:
+
+```bash
+python experiments/smoke_tests/run_physical_relaxation_tesseract.py
+```
+
+The first image uses `jax==0.8.1` on CPU for a clean correctness milestone while the host remains on
+`jax[cuda]==0.8.1`. GPU-accelerating the Tesseract should be a separate change after the API and
+VJP checks pass, so numerical and container issues are not debugged simultaneously.
+
+
+## Test the local ensemble moment projector
+
+Run the full test suite:
+
+```bash
+pytest -q
+```
+
+Run the deterministic S2 report directly:
+
+```bash
+python experiments/smoke_tests/run_moment_projection_local.py
+cat artifacts/moment_projection_local_s2.json
+```
+
+The included S2 fixture starts with one whitened moment residual of about `7.56e-3`. The current SQP
+core reduces it to about `4.57e-11` in three accepted iterations, with RMS per-particle correction
+about `2.58e-3`. The exact final rank is `1/1`, the KKT stationarity diagnostic is about `1.41e-7`,
+and gradients with respect to both coordinates and target moments are finite.
+
+The projection solves the identity-coordinate-metric case `W_x = I`. `moment_scales` provide diagonal
+coefficient whitening. `basis_mask` preserves fixed shapes while allowing known redundant coefficients
+to be explicitly pruned. A rank-deficient unpruned basis returns finite regularized output together
+with `rank_deficient=true`; it is never silently treated as well-conditioned.
+
+## Build the moment-projection Tesseract
+
+```bash
+./scripts/build_moment_projection_tesseract.sh
+
+tesseract run manybody-moment-projection check
+
+tesseract run manybody-moment-projection apply \
+  @tesseracts/moment_projection/examples/s2_payload.json
+```
+
+Check the exposed derivatives with respect to both differentiable inputs:
+
+```bash
+tesseract run \
+  --runtime-args "--input-paths coordinates,target_moments --output-paths projected_coordinates --eps 1e-5" \
+  manybody-moment-projection check-gradients \
+  @tesseracts/moment_projection/examples/s2_payload.json
+```
+
+Then test the host-side `tesseract-jax` call and `jax.grad`:
+
+```bash
+python experiments/smoke_tests/run_moment_projection_tesseract.py
+```
+
+## Run S3 scalar composition and training
+
+S3 uses the deterministic generator
+
+```text
+G_a(Z, c) = wrap(X_base + a Z)
+```
+
+and trains the single scalar `a` through the complete local composition
+
+```text
+scalar generator -> proximal relaxation -> ensemble moment projection -> outer loss
+```
+
+Run the validated local experiment:
+
+```bash
+./scripts/run_s3_local.sh
+cat artifacts/s3_scalar_local.json
+head artifacts/s3_scalar_trace.csv
+```
+
+The default fixture starts from `a=0.20` with a known target `a*=0.65`. With 30 projected-gradient
+steps, the current implementation reaches approximately `a=0.6479`. The outer loss decreases by a
+factor of about `19.6`, the final projected moment error is about `6.0e-7`, and the initial composed
+gradient agrees with centered finite differences to about `5e-11` relative error. Both solver stages
+reach their configured stopping criteria and the four-coefficient projection remains full rank.
+
+The reusable training loop accepts any objective with the signature
+`objective(a) -> (loss, scalar_metrics)`. The same loop is therefore used by the local JAX experiment
+and the Tesseract-backed experiment; only the two solver callables change.
+
+After building both images, run the container composition:
+
+```bash
+./scripts/build_physical_relaxation_tesseract.sh
+./scripts/build_moment_projection_tesseract.sh
+python experiments/smoke_tests/run_s3_tesseracts.py
+```
+
+The local S3 code is split into reusable modules:
+
+- `composition.py`: scalar generator, periodic correction metric, and local two-solver composition;
+- `scalar_training.py`: S3 objective, finite-difference sweep, and solver-agnostic scalar optimizer;
+- `configs/s3_scalar.yaml`: all physical, solver, loss, training, and acceptance parameters.
+
+## Train the compact native generator
+
+The first neural milestone uses scalar node latents and reduced pair coefficients as inputs. Pairwise
+messages depend only on scalar node states and smooth radial features. Coordinate updates are built
+from full-period periodic direction vectors multiplied by symmetric learned scalar weights. This gives
+particle-permutation equivariance, toroidal translation equivariance even across wrapping boundaries,
+and D4 equivariance in a square box. It deliberately does not claim unrestricted E(2) equivariance.
+
+Run the local two-condition smoke training:
+
+```bash
+./scripts/run_native_generator_smoke.sh
+cat artifacts/native_generator_smoke.json
+head artifacts/native_generator_smoke_trace.csv
+```
+
+The smoke configuration uses two targets from `tiny_smoke.npz`, but its latent anchors are independently
+constructed translated periodic grids with jitter; no target microscopic coordinates are passed to the
+generator. The current 3,014-parameter model reduces mean total correction RMS from about `0.06360` to
+`0.05406` in 20 Adam steps, a reduction of about `15.0%`. Final projected moment error is about
+`5.20e-6`; both final solver stages converge; the physical relaxation remains active with a small
+nonzero displacement; the projection remains full rank; and a parameter-space directional derivative
+agrees with centered finite differences to about `4.45e-8` relative error.
+
+Outputs are stored separately so the run can be inspected without rerunning training:
+
+- `native_generator_smoke.json`: configuration, acceptance metrics, and full history;
+- `native_generator_smoke_trace.csv`: one row per optimization step;
+- `native_generator_smoke_outputs.npz`: anchors and generated/relaxed/projected ensembles;
+- `native_generator_smoke_parameters.npz`: flattened trained parameter arrays, restorable with
+  `restore_generator_parameters` after initializing an architecture-compatible template.
+
+This is an integration smoke test, not yet a population-completion result. It verifies that a reusable
+conditional neural model can receive useful gradients through the complete local solver composition.
+
+## Run the four training ablations
+
+The ablation contract is explicit:
+
+- **Base:** train and serve the native generator output; no scientific solver runs during training.
+- **Post-hoc:** train the identical native objective as Base, then apply relaxation and projection only
+  for evaluation/serving. Its trained parameters must therefore match Base exactly.
+- **Relax-E2E:** train through physical relaxation; projection is evaluation/serving-only.
+- **Full-E2E:** train through both physical relaxation and moment projection.
+
+This implementation deliberately does not use an identity straight-through estimator for a stopped
+solver. A solver is either part of the differentiated training stage or excluded from the training
+objective. Complete three-stage diagnostics are evaluated separately after training.
+
+Run the deterministic two-condition routing smoke test:
+
+```bash
+./scripts/run_generator_ablations.sh
+cat artifacts/generator_ablation_smoke.json
+head artifacts/generator_ablation_smoke_trace.csv
+```
+
+All modes use exactly the same initialized 3,014-parameter model, latent anchors, node latents, targets,
+and optimizer settings. Base/Post-hoc parameters agree exactly. Independent parameter-space gradient
+checks for Base, Relax-E2E, and Full-E2E currently have best relative errors below `3e-8`; all final
+relaxation and projection evaluations converge and remain full rank.
+
+The tiny fixture is intended to validate routing, not to establish the paper's scientific ablation
+hypothesis. After 15 steps, Full-E2E's total correction RMS is about `0.05785`, versus `0.05789` for
+Post-hoc—an improvement of only about `0.07%`. A stronger separation must be sought on the larger
+calibration and matched-regime datasets rather than tuned into this smoke fixture.
+
+Outputs:
+
+- `generator_ablation_smoke.json`: configuration, routing semantics, gradient checks, and summaries;
+- `generator_ablation_smoke_trace.csv`: long-form training traces for all four named modes;
+- `generator_ablation_smoke_outputs.npz`: generated, relaxed, and projected arrays for each mode;
+- `generator_ablation_smoke_parameters.npz`: path-keyed parameter archives for each mode.
+
+## Next milestones
+
+1. Run the native generator and four modes through the Docker-backed Tesseracts and retain runtime
+   reports.
+2. Train the ablations on `calibration_smoke.npz` with minibatching and report correction burden,
+   convergence, and wall-clock cost.
+3. Add held-out angular/triplet metrics without allowing them into the projection objective.
+4. Add the optional implicit KKT VJP as an ablation while retaining the validated unrolled baseline.
+5. Calibrate the pair/angular families at `N=32, M=8` for the final ambiguity showcase.

@@ -1,0 +1,43 @@
+# Statistically inspectable but still inexpensive calibration dataset.
+seed: 20260805
+dtype: float64
+box: [1.0, 1.0]
+num_particles: 8
+num_replicas: 8
+samples_per_regime: 8
+overlap_threshold: 0.09
+angular_orders: [1, 2, 3, 4, 6]
+
+pair_basis:
+  num_basis: 6
+  r_min: 0.05
+  r_max: 0.62
+  width: 0.11
+
+simulator:
+  num_steps: 300
+  time_step: 0.00035
+  temperature: 0.012
+  max_drift_norm: 0.035
+  record_every: 0
+
+regimes:
+  - name: pair_only
+    family: pair
+    energy:
+      r0: 0.14
+      kappa: 38.0
+      pair_strength: 1.0
+      angular_strength: 0.0
+      angular_target_cosine: 0.0
+      angular_neighbor_scale: 0.22
+
+  - name: right_angle
+    family: angular
+    energy:
+      r0: 0.14
+      kappa: 38.0
+      pair_strength: 1.0
+      angular_strength: 0.25
+      angular_target_cosine: 0.0
+      angular_neighbor_scale: 0.22
