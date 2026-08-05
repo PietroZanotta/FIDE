@@ -372,13 +372,115 @@ Artifacts:
   at every pipeline stage;
 - `calibration_ablations_parameters.npz`: path-keyed parameter archives for every mode.
 
+## Run conditional equivariant flow matching
+
+The first stochastic sampler uses conditional flow matching on the periodic box. A uniform torus
+ensemble is coupled to each reference ensemble by a componentwise shortest periodic displacement. The
+particle-mean displacement is removed independently in every replica, so the path reaches the target up
+to a global translation and the velocity network never has to learn an unidentifiable translation gauge.
+Smooth physical observables continue to use chord geometry; minimum-image geometry is used only for the
+flow interpolation target.
+
+The time-conditioned velocity field reuses the audited equivariant message-passing dynamics. Time and
+reduced pair statistics are scalar node features, and vector velocities are assembled from periodic
+relative directions with symmetric scalar edge weights. The resulting field is permutation equivariant,
+toroidal-translation invariant as a velocity, square-box `D4` equivariant, and zero mean over particles.
+Sampling uses a fixed-step wrapped Euler or Heun ODE integrator.
+
+Run the toy calibration experiment:
+
+```bash
+./scripts/run_flow_matching_toy.sh
+cat artifacts/flow_matching_toy.json
+```
+
+The default run uses 90 minibatch updates, four stochastic samples per validation condition, and a
+16-step Heun solver. Current results are:
+
+- fixed-key training flow loss decreases by about `0.8%`;
+- fixed-key validation flow loss decreases by about `2.4%`;
+- validation pair-statistic error decreases from about `9.58` to `4.83` in train-standard-deviation units;
+- mean repulsive energy decreases from about `0.388` to `0.241`;
+- overlap fraction decreases from about `0.0550` to `0.0343`;
+- held-out angular MMD decreases from about `0.717` to `0.474`;
+- a parameter-space directional derivative agrees with centered finite differences to about `1.25e-8`
+  relative error.
+
+These results establish a working stochastic sampler and correct torus/equivariance machinery, but not
+yet multimodal recovery. The predicted hidden-regime centroid separation remains below the reference
+separation, so the next scientific target is the exact homometric two-mode benchmark rather than more
+tuning on this calibration archive.
+
+Artifacts:
+
+- `flow_matching_toy.json`: configuration, fixed-key losses, gradient check, and sampling diagnostics;
+- `flow_matching_toy_trace.csv`: one row per stochastic minibatch update;
+- `flow_matching_toy_outputs.npz`: initial and trained samples plus pair/angular descriptors;
+- `flow_matching_toy_parameters.npz`: path-keyed trained parameter arrays.
+
+## Run the exact homometric benchmark
+
+The homometric benchmark uses two non-congruent four-point motifs on the `12 x 12` discrete torus.
+After scaling into the unit periodic box, their six smooth chord distances agree as a multiset to
+float64 precision, so every radial pair coefficient in the configured basis is identical. Exhaustive
+checks confirm that the motifs are not related by a global torus translation, a square-box `D4`
+transformation, or particle relabeling. Their held-out eight-coefficient angular descriptors differ by
+approximately `1.4153` in Euclidean norm.
+
+Generate and certify the benchmark:
+
+```bash
+./scripts/generate_homometric_benchmark.sh
+cat artifacts/homometric_validation.json
+```
+
+The archive contains 64 symmetry-augmented ensemble samples from each mode, with eight replicas and four
+particles per ensemble. Stored particle labels remain canonical; flow training applies a fresh shared
+source-target permutation at each update, preserving exchangeability without injecting random target-label
+noise. The mathematically common pair condition is explicitly coalesced to one exact all-zero normalized
+condition after verifying that the archive deviation is below `1e-10`. Hidden mode labels and angular
+descriptors remain evaluation-only.
+
+Train the Base conditional flow on that single ambiguous condition:
+
+```bash
+./scripts/run_homometric_flow.sh
+cat artifacts/flow_matching_homometric.json
+```
+
+The default CPU-safe run uses 224 batch-size-four updates, a 16-step Heun sampler, and 5,522 parameters.
+Current deterministic results are:
+
+- fixed-key validation flow loss decreases by about `4.6%`;
+- mean pair-moment error decreases from about `0.425` to `0.218`;
+- mean repulsive energy decreases from about `5.327` to `1.870`;
+- held-out angular MMD decreases from about `0.958` to `0.862`;
+- the fraction far from both reference angular modes decreases from `0.875` to `0.750`;
+- both modes are present, with an estimated `A/B` split of `0.8125/0.1875` over 32 generated replicas;
+- a parameter directional derivative agrees with centered finite differences to about `1.18e-10`.
+
+The mode-frequency estimate is intentionally described as a small-sample smoke diagnostic, not a final
+calibrated population result. The Base flow is not balanced yet; the next stochastic ablation must report
+this mode bias rather than hiding it behind pair feasibility. Sampling is chunked and synchronized between
+initial and trained models to bound XLA memory on CPU validation hosts.
+
+Artifacts:
+
+- `homometric_benchmark.npz/json`: exact benchmark coordinates, common pair condition, reference motifs,
+  and held-out descriptors;
+- `homometric_validation.json`: distance-multiset, non-congruence, recomputation, and separation checks;
+- `flow_matching_homometric.json`: training, gradient, feasibility, and mode-coverage report;
+- `flow_matching_homometric_trace.csv`: stochastic optimization history;
+- `flow_matching_homometric_outputs.npz`: initial/trained samples, descriptors, labels, and mode distances;
+- `flow_matching_homometric_parameters.npz`: flattened trained flow parameters.
+
 ## Next milestones
 
-1. Run the calibration experiment through the Docker-backed Tesseracts and retain per-stage runtime
-   and orchestration-overhead reports.
-2. Increase the calibration population and train for enough epochs to estimate correction-burden and
-   held-out distribution differences with uncertainty intervals.
-3. Add multiple latent draws per condition and distributional population losses without putting held-out
-   descriptors into projection constraints.
-4. Add the optional implicit KKT VJP as an ablation while retaining the validated unrolled baseline.
-5. Calibrate the pair/angular families at `N=32, M=8` for the final ambiguity showcase.
+1. Add stochastic Base, Post-hoc, Relax-E2E, and Full-E2E routing around the flow ODE output.
+2. Apply relaxation and projection to identical sampled priors and report feasibility, correction burden,
+   mode frequencies, angular MMD, and mode-transition rates.
+3. Fine-tune through each permitted solver path while keeping the Base/Post-hoc flow objective identical.
+4. Increase isolated sampling statistics for the final showcase and attach confidence intervals to mode
+   frequencies and correction metrics.
+5. Run the stochastic ablation through Docker-backed Tesseracts and report solver and sampling costs.
+6. Add the optional implicit KKT VJP while retaining the validated unrolled baseline.

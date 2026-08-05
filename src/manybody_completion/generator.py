@@ -212,25 +212,20 @@ def _validate_generator_inputs(
         raise ValueError("at least two particles are required")
 
 
-def apply_equivariant_generator(
+def _apply_equivariant_coordinate_dynamics(
     parameters: GeneratorParameters,
     anchor_coordinates: Array,
     node_latents: Array,
     condition: Array,
     box: Array,
-    config: EquivariantGeneratorConfig | None = None,
-) -> Array:
-    """Generate one periodic ensemble with shape ``(M, N, 2)``.
+    config: EquivariantGeneratorConfig,
+) -> tuple[Array, Array]:
+    """Apply the shared message-passing coordinate dynamics.
 
-    ``anchor_coordinates`` are latent torus positions, not observed target
-    coordinates.  A global translation of these anchors produces the same
-    translation of the generated ensemble.  ``node_latents`` must be permuted
-    together with particles when checking particle-label equivariance.
+    Returns both wrapped final coordinates and the accumulated *unwrapped*
+    coordinate increments.  The latter is useful as an equivariant vector
+    field for continuous-time generative models.
     """
-    if config is None:
-        config = EquivariantGeneratorConfig()
-    config.validate()
-
     coordinates = jnp.asarray(anchor_coordinates)
     dtype = coordinates.dtype
     node_latents = jnp.asarray(node_latents, dtype=dtype)
@@ -239,6 +234,7 @@ def apply_equivariant_generator(
     _validate_generator_inputs(coordinates, node_latents, condition, box, config)
 
     coordinates = wrap_positions(coordinates, box)
+    total_update = jnp.zeros_like(coordinates)
     condition_features = jnp.broadcast_to(
         condition,
         coordinates.shape[:-1] + (condition.shape[0],),
@@ -278,8 +274,8 @@ def apply_equivariant_generator(
             jnp.asarray(2.0, dtype=dtype)
         )
 
-        # Symmetric scalar weights guarantee pairwise antisymmetric coordinate
-        # updates because the periodic direction vectors satisfy d_ji = -d_ij.
+        # Symmetric scalar weights guarantee pairwise antisymmetric raw
+        # updates because periodic direction vectors satisfy d_ji = -d_ij.
         symmetric_features = jnp.concatenate(
             (state_i + state_j, jnp.abs(state_i - state_j), radial), axis=-1
         )
@@ -287,13 +283,74 @@ def apply_equivariant_generator(
             _apply_mlp(layer["coordinate_weight"], symmetric_features)[..., 0]
         )
         scalar_weight = scalar_weight * pair_mask
-        raw_update = jnp.sum(scalar_weight[..., None] * directions, axis=-2) / pair_normalizer
+        raw_update = jnp.sum(
+            scalar_weight[..., None] * directions, axis=-2
+        ) / pair_normalizer
         coordinate_update = _bounded_vector_update(
             raw_update, config.max_coordinate_update
         )
+        total_update = total_update + coordinate_update
         coordinates = wrap_positions(coordinates + coordinate_update, box)
 
+    return coordinates, total_update
+
+
+def apply_equivariant_generator(
+    parameters: GeneratorParameters,
+    anchor_coordinates: Array,
+    node_latents: Array,
+    condition: Array,
+    box: Array,
+    config: EquivariantGeneratorConfig | None = None,
+) -> Array:
+    """Generate one periodic ensemble with shape ``(M, N, 2)``.
+
+    ``anchor_coordinates`` are latent torus positions, not observed target
+    coordinates.  A global translation of these anchors produces the same
+    translation of the generated ensemble.  ``node_latents`` must be permuted
+    together with particles when checking particle-label equivariance.
+    """
+    if config is None:
+        config = EquivariantGeneratorConfig()
+    config.validate()
+    coordinates, _ = _apply_equivariant_coordinate_dynamics(
+        parameters,
+        anchor_coordinates,
+        node_latents,
+        condition,
+        box,
+        config,
+    )
     return coordinates
+
+
+def apply_equivariant_displacement_field(
+    parameters: GeneratorParameters,
+    coordinates: Array,
+    node_latents: Array,
+    condition: Array,
+    box: Array,
+    config: EquivariantGeneratorConfig | None = None,
+    *,
+    remove_mean_velocity: bool = True,
+) -> Array:
+    """Return a periodic equivariant vector field on particle coordinates.
+
+    The accumulated message-passing increments are returned without wrapping.
+    Removing their particle mean fixes the otherwise unidentifiable global
+    translation gauge independently for every replica.
+    """
+    if config is None:
+        config = EquivariantGeneratorConfig()
+    config.validate()
+    _, displacement = _apply_equivariant_coordinate_dynamics(
+        parameters, coordinates, node_latents, condition, box, config
+    )
+    if remove_mean_velocity:
+        displacement = displacement - jnp.mean(
+            displacement, axis=-2, keepdims=True
+        )
+    return displacement
 
 
 def count_generator_parameters(parameters: GeneratorParameters) -> int:

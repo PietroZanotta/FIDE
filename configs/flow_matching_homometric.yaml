@@ -1,0 +1,70 @@
+# Conditional equivariant flow matching on the exact A/B homometric benchmark.
+seed: 151
+dtype: float64
+dataset: data/homometric_benchmark.npz
+dataset_metadata: data/homometric_benchmark.json
+condition_scale_floor: 0.01
+angular_scale_floor: 0.01
+force_shared_condition: true
+shared_condition_tolerance: 1.0e-10
+
+split:
+  seed: 20260805
+  validation_per_regime: 8
+
+minibatching:
+  batch_size: 4
+  num_epochs: 8
+  shuffle_seed: 57721
+
+model:
+  latent_dim: 4
+  hidden_dim: 16
+  message_dim: 16
+  num_message_passing_steps: 2
+  radial_basis_size: 8
+  radial_min: 0.0
+  radial_max: 0.45
+  radial_width: 0.07
+  max_coordinate_update: 0.30
+
+flow:
+  time_frequencies: 5
+  velocity_scale: 3.0
+  particle_matching: random
+
+training:
+  learning_rate: 0.002
+  beta1: 0.9
+  beta2: 0.999
+  epsilon: 1.0e-8
+  gradient_clip_norm: 5.0
+  weight_decay: 0.0
+  jit_step: true
+
+sampling:
+  num_steps: 16
+  integrator: heun
+
+reporting:
+  num_samples: 4
+  sampling_chunk_size: 4
+  evaluation_seed: 801
+  sampling_seed: 802
+  overlap_threshold: 0.22
+  physical_r0: 0.27
+  physical_kappa: 35.0
+  ambiguous_distance_threshold: 0.8
+
+finite_difference:
+  objective_seed: 803
+  direction_seed: 804
+  epsilons: [0.003, 0.001, 0.0003]
+  jit_objective: true
+
+acceptance:
+  minimum_validation_loss_reduction: 1.005
+  maximum_gradient_relative_error: 0.0002
+  maximum_mean_velocity_norm: 1.0e-10
+  minimum_normalized_mode_entropy: 0.05
+  maximum_ambiguous_fraction: 1.0

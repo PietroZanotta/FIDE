@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from itertools import permutations
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,7 @@ from .flow_matching import (
     sample_conditional_flow,
     sample_uniform_torus,
 )
+from .geometry import translation_gauge_fixed_displacement
 
 
 @jax.tree_util.register_pytree_node_class
@@ -117,6 +119,45 @@ def _apply_particle_permutations(values: Array, permutations: Array) -> Array:
     return jnp.take_along_axis(values, permutations[..., None], axis=-2)
 
 
+def exhaustive_particle_match_targets(
+    source: Array,
+    targets: Array,
+    box: Array,
+) -> Array:
+    """Reorder small target point sets by minimum gauge-fixed torus cost.
+
+    This is a coupling choice, not a learned operation.  It removes arbitrary
+    exchangeable label noise from the conditional flow target.  Exhaustive
+    matching is deliberately restricted to at most eight particles; the exact
+    homometric benchmark uses four, for which only 24 permutations are needed.
+    """
+    source = jnp.asarray(source)
+    targets = jnp.asarray(targets, dtype=source.dtype)
+    if source.shape != targets.shape or source.ndim != 4 or source.shape[-1] != 2:
+        raise ValueError("source and targets must have the same shape (B, M, N, 2)")
+    num_particles = source.shape[-2]
+    if num_particles > 8:
+        raise ValueError("exhaustive particle matching supports at most eight particles")
+    permutation_table = jnp.asarray(
+        tuple(permutations(range(num_particles))),
+        dtype=jnp.int32,
+    )
+    box = jnp.asarray(box, dtype=source.dtype)
+
+    def match_replica(replica_source: Array, replica_target: Array) -> Array:
+        candidates = replica_target[permutation_table]
+        displacement = jax.vmap(
+            lambda candidate: translation_gauge_fixed_displacement(
+                replica_source, candidate, box
+            )
+        )(candidates)
+        normalized = displacement / box
+        costs = jnp.mean(normalized * normalized, axis=(-2, -1))
+        return candidates[jnp.argmin(costs)]
+
+    return jax.vmap(jax.vmap(match_replica))(source, targets)
+
+
 def stochastic_flow_matching_objective(
     parameters: FlowParameters,
     batch: FlowTrainingBatch,
@@ -138,6 +179,8 @@ def stochastic_flow_matching_objective(
         targets.shape[:-1] + (config.network.latent_dim,),
         dtype=targets.dtype,
     )
+    if config.particle_matching == "exhaustive":
+        targets = exhaustive_particle_match_targets(source, targets, batch.box)
     # Exchangeability augmentation must preserve the source-target coupling.
     # Permuting the target alone would average over incompatible matchings and
     # collapse the conditional vector field toward zero.
@@ -349,6 +392,50 @@ def sample_flow_conditions(
             lambda sample_key: sample_one(sample_key, condition)
         )(condition_keys)
     )(keys, conditions)
+
+
+def sample_flow_conditions_chunked(
+    parameters: FlowParameters,
+    key: Array,
+    conditions: Array,
+    *,
+    num_samples_per_condition: int,
+    chunk_size: int,
+    num_replicas: int,
+    num_particles: int,
+    box: Array,
+    config: ConditionalFlowConfig,
+    sampling_options: FlowSamplingOptions,
+    dtype: jnp.dtype,
+) -> Array:
+    """Sample in fixed-size chunks to bound XLA compilation and memory use.
+
+    The output is identical in shape to :func:`sample_flow_conditions`.  A
+    divisible sample count is required so every chunk reuses one compiled
+    executable without padding or dropping random draws.
+    """
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    if num_samples_per_condition % chunk_size != 0:
+        raise ValueError("num_samples_per_condition must be divisible by chunk_size")
+    num_chunks = num_samples_per_condition // chunk_size
+    chunk_keys = jax.random.split(key, num_chunks)
+    chunks = [
+        sample_flow_conditions(
+            parameters,
+            chunk_key,
+            conditions,
+            num_samples_per_condition=chunk_size,
+            num_replicas=num_replicas,
+            num_particles=num_particles,
+            box=box,
+            config=config,
+            sampling_options=sampling_options,
+            dtype=dtype,
+        )
+        for chunk_key in chunk_keys
+    ]
+    return jnp.concatenate(chunks, axis=1)
 
 
 def _tree_dot(left: Any, right: Any) -> Array:

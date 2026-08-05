@@ -68,6 +68,12 @@ def _resolve_dtype(name: str) -> jnp.dtype:
 
 
 def _shared_angular_neighbor_scale(metadata: dict[str, Any]) -> float:
+    """Read one dataset-wide held-out angular scale from supported schemas."""
+    if "angular_neighbor_scale" in metadata:
+        value = float(metadata["angular_neighbor_scale"])
+        if value <= 0:
+            raise ValueError("angular_neighbor_scale must be positive")
+        return value
     regimes = metadata.get("source_config", {}).get("regimes", [])
     values = {
         float(regime["energy"]["angular_neighbor_scale"])
@@ -119,7 +125,19 @@ def build_flow_experiment_problem(
         jnp.std(train_pair, axis=0),
         jnp.asarray(float(configuration["condition_scale_floor"]), dtype=dtype),
     )
-    conditions = (pair_moments - condition_mean) / condition_scale
+    if bool(configuration.get("force_shared_condition", False)):
+        tolerance = float(configuration.get("shared_condition_tolerance", 1e-10))
+        maximum_deviation = float(
+            jax.device_get(jnp.max(jnp.abs(pair_moments - condition_mean)))
+        )
+        if maximum_deviation > tolerance:
+            raise ValueError(
+                "force_shared_condition requested, but pair moments differ by "
+                f"{maximum_deviation:.3e} > {tolerance:.3e}"
+            )
+        conditions = jnp.zeros_like(pair_moments)
+    else:
+        conditions = (pair_moments - condition_mean) / condition_scale
     train_angular = angular_moments[split.train_indices]
     angular_scale = jnp.maximum(
         jnp.std(train_angular, axis=0),

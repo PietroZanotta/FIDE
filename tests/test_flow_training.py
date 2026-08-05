@@ -80,3 +80,64 @@ def test_flow_training_updates_parameters_and_keeps_metrics_finite():
         for before, after in zip(initial_leaves, final_leaves)
     )
     assert parameter_change > 0.0
+
+
+def test_exhaustive_particle_matching_removes_label_noise() -> None:
+    from manybody_completion.flow_training import exhaustive_particle_match_targets
+    from manybody_completion.geometry import translation_gauge_fixed_displacement
+
+    box = jnp.ones((2,), dtype=jnp.float64)
+    source = jnp.asarray(
+        [[[[0.05, 0.10], [0.30, 0.15], [0.62, 0.52], [0.81, 0.77]]]],
+        dtype=jnp.float64,
+    )
+    target = source[..., jnp.asarray([2, 0, 3, 1]), :]
+    matched = exhaustive_particle_match_targets(source, target, box)
+    matched_cost = jnp.mean(
+        translation_gauge_fixed_displacement(source, matched, box) ** 2
+    )
+    identity_cost = jnp.mean(
+        translation_gauge_fixed_displacement(source, target, box) ** 2
+    )
+    np.testing.assert_allclose(matched_cost, 0.0, atol=1e-15)
+    assert float(matched_cost) < float(identity_cost)
+
+
+def test_chunked_sampling_is_deterministic_and_has_requested_shape() -> None:
+    from manybody_completion.flow_matching import FlowSamplingOptions
+    from manybody_completion.flow_training import sample_flow_conditions_chunked
+
+    problem = build_flow_experiment_problem(_small_configuration(), ROOT)
+    options = FlowSamplingOptions(num_steps=2, integrator="euler")
+    kwargs = dict(
+        conditions=problem.validation_batch.conditions[:1],
+        num_samples_per_condition=4,
+        chunk_size=2,
+        num_replicas=2,
+        num_particles=6,
+        box=problem.validation_batch.box,
+        config=problem.flow_config,
+        sampling_options=options,
+        dtype=jnp.float64,
+    )
+    first = sample_flow_conditions_chunked(
+        problem.initial_parameters,
+        jax.random.PRNGKey(901),
+        **kwargs,
+    )
+    second = sample_flow_conditions_chunked(
+        problem.initial_parameters,
+        jax.random.PRNGKey(901),
+        **kwargs,
+    )
+    assert first.shape == (1, 4, 2, 6, 2)
+    np.testing.assert_array_equal(first, second)
+
+
+def test_homometric_problem_coalesces_one_exact_condition() -> None:
+    configuration = load_yaml(ROOT / "configs" / "flow_matching_homometric.yaml")
+    configuration["minibatching"]["num_epochs"] = 1
+    problem = build_flow_experiment_problem(configuration, ROOT)
+    conditions = np.asarray(problem.full_batch.conditions)
+    np.testing.assert_array_equal(conditions, np.zeros_like(conditions))
+    assert np.unique(conditions, axis=0).shape[0] == 1

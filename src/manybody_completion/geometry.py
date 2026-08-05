@@ -92,3 +92,42 @@ def off_diagonal_mask(num_particles: int, dtype: jnp.dtype = jnp.float32) -> Arr
 def translate(positions: Array, shift: Array, box: Array) -> Array:
     """Translate all particles and wrap the result."""
     return wrap_positions(jnp.asarray(positions) + jnp.asarray(shift), box)
+
+
+def minimum_image_displacement(source: Array, target: Array, box: Array) -> Array:
+    """Return the componentwise shortest torus displacement from source to target.
+
+    This geodesic displacement is intended for interpolation and data coupling,
+    not for the smooth physical observables, which continue to use chord
+    geometry.  It is differentiable away from the measure-zero half-box branch
+    cut.
+    """
+    source = jnp.asarray(source)
+    target = jnp.asarray(target, dtype=source.dtype)
+    box = jnp.asarray(box, dtype=source.dtype)
+    if source.shape != target.shape:
+        raise ValueError(
+            f"source and target must have identical shapes; got {source.shape} and {target.shape}"
+        )
+    _validate_last_dimension(source, 2, "source")
+    if box.shape != (2,):
+        raise ValueError(f"box must have shape (2,), got {box.shape}")
+    return jnp.mod(target - source + 0.5 * box, box) - 0.5 * box
+
+
+def translation_gauge_fixed_displacement(
+    source: Array,
+    target: Array,
+    box: Array,
+) -> Array:
+    """Return a shortest-path displacement with zero particle-mean velocity.
+
+    Subtracting the particle mean independently in each replica aligns the
+    target only up to a global periodic translation.  All reduced statistics
+    used by this project are translation invariant, while the resulting path is
+    compatible with a relative-coordinate equivariant velocity field.
+    """
+    displacement = minimum_image_displacement(source, target, box)
+    if displacement.ndim < 2:
+        raise ValueError("source and target must have a particle axis")
+    return displacement - jnp.mean(displacement, axis=-2, keepdims=True)

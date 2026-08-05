@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "manybody-completion"
-version = "0.4.0"
-description = "Reusable JAX simulators and reduced-statistic datasets for differentiable many-body completion."
+version = "0.6.0"
+description = "Differentiable periodic many-body completion with equivariant flow matching and exact homometric benchmarks."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
@@ -35,6 +35,7 @@ mbc-generate-problems = "manybody_completion.cli_generate_problems:main"
 mbc-match-regimes = "manybody_completion.cli_match_regimes:main"
 mbc-check-env = "manybody_completion.cli_check_env:main"
 mbc-validate-data = "manybody_completion.cli_validate_data:main"
+mbc-generate-homometric = "manybody_completion.cli_generate_homometric:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

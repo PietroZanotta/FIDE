@@ -35,6 +35,7 @@ from .geometry import translation_gauge_fixed_displacement, wrap_positions
 
 FlowParameters: TypeAlias = GeneratorParameters
 IntegratorName: TypeAlias = Literal["euler", "heun"]
+ParticleMatchingName: TypeAlias = Literal["random", "exhaustive"]
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class ConditionalFlowConfig:
     network: EquivariantGeneratorConfig
     time_frequencies: int = 4
     velocity_scale: float = 2.0
+    particle_matching: ParticleMatchingName = "random"
 
     def validate(self) -> None:
         self.network.validate()
@@ -51,6 +53,8 @@ class ConditionalFlowConfig:
             raise ValueError("time_frequencies must be positive")
         if self.velocity_scale <= 0:
             raise ValueError("velocity_scale must be positive")
+        if self.particle_matching not in ("random", "exhaustive"):
+            raise ValueError("particle_matching must be 'random' or 'exhaustive'")
 
     @property
     def time_embedding_dim(self) -> int:
