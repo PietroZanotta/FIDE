@@ -36,7 +36,16 @@ def _make_client(
                 f"solver_backend.{name}_url (or {environment_name}) is required "
                 "for Tesseract URL transport"
             )
-        return Tesseract.from_url(str(url))
+        client = Tesseract.from_url(str(url))
+        try:
+            client.available_endpoints
+        except Exception as error:
+            raise RuntimeError(
+                f"The {name} Tesseract is unreachable at {url}. Start the "
+                "scientific Tesseract services or select "
+                "MBC_TESSERACT_TRANSPORT=local_api for an in-process run."
+            ) from error
+        return client
     if transport == "local_api":
         default = f"tesseracts/scientific_{name}/tesseract_api.py"
         path = repository_root / configuration.get(f"{name}_api", default)

@@ -11,7 +11,11 @@ if ! python -c 'import tesseract_core' >/dev/null 2>&1; then
 fi
 
 TESSERACT_BIN="$(command -v tesseract || true)"
-if [[ -z "${TESSERACT_BIN}" ]] || ! "${TESSERACT_BIN}" build --help 2>&1 | grep -q "Build a new Tesseract"; then
+TESSERACT_BUILD_HELP=""
+if [[ -n "${TESSERACT_BIN}" ]]; then
+  TESSERACT_BUILD_HELP="$("${TESSERACT_BIN}" build --help 2>&1 || true)"
+fi
+if [[ -z "${TESSERACT_BIN}" ]] || [[ "${TESSERACT_BUILD_HELP}" != *"Build a new Tesseract"* ]]; then
   echo "The Pasteur Labs Tesseract Core CLI is not active." >&2
   exit 1
 fi

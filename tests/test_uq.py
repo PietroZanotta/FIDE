@@ -43,6 +43,22 @@ def test_energy_score_prefers_matching_distribution():
     )
 
 
+def test_mode_entropy_handles_an_empty_mode_without_log_warnings():
+    rng = np.random.default_rng(4)
+    predicted = rng.normal(size=(4, 2, 3))
+    reference = rng.normal(size=(10, 3))
+    labels = np.zeros((4, 2), dtype=np.int32)
+    with np.errstate(divide="raise", invalid="raise"):
+        result = higher_order_conditional_uq(
+            predicted,
+            reference,
+            labels,
+            seed=5,
+            num_resamples=100,
+        )
+    assert result["normalized_mode_entropy"] == 0.0
+
+
 def test_seed_aggregation_separates_aleatoric_and_epistemic_variance():
     summaries = [
         {

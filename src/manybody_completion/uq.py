@@ -186,8 +186,9 @@ def higher_order_conditional_uq(
     normalized = estimated_probabilities[:2] / max(
         np.sum(estimated_probabilities[:2]), 1e-15
     )
+    positive_probabilities = normalized[normalized > 0.0]
     mode_entropy = -np.sum(
-        np.where(normalized > 0.0, normalized * np.log(normalized), 0.0)
+        positive_probabilities * np.log(positive_probabilities)
     ) / np.log(2.0)
 
     return {
