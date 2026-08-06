@@ -1,18 +1,29 @@
-"""Observation-only classical baselines for the homometric benchmark.
+"""Accelerated observation-only baselines for the homometric benchmark.
 
-Reverse Monte Carlo (RMC) matches the configured smooth pair moments directly.
-The iterative Boltzmann inversion (IBI) implementation uses a Gaussian-smoothed
-radial pair histogram estimated from microscopic training configurations.  That
-is still pair-level information, but it is richer than the RBF condition used
-by RMC and the learned models; the comparison report records this explicitly.
+The public API is unchanged. Reverse Monte Carlo (RMC) and iterative Boltzmann
+inversion (IBI) execute their dependent Markov updates inside JAX ``lax.scan``
+loops while vectorizing independent ensembles. Metropolis proposals use exact
+incremental energy/statistic updates: moving one particle recomputes only its
+``N - 1`` affected pairs, rather than rebuilding every pair in every replica.
+This removes Python work from the hot path, keeps state on one device, and reuses
+compiled executables across training seeds with identical shapes and options.
+
+RMC receives only the configured smooth pair moments. IBI receives a
+Gaussian-smoothed radial pair histogram estimated from microscopic training
+configurations; this richer pair-level information budget remains explicit in
+the returned diagnostics.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
+import jax
+import jax.numpy as jnp
 import numpy as np
+from jax import Array
 
 
 @dataclass(frozen=True)
@@ -63,82 +74,663 @@ class IBIOptions:
         if self.metropolis_steps_per_iteration < 1:
             raise ValueError("metropolis_steps_per_iteration must be positive")
         if self.proposal_scale <= 0 or self.inverse_temperature <= 0:
-            raise ValueError("proposal_scale and inverse_temperature must be positive")
+            raise ValueError(
+                "proposal_scale and inverse_temperature must be positive"
+            )
         if self.update_rate <= 0:
             raise ValueError("update_rate must be positive")
         if self.num_bins < 4 or self.radial_max <= 0 or self.kernel_width <= 0:
             raise ValueError("invalid radial discretization")
         if self.density_floor <= 0 or self.potential_clip <= 0:
-            raise ValueError("density_floor and potential_clip must be positive")
+            raise ValueError(
+                "density_floor and potential_clip must be positive"
+            )
 
 
-def _chord_distances(coordinates: np.ndarray, box: np.ndarray) -> np.ndarray:
+def _working_dtype(*values: Any) -> jnp.dtype:
+    """Use the pipeline dtype, while avoiding accidental integer arithmetic."""
+    dtype = jnp.result_type(*[jnp.asarray(value).dtype for value in values])
+    if not jnp.issubdtype(dtype, jnp.floating):
+        return jnp.float32
+    return dtype
+
+
+def _chord_distances_jax(coordinates: Array, box: Array) -> Array:
     delta = coordinates[..., :, None, :] - coordinates[..., None, :, :]
-    displacement = (box / np.pi) * np.sin(np.pi * delta / box)
-    return np.sqrt(np.sum(displacement * displacement, axis=-1) + 1e-24)
+    displacement = (box / jnp.pi) * jnp.sin(jnp.pi * delta / box)
+    return jnp.sqrt(jnp.sum(displacement * displacement, axis=-1) + 1e-24)
 
 
-def _unordered_distances(coordinates: np.ndarray, box: np.ndarray) -> np.ndarray:
-    distances = _chord_distances(coordinates, box)
+def _unordered_distances_jax(coordinates: Array, box: Array) -> Array:
+    distances = _chord_distances_jax(coordinates, box)
     num_particles = coordinates.shape[-2]
-    row, column = np.triu_indices(num_particles, k=1)
+    row, column = jnp.triu_indices(num_particles, k=1)
     return distances[..., row, column]
 
 
-def _ensemble_pair_moments(
-    ensemble: np.ndarray,
-    box: np.ndarray,
-    centers: np.ndarray,
-    widths: np.ndarray,
-) -> np.ndarray:
-    distances = _chord_distances(ensemble, box)
-    num_particles = ensemble.shape[-2]
-    mask = 1.0 - np.eye(num_particles, dtype=ensemble.dtype)
+def _pair_moments_from_distances(
+    distances: Array,
+    centers: Array,
+    widths: Array,
+    dtype: jnp.dtype,
+) -> Array:
+    num_particles = distances.shape[-1]
+    mask = 1.0 - jnp.eye(num_particles, dtype=dtype)
     standardized = (distances[..., None] - centers) / widths
-    values = np.exp(-0.5 * standardized * standardized) * mask[..., None]
-    per_replica = np.sum(values, axis=(-3, -2)) / (
+    values = jnp.exp(-0.5 * standardized * standardized) * mask[..., None]
+    per_replica = jnp.sum(values, axis=(-3, -2)) / (
         num_particles * (num_particles - 1)
     )
-    return np.mean(per_replica, axis=0)
+    return jnp.mean(per_replica, axis=1)
 
 
-def _softplus(values: np.ndarray) -> np.ndarray:
-    return np.logaddexp(values, 0.0)
+def _ensemble_pair_moments_batch(
+    coordinates: Array,
+    box: Array,
+    centers: Array,
+    widths: Array,
+) -> Array:
+    """Pair moments for a leading batch of ensembles ``(E, M, N, 2)``."""
+    distances = _chord_distances_jax(coordinates, box)
+    return _pair_moments_from_distances(
+        distances,
+        centers,
+        widths,
+        coordinates.dtype,
+    )
 
 
-def _physical_energy(
-    ensemble: np.ndarray,
-    box: np.ndarray,
-    r0: float,
-    kappa: float,
-) -> float:
-    distances = _chord_distances(ensemble, box)
-    num_particles = ensemble.shape[-2]
-    mask = 1.0 - np.eye(num_particles, dtype=ensemble.dtype)
-    penalty = _softplus(kappa * (r0 - distances)) ** 2 * mask
-    return float(np.mean(np.sum(penalty, axis=(-2, -1)) / (num_particles * (num_particles - 1))))
+def _physical_energy_from_distances(
+    distances: Array,
+    r0: Array,
+    kappa: Array,
+    dtype: jnp.dtype,
+) -> Array:
+    num_particles = distances.shape[-1]
+    mask = 1.0 - jnp.eye(num_particles, dtype=dtype)
+    penalty = jax.nn.softplus(kappa * (r0 - distances)) ** 2 * mask
+    per_replica = jnp.sum(penalty, axis=(-2, -1)) / (
+        num_particles * (num_particles - 1)
+    )
+    return jnp.mean(per_replica, axis=1)
 
 
-def _rmc_objective(
-    ensemble: np.ndarray,
-    target_moments: np.ndarray,
-    moment_scales: np.ndarray,
-    box: np.ndarray,
-    centers: np.ndarray,
-    widths: np.ndarray,
-    options: RMCOptions,
-) -> float:
-    moments = _ensemble_pair_moments(ensemble, box, centers, widths)
-    residual = (moments - target_moments) / np.maximum(moment_scales, 1e-12)
-    objective = float(np.sum(residual * residual))
-    if options.physical_weight:
-        objective += options.physical_weight * _physical_energy(
-            ensemble,
-            box,
-            options.physical_r0,
-            options.physical_kappa,
+def _rmc_objective_batch(
+    coordinates: Array,
+    target_moments: Array,
+    moment_scales: Array,
+    box: Array,
+    centers: Array,
+    widths: Array,
+    physical_weight: Array,
+    physical_r0: Array,
+    physical_kappa: Array,
+) -> Array:
+    distances = _chord_distances_jax(coordinates, box)
+    moments = _pair_moments_from_distances(
+        distances,
+        centers,
+        widths,
+        coordinates.dtype,
+    )
+    residual = (moments - target_moments) / jnp.maximum(moment_scales, 1e-12)
+    pair_objective = jnp.sum(residual * residual, axis=-1)
+
+    def add_physical(_: None) -> Array:
+        physical = _physical_energy_from_distances(
+            distances,
+            physical_r0,
+            physical_kappa,
+            coordinates.dtype,
         )
-    return objective
+        return pair_objective + physical_weight * physical
+
+    return jax.lax.cond(
+        physical_weight > 0.0,
+        add_physical,
+        lambda _: pair_objective,
+        operand=None,
+    )
+
+
+def _pair_basis_row(distances: Array, centers: Array, widths: Array) -> Array:
+    """RBF values for one moved particle against all particles."""
+    standardized = (distances[..., None] - centers) / widths
+    return jnp.exp(-0.5 * standardized * standardized)
+
+
+def _repulsive_row(
+    distances: Array,
+    r0: Array,
+    kappa: Array,
+) -> Array:
+    """Repulsive penalties for one moved particle against all particles."""
+    return jax.nn.softplus(kappa * (r0 - distances)) ** 2
+
+
+@partial(jax.jit, static_argnames=("num_steps",))
+def _run_rmc_device(
+    coordinates: Array,
+    target_moments: Array,
+    moment_scales: Array,
+    box: Array,
+    centers: Array,
+    widths: Array,
+    seed_key: Array,
+    proposal_scale: Array,
+    initial_temperature: Array,
+    final_temperature: Array,
+    physical_weight: Array,
+    physical_r0: Array,
+    physical_kappa: Array,
+    *,
+    num_steps: int,
+) -> tuple[Array, Array, Array, Array]:
+    """Run vectorized RMC with exact local statistic updates."""
+    num_ensembles, num_replicas, num_particles = coordinates.shape[:3]
+    ensemble_indices = jnp.arange(num_ensembles, dtype=jnp.int32)
+
+    distances = _chord_distances_jax(coordinates, box)
+    ensemble_moments = _pair_moments_from_distances(
+        distances,
+        centers,
+        widths,
+        coordinates.dtype,
+    )
+    residual = (ensemble_moments - target_moments) / jnp.maximum(
+        moment_scales,
+        1e-12,
+    )
+    pair_objective = jnp.sum(residual * residual, axis=-1)
+    physical_energy = _physical_energy_from_distances(
+        distances,
+        physical_r0,
+        physical_kappa,
+        coordinates.dtype,
+    )
+    current_objective = pair_objective + physical_weight * physical_energy
+    best_coordinates = coordinates
+    best_objective = current_objective
+    accepted = jnp.zeros((num_ensembles,), dtype=jnp.int32)
+
+    fractions = jnp.arange(num_steps, dtype=coordinates.dtype) / jnp.maximum(
+        num_steps - 1,
+        1,
+    )
+    temperatures = initial_temperature * (
+        final_temperature / initial_temperature
+    ) ** fractions
+    step_keys = jax.random.split(seed_key, num_steps)
+    normalizer = jnp.asarray(
+        num_particles * (num_particles - 1),
+        dtype=coordinates.dtype,
+    )
+    replica_normalizer = jnp.asarray(num_replicas, dtype=coordinates.dtype)
+
+    def metropolis_step(carry, inputs):
+        (
+            current,
+            current_moments,
+            current_physical,
+            current_value,
+            best,
+            best_value,
+            accepted_count,
+        ) = carry
+        step_key, temperature = inputs
+        replica_key, particle_key, delta_key, accept_key = jax.random.split(
+            step_key,
+            4,
+        )
+        replica_indices = jax.random.randint(
+            replica_key,
+            (num_ensembles,),
+            0,
+            num_replicas,
+            dtype=jnp.int32,
+        )
+        particle_indices = jax.random.randint(
+            particle_key,
+            (num_ensembles,),
+            0,
+            num_particles,
+            dtype=jnp.int32,
+        )
+        selected_replicas = current[ensemble_indices, replica_indices]
+        old_position = selected_replicas[
+            ensemble_indices,
+            particle_indices,
+        ]
+        new_position = jnp.mod(
+            old_position
+            + proposal_scale
+            * jax.random.normal(
+                delta_key,
+                (num_ensembles, 2),
+                dtype=current.dtype,
+            ),
+            box,
+        )
+
+        old_delta = old_position[:, None, :] - selected_replicas
+        new_delta = new_position[:, None, :] - selected_replicas
+        old_disp = (box / jnp.pi) * jnp.sin(jnp.pi * old_delta / box)
+        new_disp = (box / jnp.pi) * jnp.sin(jnp.pi * new_delta / box)
+        old_distances = jnp.sqrt(jnp.sum(old_disp * old_disp, axis=-1) + 1e-24)
+        new_distances = jnp.sqrt(jnp.sum(new_disp * new_disp, axis=-1) + 1e-24)
+        mask = 1.0 - jax.nn.one_hot(
+            particle_indices,
+            num_particles,
+            dtype=current.dtype,
+        )
+
+        old_basis = _pair_basis_row(old_distances, centers, widths)
+        new_basis = _pair_basis_row(new_distances, centers, widths)
+        replica_moment_delta = (
+            2.0
+            * jnp.sum((new_basis - old_basis) * mask[..., None], axis=1)
+            / normalizer
+        )
+        moment_delta = replica_moment_delta / replica_normalizer
+        proposed_moments = current_moments + moment_delta
+        proposed_residual = (proposed_moments - target_moments) / jnp.maximum(
+            moment_scales,
+            1e-12,
+        )
+        proposed_pair_objective = jnp.sum(
+            proposed_residual * proposed_residual,
+            axis=-1,
+        )
+
+        old_penalty = _repulsive_row(
+            old_distances,
+            physical_r0,
+            physical_kappa,
+        )
+        new_penalty = _repulsive_row(
+            new_distances,
+            physical_r0,
+            physical_kappa,
+        )
+        physical_delta = (
+            2.0
+            * jnp.sum((new_penalty - old_penalty) * mask, axis=1)
+            / normalizer
+            / replica_normalizer
+        )
+        proposed_physical = current_physical + physical_delta
+        proposed_value = (
+            proposed_pair_objective + physical_weight * proposed_physical
+        )
+
+        objective_delta = proposed_value - current_value
+        log_uniform = jnp.log(
+            jax.random.uniform(
+                accept_key,
+                (num_ensembles,),
+                minval=jnp.finfo(current.dtype).tiny,
+                maxval=1.0,
+                dtype=current.dtype,
+            )
+        )
+        accept = (objective_delta <= 0.0) | (
+            log_uniform < -objective_delta / temperature
+        )
+        accepted_count = accepted_count + accept.astype(jnp.int32)
+        updated_positions = jnp.where(accept[:, None], new_position, old_position)
+        current = current.at[
+            ensemble_indices,
+            replica_indices,
+            particle_indices,
+        ].set(updated_positions)
+        current_moments = jnp.where(
+            accept[:, None],
+            proposed_moments,
+            current_moments,
+        )
+        current_physical = jnp.where(
+            accept,
+            proposed_physical,
+            current_physical,
+        )
+        current_value = jnp.where(accept, proposed_value, current_value)
+
+        improved = accept & (proposed_value < best_value)
+        best = jnp.where(improved[:, None, None, None], current, best)
+        best_value = jnp.where(improved, proposed_value, best_value)
+        return (
+            current,
+            current_moments,
+            current_physical,
+            current_value,
+            best,
+            best_value,
+            accepted_count,
+        ), jnp.mean(best_value)
+
+    initial_mean = jnp.mean(best_objective)
+    (
+        _,
+        _,
+        _,
+        _,
+        best_coordinates,
+        best_objective,
+        accepted,
+    ), trace = jax.lax.scan(
+        metropolis_step,
+        (
+            coordinates,
+            ensemble_moments,
+            physical_energy,
+            current_objective,
+            best_coordinates,
+            best_objective,
+            accepted,
+        ),
+        (step_keys, temperatures),
+    )
+    trace = jnp.concatenate((initial_mean[None], trace), axis=0)
+    return best_coordinates, best_objective, accepted, trace
+
+
+def _radial_density_jax(
+    coordinates: Array,
+    box: Array,
+    bin_centers: Array,
+    kernel_width: Array,
+) -> Array:
+    distances = _unordered_distances_jax(coordinates, box).reshape(-1)
+    standardized = (distances[:, None] - bin_centers[None, :]) / kernel_width
+    density = jnp.mean(jnp.exp(-0.5 * standardized * standardized), axis=0)
+    return density / jnp.maximum(jnp.sum(density), 1e-15)
+
+
+def _ibi_update_potential_jax(
+    potential: Array,
+    current_density: Array,
+    target_density: Array,
+    update_rate: Array,
+    density_floor: Array,
+    potential_clip: Array,
+) -> Array:
+    ratio = (current_density + density_floor) / (
+        target_density + density_floor
+    )
+    updated = potential + update_rate * jnp.log(ratio)
+    padded = jnp.pad(updated, (1, 1), mode="edge")
+    updated = (
+        0.25 * padded[:-2]
+        + 0.5 * padded[1:-1]
+        + 0.25 * padded[2:]
+    )
+    updated = updated - jnp.min(updated)
+    return jnp.clip(updated, 0.0, potential_clip)
+
+
+def _pair_potential_energy_batch(
+    coordinates: Array,
+    box: Array,
+    bin_centers: Array,
+    potential: Array,
+) -> Array:
+    distances = _unordered_distances_jax(coordinates, box)
+    values = jnp.interp(
+        distances,
+        bin_centers,
+        potential,
+        left=potential[0],
+        right=potential[-1],
+    )
+    return jnp.mean(jnp.sum(values, axis=-1), axis=1)
+
+
+@partial(
+    jax.jit,
+    static_argnames=("num_iterations", "metropolis_steps_per_iteration"),
+)
+def _run_ibi_device(
+    coordinates: Array,
+    reference_coordinates: Array,
+    box: Array,
+    bin_centers: Array,
+    seed_key: Array,
+    proposal_scale: Array,
+    inverse_temperature: Array,
+    update_rate: Array,
+    kernel_width: Array,
+    density_floor: Array,
+    potential_clip: Array,
+    initial_repulsion: Array,
+    radial_max: Array,
+    *,
+    num_iterations: int,
+    metropolis_steps_per_iteration: int,
+) -> tuple[Array, Array, Array, Array, Array, Array]:
+    """Fit and sample IBI using exact local pair-energy updates."""
+    num_ensembles, num_replicas, num_particles = coordinates.shape[:3]
+    ensemble_indices = jnp.arange(num_ensembles, dtype=jnp.int32)
+    target_density = _radial_density_jax(
+        reference_coordinates,
+        box,
+        bin_centers,
+        kernel_width,
+    )
+    potential = initial_repulsion * jnp.exp(
+        -0.5 * (bin_centers / jnp.maximum(0.15 * radial_max, 1e-3)) ** 2
+    )
+    iteration_keys = jax.random.split(seed_key, num_iterations)
+    replica_normalizer = jnp.asarray(num_replicas, dtype=coordinates.dtype)
+
+    def ibi_iteration(carry, iteration_key):
+        current, current_potential = carry
+        energies = _pair_potential_energy_batch(
+            current,
+            box,
+            bin_centers,
+            current_potential,
+        )
+        accepted = jnp.asarray(0, dtype=jnp.int32)
+        step_keys = jax.random.split(
+            iteration_key,
+            metropolis_steps_per_iteration,
+        )
+
+        def metropolis_step(inner_carry, step_key):
+            inner_coordinates, inner_energies, accepted_count = inner_carry
+            replica_key, particle_key, delta_key, accept_key = jax.random.split(
+                step_key,
+                4,
+            )
+            replica_indices = jax.random.randint(
+                replica_key,
+                (num_ensembles,),
+                0,
+                num_replicas,
+                dtype=jnp.int32,
+            )
+            particle_indices = jax.random.randint(
+                particle_key,
+                (num_ensembles,),
+                0,
+                num_particles,
+                dtype=jnp.int32,
+            )
+            selected_replicas = inner_coordinates[
+                ensemble_indices,
+                replica_indices,
+            ]
+            old_position = selected_replicas[
+                ensemble_indices,
+                particle_indices,
+            ]
+            new_position = jnp.mod(
+                old_position
+                + proposal_scale
+                * jax.random.normal(
+                    delta_key,
+                    (num_ensembles, 2),
+                    dtype=inner_coordinates.dtype,
+                ),
+                box,
+            )
+            old_delta = old_position[:, None, :] - selected_replicas
+            new_delta = new_position[:, None, :] - selected_replicas
+            old_disp = (box / jnp.pi) * jnp.sin(jnp.pi * old_delta / box)
+            new_disp = (box / jnp.pi) * jnp.sin(jnp.pi * new_delta / box)
+            old_distances = jnp.sqrt(
+                jnp.sum(old_disp * old_disp, axis=-1) + 1e-24
+            )
+            new_distances = jnp.sqrt(
+                jnp.sum(new_disp * new_disp, axis=-1) + 1e-24
+            )
+            mask = 1.0 - jax.nn.one_hot(
+                particle_indices,
+                num_particles,
+                dtype=inner_coordinates.dtype,
+            )
+            old_values = jnp.interp(
+                old_distances,
+                bin_centers,
+                current_potential,
+                left=current_potential[0],
+                right=current_potential[-1],
+            )
+            new_values = jnp.interp(
+                new_distances,
+                bin_centers,
+                current_potential,
+                left=current_potential[0],
+                right=current_potential[-1],
+            )
+            energy_delta = (
+                jnp.sum((new_values - old_values) * mask, axis=1)
+                / replica_normalizer
+            )
+            proposed_energies = inner_energies + energy_delta
+            log_uniform = jnp.log(
+                jax.random.uniform(
+                    accept_key,
+                    (num_ensembles,),
+                    minval=jnp.finfo(inner_coordinates.dtype).tiny,
+                    maxval=1.0,
+                    dtype=inner_coordinates.dtype,
+                )
+            )
+            accept = (energy_delta <= 0.0) | (
+                log_uniform < -inverse_temperature * energy_delta
+            )
+            accepted_count = accepted_count + jnp.sum(
+                accept.astype(jnp.int32)
+            )
+            updated_positions = jnp.where(
+                accept[:, None],
+                new_position,
+                old_position,
+            )
+            inner_coordinates = inner_coordinates.at[
+                ensemble_indices,
+                replica_indices,
+                particle_indices,
+            ].set(updated_positions)
+            inner_energies = jnp.where(
+                accept,
+                proposed_energies,
+                inner_energies,
+            )
+            return (
+                inner_coordinates,
+                inner_energies,
+                accepted_count,
+            ), None
+
+        (current, _, accepted), _ = jax.lax.scan(
+            metropolis_step,
+            (current, energies, accepted),
+            step_keys,
+        )
+        current_density = _radial_density_jax(
+            current,
+            box,
+            bin_centers,
+            kernel_width,
+        )
+        density_rmse = jnp.sqrt(
+            jnp.mean((current_density - target_density) ** 2)
+        )
+        acceptance_rate = accepted.astype(current.dtype) / (
+            metropolis_steps_per_iteration * num_ensembles
+        )
+        updated_potential = _ibi_update_potential_jax(
+            current_potential,
+            current_density,
+            target_density,
+            update_rate,
+            density_floor,
+            potential_clip,
+        )
+        return (current, updated_potential), (
+            density_rmse,
+            acceptance_rate,
+        )
+
+    (coordinates, potential), history = jax.lax.scan(
+        ibi_iteration,
+        (coordinates, potential),
+        iteration_keys,
+    )
+    final_density = _radial_density_jax(
+        coordinates,
+        box,
+        bin_centers,
+        kernel_width,
+    )
+    density_rmse, acceptance_rate = history
+    return (
+        coordinates,
+        target_density,
+        final_density,
+        potential,
+        density_rmse,
+        acceptance_rate,
+    )
+
+
+def radial_density(
+    coordinates: np.ndarray,
+    box: np.ndarray,
+    bin_centers: np.ndarray,
+    kernel_width: float,
+) -> np.ndarray:
+    """Gaussian-smoothed normalized density of unordered chord distances."""
+    dtype = _working_dtype(coordinates, box, bin_centers)
+    result = _radial_density_jax(
+        jnp.asarray(coordinates, dtype=dtype),
+        jnp.asarray(box, dtype=dtype),
+        jnp.asarray(bin_centers, dtype=dtype),
+        jnp.asarray(kernel_width, dtype=dtype),
+    )
+    return np.asarray(jax.device_get(result))
+
+
+def ibi_update_potential(
+    potential: np.ndarray,
+    current_density: np.ndarray,
+    target_density: np.ndarray,
+    options: IBIOptions,
+) -> np.ndarray:
+    """One damped IBI update, with smoothing and a fixed additive gauge."""
+    options.validate()
+    dtype = _working_dtype(potential, current_density, target_density)
+    result = _ibi_update_potential_jax(
+        jnp.asarray(potential, dtype=dtype),
+        jnp.asarray(current_density, dtype=dtype),
+        jnp.asarray(target_density, dtype=dtype),
+        jnp.asarray(options.update_rate, dtype=dtype),
+        jnp.asarray(options.density_floor, dtype=dtype),
+        jnp.asarray(options.potential_clip, dtype=dtype),
+    )
+    return np.asarray(jax.device_get(result))
 
 
 def run_reverse_monte_carlo(
@@ -152,146 +744,88 @@ def run_reverse_monte_carlo(
     *,
     seed: int,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    """Run independent RMC chains for a batch of ensembles.
-
-    The evaluation ensemble is the independent statistical unit.  Each chain
-    starts from the same matched-prior coordinates used by the learned models.
-    """
+    """Run independent, vectorized RMC chains for a batch of ensembles."""
     options.validate()
-    coordinates = np.asarray(initial_coordinates, dtype=np.float64).copy()
-    target = np.asarray(target_moments, dtype=np.float64)
-    scales = np.asarray(moment_scales, dtype=np.float64)
-    box_array = np.asarray(box, dtype=np.float64)
-    centers = np.asarray(basis_centers, dtype=np.float64)
-    widths = np.asarray(basis_widths, dtype=np.float64)
-    if coordinates.ndim != 4 or coordinates.shape[-1] != 2:
+    coordinates_np = np.asarray(initial_coordinates)
+    if coordinates_np.ndim != 4 or coordinates_np.shape[-1] != 2:
         raise ValueError("initial_coordinates must have shape (E, M, N, 2)")
+    dtype = _working_dtype(
+        coordinates_np,
+        box,
+        basis_centers,
+        basis_widths,
+    )
+    coordinates = jax.device_put(jnp.asarray(coordinates_np, dtype=dtype))
+    box_array = jax.device_put(jnp.asarray(box, dtype=dtype))
+    centers = jax.device_put(jnp.asarray(basis_centers, dtype=dtype))
+    widths = jax.device_put(jnp.asarray(basis_widths, dtype=dtype))
+    scales = jax.device_put(jnp.asarray(moment_scales, dtype=dtype))
+    if box_array.shape != (2,):
+        raise ValueError("box must have shape (2,)")
+    if centers.ndim != 1 or widths.shape != centers.shape:
+        raise ValueError("basis centers and widths must be matching vectors")
+    if bool(np.any(np.asarray(widths) <= 0)):
+        raise ValueError("basis widths must be positive")
+    if scales.shape != centers.shape:
+        raise ValueError("moment_scales must match the basis dimension")
+
+    target = jnp.asarray(target_moments, dtype=dtype)
     if target.shape == (centers.size,):
-        target = np.broadcast_to(target, (coordinates.shape[0], centers.size))
+        target = jnp.broadcast_to(
+            target,
+            (coordinates.shape[0], centers.size),
+        )
     if target.shape != (coordinates.shape[0], centers.size):
         raise ValueError("target_moments has an incompatible shape")
+    target = jax.device_put(target)
 
-    rng = np.random.default_rng(seed)
-    accepted = np.zeros(coordinates.shape[0], dtype=np.int64)
-    current = np.asarray(
-        [
-            _rmc_objective(
-                coordinates[index],
-                target[index],
-                scales,
-                box_array,
-                centers,
-                widths,
-                options,
-            )
-            for index in range(coordinates.shape[0])
-        ]
+    best, best_objective, accepted, full_trace = _run_rmc_device(
+        coordinates,
+        target,
+        scales,
+        box_array,
+        centers,
+        widths,
+        jax.random.PRNGKey(seed),
+        jnp.asarray(options.proposal_scale, dtype=dtype),
+        jnp.asarray(options.initial_temperature, dtype=dtype),
+        jnp.asarray(options.final_temperature, dtype=dtype),
+        jnp.asarray(options.physical_weight, dtype=dtype),
+        jnp.asarray(options.physical_r0, dtype=dtype),
+        jnp.asarray(options.physical_kappa, dtype=dtype),
+        num_steps=options.num_steps,
     )
-    best = coordinates.copy()
-    best_objective = current.copy()
-    trace_steps: list[int] = [0]
-    trace_objective: list[float] = [float(np.mean(current))]
+    best, best_objective, accepted, full_trace = jax.device_get(
+        (best, best_objective, accepted, full_trace)
+    )
 
-    for step in range(options.num_steps):
-        fraction = step / max(options.num_steps - 1, 1)
-        temperature = options.initial_temperature * (
-            options.final_temperature / options.initial_temperature
-        ) ** fraction
-        for ensemble_index in range(coordinates.shape[0]):
-            replica_index = int(rng.integers(coordinates.shape[1]))
-            particle_index = int(rng.integers(coordinates.shape[2]))
-            proposal = coordinates[ensemble_index].copy()
-            proposal[replica_index, particle_index] = np.mod(
-                proposal[replica_index, particle_index]
-                + rng.normal(scale=options.proposal_scale, size=2),
-                box_array,
-            )
-            proposal_objective = _rmc_objective(
-                proposal,
-                target[ensemble_index],
-                scales,
-                box_array,
-                centers,
-                widths,
-                options,
-            )
-            delta = proposal_objective - current[ensemble_index]
-            if delta <= 0.0 or rng.random() < np.exp(-delta / temperature):
-                coordinates[ensemble_index] = proposal
-                current[ensemble_index] = proposal_objective
-                accepted[ensemble_index] += 1
-                if proposal_objective < best_objective[ensemble_index]:
-                    best[ensemble_index] = proposal
-                    best_objective[ensemble_index] = proposal_objective
-        if (step + 1) % options.trace_stride == 0 or step + 1 == options.num_steps:
-            trace_steps.append(step + 1)
-            trace_objective.append(float(np.mean(best_objective)))
-
-    return best, {
-        "objective_before": float(trace_objective[0]),
+    trace_steps = np.arange(
+        0,
+        options.num_steps + 1,
+        options.trace_stride,
+        dtype=np.int32,
+    )
+    if trace_steps[-1] != options.num_steps:
+        trace_steps = np.concatenate(
+            (trace_steps, np.asarray([options.num_steps], dtype=np.int32))
+        )
+    trace_objective = np.asarray(full_trace)[trace_steps]
+    return np.asarray(best), {
+        "objective_before": float(full_trace[0]),
         "objective_after": float(np.mean(best_objective)),
-        "acceptance_rate": float(np.mean(accepted / options.num_steps)),
-        "per_ensemble_objective": best_objective,
-        "trace_steps": np.asarray(trace_steps, dtype=np.int32),
-        "trace_objective": np.asarray(trace_objective, dtype=np.float64),
+        "acceptance_rate": float(
+            np.mean(np.asarray(accepted, dtype=np.float64) / options.num_steps)
+        ),
+        "per_ensemble_objective": np.asarray(best_objective),
+        "trace_steps": trace_steps,
+        "trace_objective": trace_objective,
+        "execution_backend": jax.default_backend(),
+        "execution_device": str(jax.devices()[0]),
+        "execution_strategy": (
+            "vectorized ensembles + compiled lax.scan + incremental pair updates"
+        ),
         "information_budget": "smooth pair-moment condition only",
     }
-
-
-def radial_density(
-    coordinates: np.ndarray,
-    box: np.ndarray,
-    bin_centers: np.ndarray,
-    kernel_width: float,
-) -> np.ndarray:
-    """Gaussian-smoothed normalized density of unordered chord distances."""
-    distances = _unordered_distances(coordinates, box).reshape(-1)
-    standardized = (distances[:, None] - bin_centers[None, :]) / kernel_width
-    density = np.mean(np.exp(-0.5 * standardized * standardized), axis=0)
-    return density / np.maximum(np.sum(density), 1e-15)
-
-
-def ibi_update_potential(
-    potential: np.ndarray,
-    current_density: np.ndarray,
-    target_density: np.ndarray,
-    options: IBIOptions,
-) -> np.ndarray:
-    """One damped IBI update, with smoothing and a fixed additive gauge."""
-    ratio = (current_density + options.density_floor) / (
-        target_density + options.density_floor
-    )
-    updated = potential + options.update_rate * np.log(ratio)
-    if updated.size >= 3:
-        padded = np.pad(updated, (1, 1), mode="edge")
-        updated = 0.25 * padded[:-2] + 0.5 * padded[1:-1] + 0.25 * padded[2:]
-    updated = updated - np.min(updated)
-    return np.clip(updated, 0.0, options.potential_clip)
-
-
-def _interpolated_potential(
-    distances: np.ndarray,
-    bin_centers: np.ndarray,
-    potential: np.ndarray,
-) -> np.ndarray:
-    return np.interp(
-        distances,
-        bin_centers,
-        potential,
-        left=potential[0],
-        right=potential[-1],
-    )
-
-
-def _pair_potential_energy(
-    ensemble: np.ndarray,
-    box: np.ndarray,
-    bin_centers: np.ndarray,
-    potential: np.ndarray,
-) -> float:
-    distances = _unordered_distances(ensemble, box)
-    values = _interpolated_potential(distances, bin_centers, potential)
-    return float(np.mean(np.sum(values, axis=-1)))
 
 
 def run_iterative_boltzmann_inversion(
@@ -302,99 +836,82 @@ def run_iterative_boltzmann_inversion(
     *,
     seed: int,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    """Fit an isotropic pair potential by histogram IBI and return its samples."""
+    """Fit an isotropic pair potential by vectorized, device-resident IBI."""
     options.validate()
-    coordinates = np.asarray(initial_coordinates, dtype=np.float64).copy()
-    reference = np.asarray(reference_coordinates, dtype=np.float64)
-    box_array = np.asarray(box, dtype=np.float64)
-    if coordinates.ndim != 4 or reference.ndim != 4:
+    coordinates_np = np.asarray(initial_coordinates)
+    reference_np = np.asarray(reference_coordinates)
+    if coordinates_np.ndim != 4 or reference_np.ndim != 4:
         raise ValueError("coordinates must have shapes (E, M, N, 2)")
-    bin_centers = np.linspace(
+    if coordinates_np.shape[-1] != 2 or reference_np.shape[-1] != 2:
+        raise ValueError("the final coordinate dimension must be two")
+    if coordinates_np.shape[1:] != reference_np.shape[1:]:
+        raise ValueError(
+            "initial and reference ensembles must share (M, N, 2) shape"
+        )
+
+    dtype = _working_dtype(coordinates_np, reference_np, box)
+    coordinates = jax.device_put(jnp.asarray(coordinates_np, dtype=dtype))
+    reference = jax.device_put(jnp.asarray(reference_np, dtype=dtype))
+    box_array = jax.device_put(jnp.asarray(box, dtype=dtype))
+    if box_array.shape != (2,):
+        raise ValueError("box must have shape (2,)")
+
+    bin_centers = jnp.linspace(
         options.radial_max / (2 * options.num_bins),
         options.radial_max * (1 - 1 / (2 * options.num_bins)),
         options.num_bins,
+        dtype=dtype,
     )
-    target_density = radial_density(
+    result = _run_ibi_device(
+        coordinates,
         reference,
         box_array,
         bin_centers,
-        options.kernel_width,
+        jax.random.PRNGKey(seed),
+        jnp.asarray(options.proposal_scale, dtype=dtype),
+        jnp.asarray(options.inverse_temperature, dtype=dtype),
+        jnp.asarray(options.update_rate, dtype=dtype),
+        jnp.asarray(options.kernel_width, dtype=dtype),
+        jnp.asarray(options.density_floor, dtype=dtype),
+        jnp.asarray(options.potential_clip, dtype=dtype),
+        jnp.asarray(options.initial_repulsion, dtype=dtype),
+        jnp.asarray(options.radial_max, dtype=dtype),
+        num_iterations=options.num_iterations,
+        metropolis_steps_per_iteration=options.metropolis_steps_per_iteration,
     )
-    potential = options.initial_repulsion * np.exp(
-        -0.5 * (bin_centers / max(0.15 * options.radial_max, 1e-3)) ** 2
-    )
-    rng = np.random.default_rng(seed)
-    history: list[dict[str, float]] = []
-
-    for iteration in range(options.num_iterations):
-        accepted = 0
-        attempted = 0
-        energies = np.asarray(
-            [
-                _pair_potential_energy(item, box_array, bin_centers, potential)
-                for item in coordinates
-            ]
-        )
-        for _ in range(options.metropolis_steps_per_iteration):
-            for ensemble_index in range(coordinates.shape[0]):
-                replica_index = int(rng.integers(coordinates.shape[1]))
-                particle_index = int(rng.integers(coordinates.shape[2]))
-                proposal = coordinates[ensemble_index].copy()
-                proposal[replica_index, particle_index] = np.mod(
-                    proposal[replica_index, particle_index]
-                    + rng.normal(scale=options.proposal_scale, size=2),
-                    box_array,
-                )
-                proposal_energy = _pair_potential_energy(
-                    proposal,
-                    box_array,
-                    bin_centers,
-                    potential,
-                )
-                delta = proposal_energy - energies[ensemble_index]
-                attempted += 1
-                if delta <= 0.0 or rng.random() < np.exp(
-                    -options.inverse_temperature * delta
-                ):
-                    coordinates[ensemble_index] = proposal
-                    energies[ensemble_index] = proposal_energy
-                    accepted += 1
-        current_density = radial_density(
-            coordinates,
-            box_array,
-            bin_centers,
-            options.kernel_width,
-        )
-        density_rmse = float(np.sqrt(np.mean((current_density - target_density) ** 2)))
-        history.append(
-            {
-                "iteration": float(iteration),
-                "density_rmse": density_rmse,
-                "acceptance_rate": accepted / max(attempted, 1),
-            }
-        )
-        potential = ibi_update_potential(
-            potential,
-            current_density,
-            target_density,
-            options,
-        )
-
-    final_density = radial_density(
+    (
         coordinates,
-        box_array,
-        bin_centers,
-        options.kernel_width,
-    )
-    return coordinates, {
-        "bin_centers": bin_centers,
-        "target_density": target_density,
-        "final_density": final_density,
-        "potential": potential,
-        "density_rmse": float(np.sqrt(np.mean((final_density - target_density) ** 2))),
+        target_density,
+        final_density,
+        potential,
+        density_rmse_history,
+        acceptance_history,
+    ) = jax.device_get(result)
+    history = [
+        {
+            "iteration": float(index),
+            "density_rmse": float(density_rmse_history[index]),
+            "acceptance_rate": float(acceptance_history[index]),
+        }
+        for index in range(options.num_iterations)
+    ]
+    return np.asarray(coordinates), {
+        "bin_centers": np.asarray(jax.device_get(bin_centers)),
+        "target_density": np.asarray(target_density),
+        "final_density": np.asarray(final_density),
+        "potential": np.asarray(potential),
+        "density_rmse": float(
+            np.sqrt(np.mean((final_density - target_density) ** 2))
+        ),
         "history": history,
+        "execution_backend": jax.default_backend(),
+        "execution_device": str(jax.devices()[0]),
+        "execution_strategy": (
+            "vectorized ensembles + nested compiled lax.scan + "
+            "incremental pair-energy updates"
+        ),
         "information_budget": (
-            "Gaussian-smoothed radial pair histogram estimated from microscopic "
-            "training configurations; richer than the RBF condition"
+            "Gaussian-smoothed radial pair histogram estimated from "
+            "microscopic training configurations; richer than the RBF condition"
         ),
     }

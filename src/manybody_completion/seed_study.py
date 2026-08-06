@@ -12,6 +12,19 @@ from .statistics import bootstrap_mean_interval
 from .uq import aggregate_seed_higher_order_uq
 
 
+def _to_jsonable(value: Any) -> Any:
+    """Recursively convert NumPy report values to JSON-native containers."""
+    if isinstance(value, dict):
+        return {str(key): _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def aggregate_comparison_seed_reports(
     report_paths: list[str | Path],
     *,
@@ -60,15 +73,17 @@ def aggregate_comparison_seed_reports(
             ]
             higher_order[method][stage] = aggregate_seed_higher_order_uq(summaries)
 
-    return {
-        "schema_version": 1,
-        "status": "multi-seed aggregate",
-        "num_training_seeds": len(reports),
-        "seed_report_paths": [str(path) for path in report_paths],
-        "primary_effects_across_training_seeds": effect_intervals,
-        "higher_order_uncertainty_decomposition": higher_order,
-        "inference_note": (
-            "Training seeds, not generated replicas, are the inferential units "
-            "for final method-level claims."
-        ),
-    }
+    return _to_jsonable(
+        {
+            "schema_version": 1,
+            "status": "multi-seed aggregate",
+            "num_training_seeds": len(reports),
+            "seed_report_paths": [str(path) for path in report_paths],
+            "primary_effects_across_training_seeds": effect_intervals,
+            "higher_order_uncertainty_decomposition": higher_order,
+            "inference_note": (
+                "Training seeds, not generated replicas, are the inferential units "
+                "for final method-level claims."
+            ),
+        }
+    )

@@ -40,10 +40,12 @@ def test_seed_report_aggregation(tmp_path):
     aggregate = aggregate_comparison_seed_reports(
         paths, seed=4, num_resamples=200
     )
+    json.dumps(aggregate)
     assert aggregate["num_training_seeds"] == 2
     interval = aggregate["primary_effects_across_training_seeds"]["effect"]
     assert np.isclose(interval["estimate"], -1.5)
     decomposition = aggregate["higher_order_uncertainty_decomposition"][
         "soft_cefm"
     ]["raw"]
+    assert isinstance(decomposition["epistemic_variance"], list)
     assert np.allclose(decomposition["epistemic_variance"], [2.0, 0.0])

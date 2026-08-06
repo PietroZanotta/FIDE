@@ -15,19 +15,28 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--aggregate-only",
+        action="store_true",
+        help="Reuse completed per-seed reports and only rebuild the aggregate.",
+    )
     args = parser.parse_args()
     configuration = load_yaml(args.config)
     args.output.mkdir(parents=True, exist_ok=True)
     report_paths: list[Path] = []
     for seed in configuration["seeds"]:
         seed_output = args.output / f"seed_{int(seed)}"
-        run_scientific_comparison(
-            configuration["comparison_config"],
-            seed_output,
-            rerun_flow=True,
-            seed_override=int(seed),
-        )
-        report_paths.append(seed_output / "scientific_comparison_report.json")
+        report_path = seed_output / "scientific_comparison_report.json"
+        if not args.aggregate_only:
+            run_scientific_comparison(
+                configuration["comparison_config"],
+                seed_output,
+                rerun_flow=True,
+                seed_override=int(seed),
+            )
+        if not report_path.is_file():
+            raise FileNotFoundError(f"missing completed seed report: {report_path}")
+        report_paths.append(report_path)
     aggregate = aggregate_comparison_seed_reports(
         report_paths,
         seed=int(configuration["aggregate_seed"]),
