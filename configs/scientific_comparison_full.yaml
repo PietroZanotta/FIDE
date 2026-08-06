@@ -13,7 +13,7 @@ classical_baselines:
   ibi:
     num_iterations: 20
     metropolis_steps_per_iteration: 1200
-    proposal_scale: 0.045
+    proposal_scale: 0.06
     inverse_temperature: 1.0
     update_rate: 0.20
     num_bins: 48
@@ -22,6 +22,9 @@ classical_baselines:
     density_floor: 1.0e-5
     potential_clip: 20.0
     initial_repulsion: 1.0
+    convergence_window: 5
+    convergence_relative_tolerance: 0.10
+    density_rmse_tolerance: 0.01
 
 uq:
   interval_levels: [0.50, 0.80, 0.90, 0.95]

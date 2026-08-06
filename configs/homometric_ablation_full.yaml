@@ -3,6 +3,12 @@ seed: 20260805
 dtype: float32
 box: [1.0, 1.0]
 
+solver_backend:
+  kind: local_jax
+  transport: url
+  relaxation_url: http://127.0.0.1:8001
+  projection_url: http://127.0.0.1:8002
+
 dataset:
   samples_per_mode: 256
   validation_per_mode: 64
@@ -46,6 +52,13 @@ fine_tuning:
   chunk_size: 32
   synchronize_each_chunk: false
 
+# Full-E2E crosses the most strongly curved solver path.  A smaller optimizer
+# step prevents one clipped update from pushing the generator outside the
+# projection basin before the correction objective can shape it.
+full_e2e_fine_tuning:
+  learning_rate: 2.0e-5
+  gradient_clip_norm: 0.5
+
 training_sampling:
   num_steps: 8
   method: heun
@@ -68,11 +81,20 @@ relaxation:
   tolerance: 0.005
 
 projection:
-  num_steps: 16
-  ridge: 1.0e-6
+  num_steps: 32
+  ridge: 1.0e-3
   max_particle_step: 0.05
   tolerance: 0.001
   rank_tolerance: 1.0e-7
+
+# Training uses a strongly damped truncated solve.  Serving uses the more
+# accurate 32-step projection above.  This is an explicit solver curriculum,
+# not a change to the reported serving endpoint.
+training_projection:
+  num_steps: 4
+  ridge: 0.1
+  max_particle_step: 0.03
+  line_search_steps: 4
 
 evaluation:
   num_ensembles: 1024

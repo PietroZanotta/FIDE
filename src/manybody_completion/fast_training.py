@@ -79,19 +79,50 @@ def initialize_adam(parameters: PyTree) -> AdamState:
 
 
 def tree_global_norm(tree: PyTree) -> Array:
-    """Compute one stable global L2 norm over a pytree."""
-    squared = sum(
-        jnp.sum(jnp.asarray(leaf, dtype=jnp.float32) ** 2)
+    """Compute a global L2 norm without overflowing finite float32 values."""
+    leaves = [
+        jnp.asarray(leaf, dtype=jnp.float32)
         for leaf in jax.tree_util.tree_leaves(tree)
+    ]
+    if not leaves:
+        return jnp.asarray(0.0, dtype=jnp.float32)
+    all_finite = jnp.all(
+        jnp.stack([jnp.all(jnp.isfinite(leaf)) for leaf in leaves])
     )
-    return jnp.sqrt(squared + jnp.asarray(1e-24, dtype=jnp.float32))
+    maximum = jnp.max(
+        jnp.stack(
+            [
+                jnp.max(jnp.where(jnp.isfinite(leaf), jnp.abs(leaf), 0.0))
+                for leaf in leaves
+            ]
+        )
+    )
+    safe_maximum = jnp.maximum(maximum, jnp.asarray(1e-30, dtype=jnp.float32))
+    scaled_squared = sum(
+        jnp.sum((jnp.where(jnp.isfinite(leaf), leaf, 0.0) / safe_maximum) ** 2)
+        for leaf in leaves
+    )
+    finite_norm = maximum * jnp.sqrt(scaled_squared)
+    return jnp.where(all_finite, finite_norm, jnp.asarray(jnp.inf, jnp.float32))
 
 
 def clip_by_global_norm(tree: PyTree, maximum_norm: float) -> tuple[PyTree, Array]:
-    """Clip a gradient pytree and return its unclipped norm."""
+    """Clip finite gradients; a non-finite tree produces a zero update."""
     norm = tree_global_norm(tree)
-    scale = jnp.minimum(1.0, jnp.asarray(maximum_norm, norm.dtype) / norm)
-    return jax.tree_util.tree_map(lambda value: value * scale, tree), norm
+    finite = jnp.isfinite(norm)
+    scale = jnp.where(
+        finite,
+        jnp.minimum(
+            1.0,
+            jnp.asarray(maximum_norm, norm.dtype) / jnp.maximum(norm, 1e-30),
+        ),
+        0.0,
+    )
+    clipped = jax.tree_util.tree_map(
+        lambda value: jnp.where(jnp.isfinite(value), value * scale, 0.0),
+        tree,
+    )
+    return clipped, norm
 
 
 def adam_update(
@@ -174,6 +205,7 @@ def make_chunk_trainer(
             **metrics,
             "loss": loss,
             "gradient_norm": gradient_norm,
+            "gradient_is_finite": jnp.isfinite(gradient_norm),
             "optimizer_step": optimizer_state.step,
         }
         return (parameters, optimizer_state), output_metrics

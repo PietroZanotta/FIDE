@@ -2,6 +2,13 @@ seed: 20260805
 dtype: float64
 box: [1.0, 1.0]
 
+solver_backend:
+  # Change to `tesseract` after starting the two scientific Tesseract services.
+  kind: local_jax
+  transport: url
+  relaxation_url: http://127.0.0.1:8001
+  projection_url: http://127.0.0.1:8002
+
 dataset:
   samples_per_mode: 3
   validation_per_mode: 1

@@ -43,7 +43,7 @@ from .geometry import periodic_mean_squared_displacement
 from .network import FlowNetworkConfig, Parameters
 from .observables import ensemble_pair_moments
 from .routing import AblationMode, training_stage
-from .solvers import LocalJaxBackend
+from .solvers import SolverBackend
 
 
 @dataclass(frozen=True)
@@ -269,7 +269,7 @@ def route_objective(
     condition_batch: Array,
     moment_batch: Array,
     key: Array,
-    backend: LocalJaxBackend,
+    backend: SolverBackend,
     network_config: FlowNetworkConfig,
     sampling_options: SamplingOptions,
     weights: FineTuneWeights,
@@ -363,7 +363,7 @@ def fine_tune_route(
     targets: Array,
     conditions: Array,
     target_moments: Array,
-    backend: LocalJaxBackend,
+    backend: SolverBackend,
     network_config: FlowNetworkConfig,
     sampling_options: SamplingOptions,
     optimizer_options: AdamOptions,

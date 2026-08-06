@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import csv
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any
 
 import jax
@@ -26,7 +26,7 @@ from .homometric import build_homometric_dataset
 from .metrics import correction_arrays, stage_arrays, summarize_stage
 from .observables import PairBasis, angular_cosine_moments
 from .routing import evaluate_all_stages
-from .solvers import LocalJaxBackend, ProjectionOptions, RelaxationOptions
+from .solver_factory import build_solver_backend
 from .statistics import paired_bootstrap_difference
 from .uq import higher_order_conditional_uq
 
@@ -51,7 +51,9 @@ def _load_npz(path: Path) -> dict[str, np.ndarray]:
         return {name: archive[name] for name in archive.files}
 
 
-def _build_problem(flow_config: dict[str, Any]) -> dict[str, Any]:
+def _build_problem(
+    flow_config: dict[str, Any], repository_root: Path
+) -> dict[str, Any]:
     dtype = jnp.float64 if flow_config["dtype"] == "float64" else jnp.float32
     jax.config.update("jax_enable_x64", dtype == jnp.float64)
     box = jnp.asarray(flow_config["box"], dtype=dtype)
@@ -74,13 +76,13 @@ def _build_problem(flow_config: dict[str, Any]) -> dict[str, Any]:
         angular_orders=angular_orders,
         angular_neighbor_scale=angular_neighbor_scale,
     )
-    backend = LocalJaxBackend(
+    backend = build_solver_backend(
+        flow_config,
+        repository_root=repository_root,
         box=box,
         basis=basis,
         moment_scales=jnp.ones_like(dataset["common_pair_moments"]),
         physical=PhysicalParameters(**flow_config["physical"]),
-        relaxation_options=RelaxationOptions(**flow_config["relaxation"]),
-        projection_options=ProjectionOptions(**flow_config["projection"]),
     )
     return {
         "dtype": dtype,
@@ -303,11 +305,11 @@ def run_scientific_comparison(
             flow_report_path = candidate / "homometric_ablation_report.json"
             flow_arrays_path = candidate / "homometric_ablation_arrays.npz"
     if rerun_flow or not flow_report_path.is_file() or not flow_arrays_path.is_file():
-        run_experiment(flow_config_path, flow_output)
+        run_experiment(flow_config_path, flow_output, repository_root=root)
 
     flow_report = json.loads(flow_report_path.read_text(encoding="utf-8"))
     flow_arrays = _load_npz(flow_arrays_path)
-    problem = _build_problem(flow_config)
+    problem = _build_problem(flow_config, root)
     problem["flow_config"] = flow_config
     from .statistics import bootstrap_mean_interval
 

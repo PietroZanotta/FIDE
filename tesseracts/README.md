@@ -1,9 +1,28 @@
-# Tesseract boundaries
+# Homometric scientific Tesseracts
 
-The host process owns JAX model training and calls the two coarse solver components through
-`tesseract-jax`. Each component will be initialized with `tesseract init --recipe jax` so its
-API includes `abstract_eval` and `vector_jacobian_product` from the start.
+The homometric experiment uses the equation-identical wrappers in
+`scientific_relaxation/` and `scientific_projection/`. Build both with:
 
-The simulator and observable package under `src/manybody_completion/` is deliberately independent
-of Tesseract. The physical-relaxation and moment-projection containers can vendor the same formulas
-or consume a small solver-only package without pulling CUDA into their images.
+```bash
+./scripts/build_scientific_tesseracts.sh
+tesseract serve --port 8001 manybody-scientific-relaxation
+tesseract serve --port 8002 manybody-scientific-projection
+```
+
+For a host-side equivalence and gradient smoke test (no Docker), run:
+
+```bash
+PYTHONPATH=src python scripts/run_tesseract_backend_smoke.py
+```
+
+The experiment defaults to `solver_backend.kind: local_jax`. To use served
+Tesseracts, change that field to `tesseract` in the selected
+`configs/homometric_ablation_*.yaml`; the default endpoints are
+`http://127.0.0.1:8001` and `http://127.0.0.1:8002`. They can be overridden with
+`MBC_RELAXATION_TESSERACT_URL` and `MBC_PROJECTION_TESSERACT_URL`. Setting
+`MBC_SOLVER_BACKEND=tesseract` selects Tesseract without editing YAML.
+For an in-process debugging run, also set
+`MBC_TESSERACT_TRANSPORT=local_api`; scientific runs should use served URLs.
+
+The archived standalone Tesseracts used different solver equations and are
+not part of this scientific comparison backend.

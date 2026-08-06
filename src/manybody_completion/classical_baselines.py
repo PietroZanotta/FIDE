@@ -67,6 +67,9 @@ class IBIOptions:
     density_floor: float = 1e-4
     potential_clip: float = 12.0
     initial_repulsion: float = 1.0
+    convergence_window: int = 2
+    convergence_relative_tolerance: float = 0.10
+    density_rmse_tolerance: float = 0.01
 
     def validate(self) -> None:
         if self.num_iterations < 1:
@@ -85,6 +88,14 @@ class IBIOptions:
             raise ValueError(
                 "density_floor and potential_clip must be positive"
             )
+        if self.convergence_window < 1:
+            raise ValueError("convergence_window must be positive")
+        if self.convergence_window > self.num_iterations:
+            raise ValueError("convergence_window cannot exceed num_iterations")
+        if self.convergence_relative_tolerance <= 0:
+            raise ValueError("convergence_relative_tolerance must be positive")
+        if self.density_rmse_tolerance <= 0:
+            raise ValueError("density_rmse_tolerance must be positive")
 
 
 def _working_dtype(*values: Any) -> jnp.dtype:
@@ -482,7 +493,12 @@ def _pair_potential_energy_batch(
         left=potential[0],
         right=potential[-1],
     )
-    return jnp.mean(jnp.sum(values, axis=-1), axis=1)
+    # Replicas are independent samples from the same canonical distribution.
+    # Their joint energy is therefore the *sum* of the replica energies.  An
+    # earlier implementation averaged here and divided a local Metropolis
+    # energy difference by ``num_replicas`` below.  That silently changed the
+    # effective inverse temperature from beta to beta / num_replicas.
+    return jnp.sum(jnp.sum(values, axis=-1), axis=1)
 
 
 @partial(
@@ -520,7 +536,6 @@ def _run_ibi_device(
         -0.5 * (bin_centers / jnp.maximum(0.15 * radial_max, 1e-3)) ** 2
     )
     iteration_keys = jax.random.split(seed_key, num_iterations)
-    replica_normalizer = jnp.asarray(num_replicas, dtype=coordinates.dtype)
 
     def ibi_iteration(carry, iteration_key):
         current, current_potential = carry
@@ -603,9 +618,12 @@ def _run_ibi_device(
                 left=current_potential[0],
                 right=current_potential[-1],
             )
-            energy_delta = (
-                jnp.sum((new_values - old_values) * mask, axis=1)
-                / replica_normalizer
+            # Moving one particle changes exactly the N - 1 pairs in its
+            # selected replica.  Do not normalize this local canonical-energy
+            # difference by the number of independent replicas.
+            energy_delta = jnp.sum(
+                (new_values - old_values) * mask,
+                axis=1,
             )
             proposed_energies = inner_energies + energy_delta
             log_uniform = jnp.log(
@@ -621,7 +639,8 @@ def _run_ibi_device(
                 log_uniform < -inverse_temperature * energy_delta
             )
             accepted_count = accepted_count + jnp.sum(
-                accept.astype(jnp.int32)
+                accept.astype(jnp.int32),
+                dtype=jnp.int32,
             )
             updated_positions = jnp.where(
                 accept[:, None],
@@ -895,6 +914,13 @@ def run_iterative_boltzmann_inversion(
         }
         for index in range(options.num_iterations)
     ]
+    convergence_tail = np.asarray(density_rmse_history)[
+        -options.convergence_window :
+    ]
+    convergence_relative_range = float(
+        np.ptp(convergence_tail)
+        / max(float(np.mean(convergence_tail)), np.finfo(np.float64).tiny)
+    )
     return np.asarray(coordinates), {
         "bin_centers": np.asarray(jax.device_get(bin_centers)),
         "target_density": np.asarray(target_density),
@@ -904,6 +930,17 @@ def run_iterative_boltzmann_inversion(
             np.sqrt(np.mean((final_density - target_density) ** 2))
         ),
         "history": history,
+        "converged": bool(
+            density_rmse_history[-1] <= options.density_rmse_tolerance
+            and convergence_relative_range
+            <= options.convergence_relative_tolerance
+        ),
+        "convergence_window": options.convergence_window,
+        "convergence_relative_range": convergence_relative_range,
+        "convergence_relative_tolerance": (
+            options.convergence_relative_tolerance
+        ),
+        "density_rmse_tolerance": options.density_rmse_tolerance,
         "execution_backend": jax.default_backend(),
         "execution_device": str(jax.devices()[0]),
         "execution_strategy": (

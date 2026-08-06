@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import replace
 import json
-from pathlib import Path
 import platform
 import time
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import jax
@@ -18,27 +18,20 @@ from jax import Array
 from .config import load_yaml
 from .energy import PhysicalParameters
 from .flow import SamplingOptions, sample_conditional_flow, sample_uniform_torus
-from .geometry import periodic_rms_displacement
 from .homometric import (
     build_homometric_dataset,
-    motif_coordinates,
     validate_homometric_pair,
 )
 from .metrics import (
     correction_arrays,
-    reference_angular_descriptors,
     stage_arrays,
     summarize_stage,
     transition_matrix,
 )
 from .network import FlowNetworkConfig, initialize_flow_network
 from .observables import PairBasis, angular_cosine_moments
-from .routing import AblationMode, ROUTES, evaluate_all_stages
-from .solvers import (
-    LocalJaxBackend,
-    ProjectionOptions,
-    RelaxationOptions,
-)
+from .routing import ROUTES, AblationMode, evaluate_all_stages
+from .solver_factory import build_solver_backend
 from .statistics import bootstrap_mean_interval, paired_bootstrap_difference
 from .training import (
     AdamOptions,
@@ -46,7 +39,6 @@ from .training import (
     fine_tune_route,
     pretrain_flow,
     route_objective,
-    tree_l2_norm,
 )
 
 
@@ -210,10 +202,20 @@ def _write_summary_csv(path: Path, report: dict[str, Any]) -> None:
             )
 
 
-def run_experiment(config_path: str | Path, output_directory: str | Path) -> dict[str, Any]:
+def run_experiment(
+    config_path: str | Path,
+    output_directory: str | Path,
+    *,
+    repository_root: str | Path | None = None,
+) -> dict[str, Any]:
     """Run one comparison-ready homometric stochastic ablation."""
     print("[experiment] loading configuration", flush=True)
     config = load_yaml(config_path)
+    backend_root = (
+        Path(repository_root).resolve()
+        if repository_root is not None
+        else Path(config_path).resolve().parents[1]
+    )
 
     # Neural-network and solver training dtype.
     training_dtype = (
@@ -324,17 +326,26 @@ def run_experiment(config_path: str | Path, output_directory: str | Path) -> dic
     pretraining_seconds = time.perf_counter() - start
 
     physical = PhysicalParameters(**config["physical"])
-    backend = LocalJaxBackend(
+    backend = build_solver_backend(
+        config,
+        repository_root=backend_root,
         box=box,
         basis=basis,
         moment_scales=jnp.ones_like(dataset["common_pair_moments"]),
         physical=physical,
-        relaxation_options=RelaxationOptions(**config["relaxation"]),
-        projection_options=ProjectionOptions(**config["projection"]),
+    )
+    training_backend = build_solver_backend(
+        config,
+        repository_root=backend_root,
+        box=box,
+        basis=basis,
+        moment_scales=jnp.ones_like(dataset["common_pair_moments"]),
+        physical=physical,
+        projection_overrides=config.get("training_projection", {}),
     )
     training_sampling = SamplingOptions(**config["training_sampling"])
     evaluation_sampling = SamplingOptions(**config["evaluation"]["sampling"])
-    fine_options = AdamOptions(**config["fine_tuning"])
+    fine_tuning_config = config["fine_tuning"]
     weights = FineTuneWeights(**config["objective_weights"])
 
     trained_parameters: dict[AblationMode, Any] = {}
@@ -345,13 +356,18 @@ def run_experiment(config_path: str | Path, output_directory: str | Path) -> dic
     for mode in (AblationMode.BASE, AblationMode.RELAX_E2E, AblationMode.FULL_E2E):
         print(f"[experiment] fine-tuning {mode.value}", flush=True)
         start = time.perf_counter()
+        mode_fine_tuning = {
+            **fine_tuning_config,
+            **config.get(f"{mode.value}_fine_tuning", {}),
+        }
+        fine_options = AdamOptions(**mode_fine_tuning)
         result = fine_tune_route(
             _tree_copy(pretrained.parameters),
             mode,
             train_targets,
             train_conditions,
             train_moments,
-            backend,
+            training_backend,
             network_config,
             training_sampling,
             fine_options,
@@ -527,6 +543,18 @@ def run_experiment(config_path: str | Path, output_directory: str | Path) -> dic
                 "mean_projection_residual": float(
                     jnp.mean(projection_diagnostics["constraint_residual"])
                 ),
+                "mean_projection_initial_residual": float(
+                    jnp.mean(
+                        projection_diagnostics["constraint_residual_before"]
+                    )
+                ),
+                "mean_projection_line_search_failures": float(
+                    jnp.mean(
+                        projection_diagnostics["line_search_failures"].astype(
+                            dtype
+                        )
+                    )
+                ),
             },
             "runtime_seconds": {
                 "training": training_runtime[mode.value],
@@ -588,13 +616,13 @@ def run_experiment(config_path: str | Path, output_directory: str | Path) -> dic
         check_count = int(gradient_config["batch_size"])
         check_key = jax.random.PRNGKey(seed + 10)
         check_backend = replace(
-            backend,
+            training_backend,
             relaxation_options=replace(
-                backend.relaxation_options,
+                training_backend.relaxation_options,
                 num_steps=int(gradient_config.get("relaxation_steps", 1)),
             ),
             projection_options=replace(
-                backend.projection_options,
+                training_backend.projection_options,
                 num_steps=int(gradient_config.get("projection_steps", 1)),
             ),
         )
@@ -640,6 +668,7 @@ def run_experiment(config_path: str | Path, output_directory: str | Path) -> dic
             "python": platform.python_version(),
             "jax": jax.__version__,
             "backend": jax.default_backend(),
+            "solver_backend": type(backend).__name__,
             "platform": platform.platform(),
         },
         "benchmark_validation": benchmark_check,

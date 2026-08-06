@@ -8,7 +8,7 @@ from enum import Enum
 import jax.numpy as jnp
 from jax import Array
 
-from .solvers import LocalJaxBackend, batch_project, batch_relax
+from .solvers import SolverBackend, batch_project, batch_relax
 
 
 class AblationMode(str, Enum):
@@ -38,7 +38,7 @@ def training_stage(
     mode: AblationMode,
     generated: Array,
     target_moments: Array,
-    backend: LocalJaxBackend,
+    backend: SolverBackend,
 ) -> tuple[Array, dict[str, Array]]:
     """Execute only solvers whose gradients belong to the selected route."""
     spec = ROUTES[mode]
@@ -69,7 +69,7 @@ def training_stage(
 def evaluate_all_stages(
     generated: Array,
     target_moments: Array,
-    backend: LocalJaxBackend,
+    backend: SolverBackend,
 ) -> dict[str, object]:
     """Run both solvers for stagewise diagnostics, regardless of serving route."""
     relaxed, relaxation = batch_relax(backend, generated)
