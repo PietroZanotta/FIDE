@@ -1,0 +1,97 @@
+# Registered comparison scale. This is intentionally not the default smoke run.
+seed: 20260805
+dtype: float32
+box: [1.0, 1.0]
+
+dataset:
+  samples_per_mode: 256
+  validation_per_mode: 64
+  num_replicas: 8
+
+pair_basis:
+  num_basis: 12
+  r_min: 0.16
+  r_max: 0.43
+  width: 0.03
+
+angular:
+  orders: [1, 2, 3, 4, 5, 6, 7, 8]
+  neighbor_scale: 0.20
+  scale_floor: 0.02
+  far_threshold: 3.0
+
+network:
+  hidden_dim: 64
+  message_dim: 64
+  num_layers: 4
+  radial_basis_size: 16
+  radial_max: 0.50
+  radial_width: 0.04
+  time_frequencies: 8
+  velocity_scale: 2.5
+
+pretraining:
+  learning_rate: 0.001
+  num_steps: 3000
+  batch_size: 32
+  gradient_clip_norm: 5.0
+  chunk_size: 32
+  synchronize_each_chunk: false
+
+fine_tuning:
+  learning_rate: 0.0002
+  num_steps: 500
+  batch_size: 8
+  gradient_clip_norm: 2.0
+  chunk_size: 32
+  synchronize_each_chunk: false
+
+training_sampling:
+  num_steps: 8
+  method: heun
+
+objective_weights:
+  flow_matching: 1.0
+  observed: 50.0
+  physical: 2.0
+  correction: 50.0
+
+physical:
+  r0: 0.22
+  kappa: 30.0
+
+relaxation:
+  num_steps: 16
+  step_size: 0.05
+  prox_strength: 0.20
+  max_particle_step: 0.03
+  tolerance: 0.005
+
+projection:
+  num_steps: 16
+  ridge: 1.0e-6
+  max_particle_step: 0.05
+  tolerance: 0.001
+  rank_tolerance: 1.0e-7
+
+evaluation:
+  num_ensembles: 1024
+  overlap_threshold: 0.20
+  bootstrap_resamples: 5000
+  sampling:
+    num_steps: 32
+    method: heun
+
+gradient_check:
+  enabled: true
+  batch_size: 1
+  relaxation_steps: 1
+  projection_steps: 1
+  epsilons: [0.003, 0.001, 0.0003, 0.0001]
+  sampling:
+    num_steps: 4
+    method: heun
+
+decision_rules:
+  pair_error_noninferiority_margin: 0.002
+  mode_tv_noninferiority_margin: 0.05

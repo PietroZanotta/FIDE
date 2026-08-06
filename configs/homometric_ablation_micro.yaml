@@ -1,0 +1,92 @@
+seed: 20260805
+dtype: float64
+box: [1.0, 1.0]
+
+dataset:
+  samples_per_mode: 3
+  validation_per_mode: 1
+  num_replicas: 2
+
+pair_basis:
+  num_basis: 3
+  r_min: 0.18
+  r_max: 0.42
+  width: 0.06
+
+angular:
+  orders: [1, 2, 3]
+  neighbor_scale: 0.20
+  scale_floor: 0.05
+  far_threshold: 3.0
+
+network:
+  hidden_dim: 6
+  message_dim: 6
+  num_layers: 1
+  radial_basis_size: 4
+  radial_max: 0.50
+  radial_width: 0.12
+  time_frequencies: 2
+  velocity_scale: 1.5
+
+pretraining:
+  learning_rate: 0.002
+  num_steps: 3
+  batch_size: 2
+  gradient_clip_norm: 5.0
+
+fine_tuning:
+  learning_rate: 0.0008
+  num_steps: 1
+  batch_size: 1
+  gradient_clip_norm: 5.0
+
+training_sampling:
+  num_steps: 1
+  method: euler
+
+objective_weights:
+  flow_matching: 1.0
+  observed: 10.0
+  physical: 1.0
+  correction: 10.0
+
+physical:
+  r0: 0.22
+  kappa: 20.0
+
+relaxation:
+  num_steps: 1
+  step_size: 0.05
+  prox_strength: 0.15
+  max_particle_step: 0.05
+  tolerance: 1.0
+
+projection:
+  num_steps: 1
+  ridge: 1.0e-5
+  max_particle_step: 0.08
+  tolerance: 1.0
+  rank_tolerance: 1.0e-7
+
+evaluation:
+  num_ensembles: 4
+  overlap_threshold: 0.20
+  bootstrap_resamples: 100
+  sampling:
+    num_steps: 2
+    method: euler
+
+gradient_check:
+  enabled: false
+  batch_size: 1
+  relaxation_steps: 1
+  projection_steps: 1
+  epsilons: [0.001, 0.0003]
+  sampling:
+    num_steps: 1
+    method: euler
+
+decision_rules:
+  pair_error_noninferiority_margin: 1.0
+  mode_tv_noninferiority_margin: 1.0

@@ -1,41 +1,28 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=75", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "manybody-completion"
-version = "0.6.0"
-description = "Differentiable periodic many-body completion with equivariant flow matching and exact homometric benchmarks."
-readme = "README.md"
+name = "manybody-scientific-ablation"
+version = "0.2.0"
+description = "Homometric scientific comparisons with classical baselines, solver-aware flows, and conditional UQ"
 requires-python = ">=3.11,<3.15"
 dependencies = [
-  "numpy>=2.0,<3",
-  "PyYAML>=6.0.2,<7",
+  "jax==0.8.1",
+  "numpy>=2,<3",
+  "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
-cpu = [
-  "jax==0.8.1",
-  "tesseract-core==1.10.0",
-  "tesseract-jax==0.2.3",
-]
-cuda = [
-  "jax[cuda]==0.8.1",
-  "tesseract-core==1.10.0",
-  "tesseract-jax==0.2.3",
-]
-dev = [
-  "pytest>=8.3,<9",
-  "ruff>=0.11,<1",
-]
+cuda = ["jax[cuda]==0.8.1"]
+test = ["pytest>=8,<9"]
 
 [project.scripts]
-mbc-generate-data = "manybody_completion.cli_generate_data:main"
-mbc-generate-problems = "manybody_completion.cli_generate_problems:main"
-mbc-match-regimes = "manybody_completion.cli_match_regimes:main"
-mbc-check-env = "manybody_completion.cli_check_env:main"
-mbc-validate-data = "manybody_completion.cli_validate_data:main"
-mbc-generate-homometric = "manybody_completion.cli_generate_homometric:main"
+mbc-run-homometric-ablation = "manybody_completion.cli:main"
+mbc-run-scientific-comparison = "manybody_completion.comparison_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -43,7 +30,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
