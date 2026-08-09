@@ -457,6 +457,26 @@ These runs live under `results/level2_suite/` and do not alter or join the
 existing A/B or scalar-level-2 workflows. See [`notes.md`](notes.md) for budgets,
 ports, outputs, and individual-experiment commands.
 
+### Stage 2: fiber-adapted coupling, coupling only
+
+The endpoint-coupling ablation loads the already selected paper schedule for
+each bank and holds it fixed. It compares independent pairing, a conventional
+permutation/translation-aware geometric Sinkhorn plan, and a differentiable
+fiber-aware plan trained with correction energy plus the established ESS-floor
+penalty. Final MMD² and hidden q4 are evaluation-only quantities.
+
+```bash
+./scripts/run_coupling_study.sh --quick  # one-bank implementation check
+./scripts/run_coupling_study.sh          # five paired paper banks
+./.venv/bin/python validate_coupling_study.py
+```
+
+Optimization, validation, and final evaluation use distinct endpoint banks.
+The correction network keeps the established stratified random-continuous-time
+protocol. Machine-readable results, figures, and a concise scientific report
+are written below `results/coupling_study/`. This runner stops after Stage 2;
+there is no joint schedule-coupling implementation.
+
 ## Multiple training seeds × multiple evaluation seeds
 
 Recommended paper-facing robustness command:
