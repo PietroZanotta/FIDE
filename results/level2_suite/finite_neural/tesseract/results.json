@@ -1,0 +1,52 @@
+{
+  "experiment": "finite_neural",
+  "backend": "tesseract",
+  "mode": "quick",
+  "configuration": {
+    "time_points": 7,
+    "training_bank_size": 192,
+    "validation_bank_size": 384,
+    "schedule_parameters": 3,
+    "neural_features": 40,
+    "ess_floor": 0.3,
+    "optimization_steps": 84,
+    "state_dimension": 2,
+    "particle_count": 1
+  },
+  "metrics": {
+    "initial_integrated_fresh_energy": 1.223623509918152,
+    "optimized_integrated_fresh_energy": 0.10455297198028835,
+    "fresh_energy_reduction_fraction": 0.9145546231068395,
+    "initial_min_fresh_ess": 0.24960928104598892,
+    "optimized_min_fresh_ess": 0.9529921208367558,
+    "initial_integrated_fresh_ritz_gain": -0.03847899693138199,
+    "optimized_integrated_fresh_ritz_gain": -0.07727056748406391,
+    "max_fresh_calibration_residual": 3.343317912357651e-16,
+    "gradient_relative_error": 2.4769306074877347e-07,
+    "initial_raw": [
+      -1.258691549446032,
+      0.5,
+      -0.4
+    ],
+    "optimized_raw": [
+      0.603118569020844,
+      0.03027825156777072,
+      0.02353004602679044
+    ],
+    "initial_beta_range": [
+      0.1425167824771842,
+      0.41678783819802645
+    ],
+    "optimized_beta_range": [
+      1.015850259712638,
+      1.0629636692001303
+    ]
+  },
+  "acceptance_gates": {
+    "fresh_bank_energy_reduced": true,
+    "fresh_bank_overlap_improved": true,
+    "fresh_bank_calibrated": true,
+    "implicit_gradient_matches_finite_difference": true
+  },
+  "passed": true
+}
