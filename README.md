@@ -490,6 +490,22 @@ three bank roles, performs repeated fixed-plan pair realizations (including
 fixed-field MMD² rollouts), and writes its decision under
 `results/coupling_study/diagnostics/`. It does not implement Stage 3.
 
+Run the single Stage 2B representation follow-up, which retains the geometric
+kernel and nine Phi interactions and adds exactly 36 bilinear interactions from
+the six unique entries of `JPhi(X) @ JPhi(X).T`:
+
+```bash
+./scripts/run_stage2b_moment_gram.sh --aggregate-existing  # rebuild report/plots
+./scripts/run_stage2b_moment_gram.sh                       # full five-bank run
+./.venv/bin/python validate_stage2b_moment_gram.py
+```
+
+Outputs live under `results/coupling_study/stage2b_moment_gram/`. The completed
+run did not improve held-out correction energy over geometric OT or Phi-only
+coupling, so its machine-readable decision stops fiber-aware coupling
+development for this paper. It does not implement joint schedule-coupling
+optimization or start another experimental suite.
+
 ## Multiple training seeds × multiple evaluation seeds
 
 Recommended paper-facing robustness command:

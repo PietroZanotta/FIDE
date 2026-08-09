@@ -125,6 +125,30 @@ def coupling_features(bank: EndpointBank) -> np.ndarray:
     return interactions.reshape(len(minus), len(plus), -1)
 
 
+def moment_response_gram_embedding(configurations: np.ndarray) -> np.ndarray:
+    """Six unique entries of the invariant local Gram JPhi(X) JPhi(X)^T."""
+    jacobians = np.asarray(paper.v_jphi(jnp.asarray(configurations)))
+    gram = np.einsum("irnd,isnd->irs", jacobians, jacobians)
+    upper = np.triu_indices(3)
+    return gram[:, upper[0], upper[1]]
+
+
+def richer_coupling_features(bank: EndpointBank) -> np.ndarray:
+    """Existing 9 Phi interactions plus exactly 36 Gram interactions."""
+    phi_interactions = coupling_features(bank)
+    minus = moment_response_gram_embedding(bank.minus)
+    plus = moment_response_gram_embedding(bank.plus)
+    pooled = np.concatenate([minus, plus], axis=0)
+    mean = pooled.mean(axis=0)
+    scale = np.maximum(pooled.std(axis=0), 1e-6)
+    minus = (minus - mean) / scale
+    plus = (plus - mean) / scale
+    gram_interactions = np.einsum("ir,js->ijrs", minus, plus).reshape(
+        len(minus), len(plus), 36
+    )
+    return np.concatenate([phi_interactions, gram_interactions], axis=-1)
+
+
 def _log_sinkhorn(logits: jax.Array, row_mass: jax.Array,
                   column_mass: jax.Array,
                   iterations: int = SINKHORN_ITERATIONS) -> jax.Array:
@@ -152,7 +176,8 @@ def _log_sinkhorn(logits: jax.Array, row_mass: jax.Array,
 
 def build_plan(method: str, cost: jax.Array, features: jax.Array,
                row_mass: jax.Array, column_mass: jax.Array,
-               parameters: jax.Array | None = None) -> jax.Array:
+               parameters: jax.Array | None = None,
+               sinkhorn_iterations: int = SINKHORN_ITERATIONS) -> jax.Array:
     if method == "independent":
         return row_mass[:, None] * column_mass[None, :]
     logits = -cost / SINKHORN_EPSILON
@@ -162,11 +187,12 @@ def build_plan(method: str, cost: jax.Array, features: jax.Array,
         logits = logits + jnp.einsum("ijk,k->ij", features, parameters)
     elif method != "geometric_sinkhorn":
         raise ValueError(f"unknown coupling method: {method}")
-    return _log_sinkhorn(logits, row_mass, column_mass)
+    return _log_sinkhorn(logits, row_mass, column_mass, sinkhorn_iterations)
 
 
 def plan_diagnostics(plan: np.ndarray, cost: np.ndarray,
-                     row_mass: np.ndarray, column_mass: np.ndarray) -> dict:
+                     row_mass: np.ndarray, column_mass: np.ndarray,
+                     sinkhorn_iterations: int = SINKHORN_ITERATIONS) -> dict:
     safe = np.maximum(plan, 1e-300)
     return {
         "row_marginal_linf": float(np.max(np.abs(plan.sum(axis=1) - row_mass))),
@@ -175,7 +201,7 @@ def plan_diagnostics(plan: np.ndarray, cost: np.ndarray,
         "microscopic_cost": float(np.sum(plan * cost)),
         "entropy": float(-np.sum(plan * np.log(safe))),
         "sinkhorn_epsilon": SINKHORN_EPSILON,
-        "sinkhorn_iterations": SINKHORN_ITERATIONS,
+        "sinkhorn_iterations": sinkhorn_iterations,
     }
 
 
@@ -354,9 +380,11 @@ def plan_path_metrics(plan: jax.Array, statistics: FiberStatistics,
 def coupling_objective(parameters: jax.Array, cost: jax.Array, features: jax.Array,
                        statistics: FiberStatistics, times: jax.Array,
                        target: jax.Array, row_mass: jax.Array,
-                       column_mass: jax.Array) -> jax.Array:
+                       column_mass: jax.Array,
+                       sinkhorn_iterations: int = SINKHORN_ITERATIONS) -> jax.Array:
     plan = build_plan(
         "fiber_aware", cost, features, row_mass, column_mass, parameters,
+        sinkhorn_iterations,
     )
     metrics = plan_path_metrics(plan, statistics, times, target)
     ess_penalty = ESS_PENALTY * jnp.trapezoid(
@@ -369,14 +397,16 @@ def optimize_coupling(cost, features, statistics, validation_cost,
                       validation_features, validation_statistics, times, target,
                       row_mass, column_mass, validation_row_mass,
                       validation_column_mass,
-                      steps: int):
+                      steps: int,
+                      sinkhorn_iterations: int = SINKHORN_ITERATIONS):
     objective = jax.jit(lambda parameters: coupling_objective(
         parameters, cost, features, statistics, times, target,
-        row_mass, column_mass,
+        row_mass, column_mass, sinkhorn_iterations,
     ))
     validation_objective = jax.jit(lambda parameters: coupling_objective(
         parameters, validation_cost, validation_features, validation_statistics,
         times, target, validation_row_mass, validation_column_mass,
+        sinkhorn_iterations,
     ))
     value_gradient = jax.jit(jax.value_and_grad(objective))
     parameters = jnp.zeros(features.shape[-1], dtype=jnp.float64)
