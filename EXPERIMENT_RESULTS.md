@@ -25,6 +25,7 @@ The commands for reproducing them are also listed in [`notes.md`](notes.md).
 | Paper-facing Tesseract check | Served full-MLP correction kernel | Tesseract quick | One seed | Passed; parity passed |
 | Stage 3 rollout adaptation | Differentiate a 3-parameter time modulation through the frozen neural ODE | JAX standard | Five independent adaptation/selection/evaluation bank triples | Completed; surrogate improved, final-law interval crosses zero |
 | Stage 3B confirmation | Confirm Stage 3 and isolate temporal structure and full credit assignment | JAX standard | Ten new model seeds and bank triples | Confirmed all three prespecified effects |
+| Stage 4 fiber design | Differentiate a rank-three radial-observable subspace through the fixed moment-fiber construction | JAX standard | Five independent adaptation/selection/evaluation bank triples | Completed; mean improved, paired interval narrowly crosses zero |
 
 The metrics are not interchangeable across rows. Experiment A uses Wasserstein
 and KS distances; Experiment B uses MMD; the level-2 schedule studies primarily
@@ -868,6 +869,56 @@ Primary artifacts:
 - [`results/stage3b_confirmatory/stage3b_contrasts.png`](results/stage3b_confirmatory/stage3b_contrasts.png)
 - [`results/stage3b_confirmatory/stage3b_selection.png`](results/stage3b_confirmatory/stage3b_selection.png)
 
+### 8.11 Stage 4: differentiable moment-fiber design
+
+Stage 4 isolates the choice of the three measured observables. For every
+paper-facing seed `401–405`, the physical endpoint configurations and weights,
+hidden q4 gap, deterministic angular-sort coupling, selected reference
+schedule, construction times, calibration equations, and eight-function Ritz
+realization dictionary were fixed. No rollout, schedule optimization, coupling
+adaptation, or neural training was performed.
+
+The learnable object is a rank-three subspace of an eleven-function radial RBF
+dictionary that nests the original hand observables. The coefficients are
+row-orthonormal, preventing scale or rank collapse, and lie in the nullspace of
+the fixed weighted endpoint dictionary-mean difference. Thus every candidate
+defines exactly three observables and keeps the two original endpoint laws in
+the same equivalence class. q4 and all angular descriptors are excluded from
+adaptation and selection.
+
+Each seed used disjoint adaptation, checkpoint-selection, and untouched
+evaluation banks. Step zero was the exact hand-observable span, so selection
+could retain the control. The primary construction objective was the existing
+integrated Ritz correction energy plus `0.02` times forcing power and the ESS
+floor penalty. Calibration was iterated to convergence for both arms; maximum
+evaluation residuals were at numerical precision. A directional derivative
+check through calibration and the full fiber construction had relative error
+`2.58e-8`.
+
+Untouched-bank five-seed results were:
+
+| fiber | construction objective | correction energy | forcing power | minimum ESS |
+|---|---:|---:|---:|---:|
+| hand | 0.64082 | 0.22281 | 20.6301 | 0.16402 |
+| differentiably designed | **0.31943** | **0.12300** | **9.8216** | **0.36946** |
+
+Designed checkpoints improved the primary evaluation objective on seeds 401,
+402, 404, and 405; seed 403 was slightly worse. The paired designed-minus-hand
+effect was `-0.32139`, with 95% interval `(-0.65720, 0.01441)`. Correction
+energy and forcing power also improved in mean, but their paired intervals
+crossed zero. Therefore differentiation found substantially better mean fibers,
+but this five-seed experiment does **not** establish that the designed
+three-observable equivalence class is better than the hand class.
+
+Primary artifacts:
+
+- [`stage4_protocol.json`](stage4_protocol.json)
+- [`results/stage4_fiber_design/summary.json`](results/stage4_fiber_design/summary.json)
+- [`results/stage4_fiber_design/stage4_metrics.csv`](results/stage4_fiber_design/stage4_metrics.csv)
+- [`results/stage4_fiber_design/REPORT.md`](results/stage4_fiber_design/REPORT.md)
+- [`results/stage4_fiber_design/stage4_summary.png`](results/stage4_fiber_design/stage4_summary.png)
+- [`results/stage4_fiber_design/stage4_selection_q4.png`](results/stage4_fiber_design/stage4_selection_q4.png)
+
 ## 9. MGD-specific numerical validation
 
 The archived reference validation sweeps predictor/corrector noise levels
@@ -933,6 +984,9 @@ Supported reasonably well:
 
 Not yet supported strongly enough:
 
+- A Stage-4 advantage of the differentiably designed three-observable fiber:
+  its mean construction objective is substantially lower, but the paired
+  five-seed interval `(-0.65720, 0.01441)` narrowly includes zero.
 - A statistically significant advantage of the three-parameter schedule over
   the optimized scalar schedule; its paired five-bank interval includes zero.
 - An end-to-end N=32 neural MMD advantage; its paired interval is centered near
@@ -1027,6 +1081,14 @@ Stage 3B predeclared confirmation:
 ./scripts/run_stage3b_confirmatory.sh
 ./scripts/run_stage3b_confirmatory.sh --aggregate-existing
 ./.venv/bin/python validate_stage3b_confirmatory.py
+```
+
+Stage 4 differentiable observable design:
+
+```bash
+./scripts/run_stage4_fiber_design.sh
+./scripts/run_stage4_fiber_design.sh --aggregate-existing
+./.venv/bin/python validate_stage4_fiber_design.py
 ```
 
 Validation and ablation commands:

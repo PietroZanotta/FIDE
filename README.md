@@ -491,6 +491,30 @@ both time dependence versus scalar amplitude and full temporal credit
 assignment versus the stopped-state control. Outputs are under
 `results/stage3b_base_models/` and `results/stage3b_confirmatory/`.
 
+### Stage 4: differentiable moment-fiber design
+
+Stage 4 changes only the choice of the three measured observables. It learns a
+rank-three subspace of radial RBF measurements by differentiating through the
+converged exponential calibration and Ritz moment-fiber construction. The
+fixed endpoint weights are built into an exact endpoint-nullspace constraint, and
+row-orthonormal coefficients prevent collapsed or rescaled observables.
+The original hand fiber is the step-zero candidate.
+
+The physical endpoints, endpoint weights, hidden q4 gap, angular-sort coupling,
+selected schedule, construction grid, and Ritz realization dictionary are
+unchanged. Adaptation, selection, and final evaluation use distinct banks; q4
+is evaluation-only. There is no rollout, schedule adaptation, or neural
+training in this experiment.
+
+```bash
+./scripts/run_stage4_fiber_design.sh
+./scripts/run_stage4_fiber_design.sh --aggregate-existing
+./.venv/bin/python validate_stage4_fiber_design.py
+```
+
+The frozen protocol is recorded in [`stage4_protocol.json`](stage4_protocol.json),
+and completed artifacts are written under `results/stage4_fiber_design/`.
+
 ## Multiple training seeds × multiple evaluation seeds
 
 Recommended paper-facing robustness command:
