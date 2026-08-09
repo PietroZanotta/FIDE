@@ -1,0 +1,42 @@
+Many-body completion milestone 8 validation report
+Date: 2026-08-05
+Python: 3.13.5
+JAX: 0.9.0.1
+Backend: cpu
+
+Execution strategy:
+- Every pytest module was run in a fresh process with plugin autoload disabled.
+- This avoids accumulated CPU-XLA teardown state in the sandbox.
+
+Module results:
+- test_ablation.py: 7/7 passed
+- test_angular_invariance.py: 1/1 passed
+- test_calibration_experiment.py: 5/5 passed
+- test_dataset.py: 1/1 passed
+- test_flow_matching.py: 5/5 passed
+- test_flow_training.py: 6/6 passed
+- test_generator.py: 6/6 passed
+- test_generator_training.py: 2/2 passed
+- test_geometry.py: 2/2 passed
+- test_heldout_evaluation.py: 3/3 passed
+- test_homometric.py: 5/5 passed
+- test_observables.py: 2/2 passed
+- test_problem_instances.py: 1/1 passed
+- test_projection.py: 5/5 passed
+- test_relaxation.py: 3/3 passed
+- test_s3.py: 2/2 passed
+- test_simulator.py: 2/2 passed
+- test_tesseract_layout.py: 4/4 passed
+- test_validation.py: 1/1 passed
+
+Total: 63/63 passed
+
+Reproducibility:
+- homometric dataset JSON/report: byte-identical on regeneration
+- homometric dataset NPZ: every named array exactly identical
+- homometric flow JSON/CSV: byte-identical on rerun
+- homometric flow output/parameter NPZ: every named array exactly identical
+
+Environment note:
+- Validation ran on CPU JAX in the sandbox; repository requirements remain pinned to JAX 0.8.1.
+- Docker-backed Tesseract runtime checks remain host-specific and were not executed here.

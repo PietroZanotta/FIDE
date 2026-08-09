@@ -1,0 +1,17 @@
+name: manybody-scientific-dual-calibration
+version: 0.1.0
+entrypoint: tesseract_api:apply
+description: Covariance-controlled dual moment calibration with fresh final sampling.
+inputs:
+  - prior_parameters
+  - n_spins
+  - target_moment
+  - sampler_options
+  - calibration_options
+  - seed
+outputs:
+  - dual
+  - status
+  - fit_trace
+  - residual_uncertainty
+  - final_ensemble

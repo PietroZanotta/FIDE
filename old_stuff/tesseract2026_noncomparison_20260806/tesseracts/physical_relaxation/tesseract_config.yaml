@@ -1,0 +1,13 @@
+name: "manybody-physical-relaxation"
+version: "0.1.0"
+description: "Differentiable proximal relaxation for periodic many-body ensembles."
+
+build_config:
+  python_version: "3.11"
+  package_data:
+    - ["../../src/manybody_completion", "/tesseract/manybody_completion"]
+
+metadata:
+  derivative_mode: "unrolled_reverse_mode"
+  geometry: "smooth_periodic_chord"
+  methodology_equations: [9, 10]

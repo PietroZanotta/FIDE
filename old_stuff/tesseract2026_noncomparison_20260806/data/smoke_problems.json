@@ -1,0 +1,35 @@
+{
+  "dtype": "float64",
+  "instances": {
+    "S1": {
+      "M": 1,
+      "N": 2,
+      "acceptance": [
+        "increase periodic separation",
+        "reduce smooth repulsive energy",
+        "retain center of mass up to periodic gauge",
+        "smooth final-separation sensitivity"
+      ],
+      "description": "two-particle proximal relaxation"
+    },
+    "S2": {
+      "M": 8,
+      "N": 4,
+      "R": 1,
+      "description": "one-moment ensemble projection",
+      "target_is_constructively_feasible": true
+    },
+    "S3": {
+      "M": 8,
+      "N": 4,
+      "R": 4,
+      "a_initial": 0.2,
+      "a_star": 0.65,
+      "description": "scalar generator recovery through both Tesseracts",
+      "generator": "wrap(X_base + a * Z)"
+    }
+  },
+  "jax_version": "0.9.0.1",
+  "schema_version": 1,
+  "seed": 20260805
+}

@@ -1,0 +1,19 @@
+name: manybody-scientific-tilted-ensemble
+version: 0.3.0
+entrypoint: tesseract_api:apply
+description: Corrected annealed particle sampler with an optional learned defensive tilt proposal.
+inputs:
+  - prior_probabilities
+  - n_spins
+  - dual
+  - sampler_options
+  - seed
+  - proposal_model  # optional serialized ProposalModel
+outputs:
+  - atom_probabilities
+  - moment_mean
+  - moment_covariance
+  - effective_sample_size
+  - proposal_expected_ess_fraction
+  - mode_plus_probability
+  - diagnostics

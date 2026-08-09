@@ -1,0 +1,445 @@
+{
+  "backend": "local-jax",
+  "base_post_hoc_parameter_distance": 0.0,
+  "batch_shape": [
+    2,
+    4,
+    6,
+    2
+  ],
+  "condition_mean": [
+    0.08675590445618195,
+    0.32715770122370524,
+    0.6681247837888136,
+    0.7718389525228952,
+    0.47596255640513485,
+    0.14412795346731133
+  ],
+  "condition_scale": [
+    0.011009401514762592,
+    0.026060184431248558,
+    0.023852493886485505,
+    0.011314610966831215,
+    0.030304476006395634,
+    0.01799981248929249
+  ],
+  "configuration": {
+    "acceptance": {
+      "maximum_base_post_hoc_parameter_distance": 0.0,
+      "maximum_full_projected_moment_error": 0.0001,
+      "maximum_full_vs_post_hoc_correction_ratio": 1.01,
+      "maximum_gradient_relative_error": 2e-05,
+      "maximum_rank_deficient_rate": 0.0,
+      "minimum_loss_reduction_factor": 1.02,
+      "minimum_projection_convergence_rate": 1.0,
+      "minimum_relaxation_convergence_rate": 1.0
+    },
+    "condition_scale_floor": 0.01,
+    "dataset": "data/tiny_smoke.npz",
+    "dtype": "float64",
+    "finite_difference": {
+      "direction_seed": 321,
+      "epsilons": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001
+      ],
+      "modes": [
+        "base",
+        "relax_e2e",
+        "full_e2e"
+      ]
+    },
+    "latent_anchors": {
+      "grid_shape": [
+        3,
+        2
+      ],
+      "jitter_scale": 0.025
+    },
+    "model": {
+      "hidden_dim": 12,
+      "latent_dim": 3,
+      "max_coordinate_update": 0.08,
+      "message_dim": 12,
+      "num_message_passing_steps": 2,
+      "radial_basis_size": 6,
+      "radial_max": 0.48,
+      "radial_min": 0.0,
+      "radial_width": 0.1
+    },
+    "objective": {
+      "correction": 1000.0,
+      "observed": 1000.0,
+      "physical": 0.1,
+      "preprojection_observed": 0.0
+    },
+    "physical": {
+      "kappa": 30.0,
+      "prox_strength": 0.05,
+      "r0": 0.12
+    },
+    "projection": {
+      "damping": 1.0,
+      "kkt_tolerance": 0.005,
+      "line_search_shrink": 0.5,
+      "line_search_steps": 10,
+      "max_correction_norm": 0.5,
+      "max_step_norm": 0.08,
+      "merit_penalty": 10.0,
+      "num_steps": 30,
+      "ridge": 1e-07,
+      "sufficient_decrease": 0.0001,
+      "svd_rcond": 1e-07,
+      "tolerance": 2e-05
+    },
+    "projection_moment_scales": "unit",
+    "relaxation": {
+      "armijo_coefficient": 0.0001,
+      "line_search_shrink": 0.5,
+      "line_search_steps": 8,
+      "max_update_norm": 0.04,
+      "num_steps": 32,
+      "step_size": 0.05,
+      "tolerance": 0.002
+    },
+    "seed": 3,
+    "target_indices": [
+      1,
+      3
+    ],
+    "training": {
+      "beta1": 0.9,
+      "beta2": 0.999,
+      "epsilon": 1e-08,
+      "gradient_clip_norm": 5.0,
+      "learning_rate": 0.002,
+      "num_steps": 15,
+      "weight_decay": 0.0
+    }
+  },
+  "finite_difference": {
+    "base": {
+      "absolute_errors": [
+        2.4925413850962475e-09,
+        2.9163526107933713e-10,
+        3.524775610275199e-11,
+        1.4523594132898054e-11
+      ],
+      "autodiff": 0.023191578476613118,
+      "best_absolute_error": 1.4523594132898054e-11,
+      "best_relative_error": 6.262443131046021e-10,
+      "epsilons": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001
+      ],
+      "finite_differences": [
+        0.023191575984071733,
+        0.023191578184977857,
+        0.023191578441365362,
+        0.023191578462089524
+      ],
+      "gradient_norm": 4.933756716015637,
+      "relative_errors": [
+        1.0747614215262576e-07,
+        1.2575050093008044e-08,
+        1.5198515331026985e-09,
+        6.262443131046021e-10
+      ]
+    },
+    "full_e2e": {
+      "absolute_errors": [
+        6.015930998845564e-08,
+        6.6810511289983054e-09,
+        3.4804293475021453e-10,
+        6.644032546354595e-11
+      ],
+      "autodiff": 0.019687356429716057,
+      "best_absolute_error": 6.644032546354595e-11,
+      "best_relative_error": 3.3747713005927526e-09,
+      "epsilons": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001
+      ],
+      "finite_differences": [
+        0.01968729627040607,
+        0.01968734974866493,
+        0.019687356081673123,
+        0.019687356496156383
+      ],
+      "gradient_norm": 3.4223584260877535,
+      "relative_errors": [
+        3.0557332673497648e-06,
+        3.3935745273113153e-07,
+        1.7678500208635387e-08,
+        3.3747713005927526e-09
+      ]
+    },
+    "relax_e2e": {
+      "absolute_errors": [
+        1.7097683546740683e-08,
+        1.891476877902143e-09,
+        2.0719453930340137e-10,
+        1.47558770757783e-11
+      ],
+      "autodiff": 0.11110185121533288,
+      "best_absolute_error": 1.47558770757783e-11,
+      "best_relative_error": 1.328139622730416e-10,
+      "epsilons": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001
+      ],
+      "finite_differences": [
+        0.11110186831301642,
+        0.11110185310680976,
+        0.11110185142252742,
+        0.11110185123008876
+      ],
+      "gradient_norm": 4.92840564209045,
+      "relative_errors": [
+        1.5389197713369042e-07,
+        1.702471072454196e-08,
+        1.8649062732701523e-09,
+        1.328139622730416e-10
+      ]
+    }
+  },
+  "full_vs_post_hoc_correction_improvement_fraction": 0.0006887084257585219,
+  "full_vs_post_hoc_correction_ratio": 0.9993112915742415,
+  "jax_version": "0.8.1",
+  "modes": {
+    "base": {
+      "final_loss": 9.044064037604102,
+      "final_metrics": {
+        "correction_loss": 0.0,
+        "loss_std": 3.4029307283801336,
+        "moment_error_initial": 0.09333671471039728,
+        "moment_error_projected": 1.2679951035048316e-05,
+        "moment_error_relaxed": 0.09346188380927391,
+        "moment_error_serving": 0.09333671471039728,
+        "moment_error_training": 0.09333671471039728,
+        "observed_loss": 9.044050926533759,
+        "physical_energy": 0.00013111070349040312,
+        "physical_energy_initial": 0.00013111070349040312,
+        "physical_energy_projected": 0.0038232025282829204,
+        "physical_energy_relaxed": 0.00012625970089391207,
+        "physical_energy_serving": 0.00013111070349040312,
+        "physical_energy_training": 0.00013111070349040312,
+        "physical_loss": 1.3111070349040312e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_correction": 0.05838790569592206,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "relaxation_displacement": 0.00021785637836428727,
+        "serving_correction_rms": 0.0,
+        "total_correction_rms": 0.0578873427216096,
+        "training_correction_rms": 0.0
+      },
+      "final_total_correction_rms": 0.0578873427216096,
+      "initial_loss": 10.405926827830335,
+      "initial_total_correction_rms": 0.0635992013144828,
+      "loss_reduction_factor": 1.1505808433646396,
+      "mode": "base",
+      "parameter_displacement": 1.1951682584857664,
+      "serving_stage": "initial",
+      "total_correction_reduction_fraction": 0.08981022520439252,
+      "training_final_metrics": {
+        "correction_loss": 0.0,
+        "loss_std": 3.4029307283801353,
+        "moment_error_initial": 0.09333671471039726,
+        "moment_error_training": 0.09333671471039726,
+        "observed_loss": 9.044050926533753,
+        "physical_energy_initial": 0.0001311107034904031,
+        "physical_energy_training": 0.0001311107034904031,
+        "physical_loss": 1.311107034904031e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "training_correction_rms": 0.0,
+        "training_projection_used": 0.0,
+        "training_relaxation_used": 0.0
+      },
+      "training_stage": "initial"
+    },
+    "full_e2e": {
+      "final_loss": 3.3896630912300703,
+      "final_metrics": {
+        "correction_loss": 3.389275310288256,
+        "loss_std": 0.7583158056098436,
+        "moment_error_initial": 0.09405973461302633,
+        "moment_error_projected": 1.7335539993503115e-05,
+        "moment_error_relaxed": 0.09415922833117212,
+        "moment_error_serving": 1.7335539993503115e-05,
+        "moment_error_training": 1.7335539993503115e-05,
+        "observed_loss": 3.019556248080981e-07,
+        "physical_energy": 0.003874789862873501,
+        "physical_energy_initial": 0.00012556821630657454,
+        "physical_energy_projected": 0.003874789862873501,
+        "physical_energy_relaxed": 0.00012166147369991142,
+        "physical_energy_serving": 0.003874789862873501,
+        "physical_energy_training": 0.003874789862873501,
+        "physical_loss": 0.0003874789862873501,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_correction": 0.058332410143310975,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "relaxation_displacement": 0.00017826633086298835,
+        "serving_correction_rms": 0.057847475220932455,
+        "total_correction_rms": 0.057847475220932455,
+        "training_correction_rms": 0.057847475220932455
+      },
+      "final_total_correction_rms": 0.057847475220932455,
+      "initial_loss": 4.084057551256397,
+      "initial_total_correction_rms": 0.0635992013144828,
+      "loss_reduction_factor": 1.2048564831776065,
+      "mode": "full_e2e",
+      "parameter_displacement": 1.1111569581076404,
+      "serving_stage": "projected",
+      "total_correction_reduction_fraction": 0.09043708057133348,
+      "training_final_metrics": {
+        "correction_loss": 3.3892753102881583,
+        "loss_std": 0.7583158056098871,
+        "moment_error_initial": 0.0940597346130264,
+        "moment_error_training": 1.73355399934095e-05,
+        "observed_loss": 3.019556248050019e-07,
+        "physical_energy_initial": 0.00012556821630657454,
+        "physical_energy_training": 0.0038747898628717996,
+        "physical_loss": 0.00038747898628718,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "training_correction_rms": 0.05784747522093155,
+        "training_projection_used": 1.0,
+        "training_relaxation_used": 1.0
+      },
+      "training_stage": "projected"
+    },
+    "post_hoc": {
+      "final_loss": 9.044064037604102,
+      "final_metrics": {
+        "correction_loss": 0.0,
+        "loss_std": 3.4029307283801336,
+        "moment_error_initial": 0.09333671471039728,
+        "moment_error_projected": 1.2679951035048316e-05,
+        "moment_error_relaxed": 0.09346188380927391,
+        "moment_error_serving": 1.2679951035048316e-05,
+        "moment_error_training": 0.09333671471039728,
+        "observed_loss": 9.044050926533759,
+        "physical_energy": 0.00013111070349040312,
+        "physical_energy_initial": 0.00013111070349040312,
+        "physical_energy_projected": 0.0038232025282829204,
+        "physical_energy_relaxed": 0.00012625970089391207,
+        "physical_energy_serving": 0.0038232025282829204,
+        "physical_energy_training": 0.00013111070349040312,
+        "physical_loss": 1.3111070349040312e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_correction": 0.05838790569592206,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "relaxation_displacement": 0.00021785637836428727,
+        "serving_correction_rms": 0.0578873427216096,
+        "total_correction_rms": 0.0578873427216096,
+        "training_correction_rms": 0.0
+      },
+      "final_total_correction_rms": 0.0578873427216096,
+      "initial_loss": 10.405926827830335,
+      "initial_total_correction_rms": 0.0635992013144828,
+      "loss_reduction_factor": 1.1505808433646396,
+      "mode": "post_hoc",
+      "parameter_displacement": 1.1951682584857664,
+      "serving_stage": "projected",
+      "total_correction_reduction_fraction": 0.08981022520439252,
+      "training_final_metrics": {
+        "correction_loss": 0.0,
+        "loss_std": 3.4029307283801336,
+        "moment_error_initial": 0.09333671471039728,
+        "moment_error_training": 0.09333671471039728,
+        "observed_loss": 9.044050926533759,
+        "physical_energy_initial": 0.00013111070349040312,
+        "physical_energy_training": 0.00013111070349040312,
+        "physical_loss": 1.3111070349040312e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "training_correction_rms": 0.0,
+        "training_projection_used": 0.0,
+        "training_relaxation_used": 0.0
+      },
+      "training_stage": "initial"
+    },
+    "relax_e2e": {
+      "final_loss": 9.06320788936349,
+      "final_metrics": {
+        "correction_loss": 7.110829698631111e-05,
+        "loss_std": 3.390762184383275,
+        "moment_error_initial": 0.09333081680114827,
+        "moment_error_projected": 1.3688011987412089e-05,
+        "moment_error_relaxed": 0.09345595961116841,
+        "moment_error_serving": 1.3688011987412089e-05,
+        "moment_error_training": 0.09345595961116841,
+        "observed_loss": 9.063124156430387,
+        "physical_energy": 0.00012624636116403498,
+        "physical_energy_initial": 0.00013109221457089339,
+        "physical_energy_projected": 0.0038164017553424297,
+        "physical_energy_relaxed": 0.00012624636116403498,
+        "physical_energy_serving": 0.0038164017553424297,
+        "physical_energy_training": 0.00012624636116403498,
+        "physical_loss": 1.2624636116403499e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_correction": 0.05838550783304442,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "relaxation_displacement": 0.00021774990518876004,
+        "serving_correction_rms": 0.057885324662868824,
+        "total_correction_rms": 0.057885324662868824,
+        "training_correction_rms": 0.00021774990518876007
+      },
+      "final_total_correction_rms": 0.057885324662868824,
+      "initial_loss": 10.408238039014229,
+      "initial_total_correction_rms": 0.0635992013144828,
+      "loss_reduction_factor": 1.148405527719303,
+      "mode": "relax_e2e",
+      "parameter_displacement": 1.1952561957685457,
+      "serving_stage": "projected",
+      "total_correction_reduction_fraction": 0.08984195608621282,
+      "training_final_metrics": {
+        "correction_loss": 7.11082969863111e-05,
+        "loss_std": 3.390762184383274,
+        "moment_error_initial": 0.09333081680114828,
+        "moment_error_training": 0.09345595961116843,
+        "observed_loss": 9.063124156430387,
+        "physical_energy_initial": 0.0001310922145708934,
+        "physical_energy_training": 0.00012624636116403498,
+        "physical_loss": 1.2624636116403499e-05,
+        "preprojection_loss": 0.0,
+        "projection_converged": 1.0,
+        "projection_rank_deficient": 0.0,
+        "relaxation_converged": 1.0,
+        "training_correction_rms": 0.00021774990518876004,
+        "training_projection_used": 0.0,
+        "training_relaxation_used": 1.0
+      },
+      "training_stage": "relaxed"
+    }
+  },
+  "parameter_count": 3014,
+  "schema_version": 1,
+  "selected_indices": [
+    1,
+    3
+  ]
+}

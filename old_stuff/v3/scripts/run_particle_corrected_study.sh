@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
+run_module manybody_completion.workflow_cli seed-sweep \
+  --config configs/diffpop_particle_corrected_seed_sweep.yaml "$@"

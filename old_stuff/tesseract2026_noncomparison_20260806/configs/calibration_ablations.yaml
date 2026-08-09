@@ -1,0 +1,92 @@
+# Calibration-scale, leakage-safe four-mode ablation with deterministic minibatches.
+seed: 41
+dtype: float64
+dataset: data/calibration_smoke.npz
+dataset_metadata: data/calibration_smoke.json
+condition_scale_floor: 0.003
+angular_scale_floor: 0.005
+projection_moment_scales: unit
+
+integrity:
+  recompute_descriptors: true
+  descriptor_tolerance: 1.0e-10
+
+split:
+  seed: 2026
+  validation_per_regime: 2
+
+minibatching:
+  batch_size: 4
+  num_epochs: 2
+  shuffle_seed: 31415
+
+latent_anchors:
+  grid_shape: [4, 2]
+  jitter_scale: 0.02
+
+model:
+  latent_dim: 3
+  hidden_dim: 12
+  message_dim: 12
+  num_message_passing_steps: 2
+  radial_basis_size: 6
+  radial_min: 0.0
+  radial_max: 0.62
+  radial_width: 0.11
+  max_coordinate_update: 0.07
+
+physical:
+  r0: 0.14
+  kappa: 38.0
+  prox_strength: 0.05
+
+relaxation:
+  num_steps: 28
+  step_size: 0.04
+  tolerance: 0.0045
+  max_update_norm: 0.035
+  line_search_steps: 8
+  line_search_shrink: 0.5
+  armijo_coefficient: 0.0001
+
+projection:
+  num_steps: 32
+  tolerance: 0.00017
+  kkt_tolerance: 0.006
+  ridge: 1.0e-7
+  svd_rcond: 1.0e-7
+  damping: 1.0
+  max_step_norm: 0.07
+  max_correction_norm: 0.45
+  line_search_steps: 10
+  line_search_shrink: 0.5
+  sufficient_decrease: 0.0001
+  merit_penalty: 10.0
+
+objective:
+  observed: 1000.0
+  physical: 0.1
+  correction: 1000.0
+  preprojection_observed: 0.0
+
+training:
+  learning_rate: 0.0015
+  beta1: 0.9
+  beta2: 0.999
+  epsilon: 1.0e-8
+  gradient_clip_norm: 5.0
+  weight_decay: 0.0
+  jit_objective: true
+
+finite_difference:
+  modes: [full_e2e]
+  direction_seed: 808
+  epsilons: [0.003, 0.001, 0.0003]
+  jit_objective: true
+
+acceptance:
+  maximum_full_validation_projected_moment_error: 0.0002
+  maximum_gradient_relative_error: 0.0002
+  minimum_relaxation_convergence_rate: 0.95
+  minimum_projection_convergence_rate: 0.95
+  maximum_rank_deficient_rate: 0.0

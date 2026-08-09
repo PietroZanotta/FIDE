@@ -1,0 +1,32 @@
+{
+  "pure_jax_kernel_parity": {
+    "t1_velocity": 2.220446049250313e-16,
+    "t2_lambda": 0.0,
+    "t2_weights": 0.0,
+    "t2_lambda_dot": 0.0,
+    "t2_forcing": 0.0,
+    "t2_correction": 8.326672684688674e-16,
+    "t2_velocity": 8.326672684688674e-16,
+    "t1_dt_gradient": 0.0,
+    "t2_phi_vjp": 6.938893903907228e-17,
+    "t2_phi_jvp": 1.1757428364234102e-11
+  },
+  "tesseract_runtime": {
+    "available": true,
+    "reason": null,
+    "transport": "tesseract CLI / Docker",
+    "runtime_diffs": {
+      "reference_velocity": 3.3306690738754696e-16,
+      "fiber_weights": 6.938893903907228e-18,
+      "fiber_velocity": 4.440892098500626e-16
+    },
+    "images": [
+      "mfsi-reference-transport:latest",
+      "mfsi-moment-fiber-realizer:latest"
+    ]
+  },
+  "configs_present": {
+    "reference_transport": true,
+    "moment_fiber_realizer": true
+  }
+}

@@ -1,0 +1,17 @@
+name: manybody-scientific-tilted-ensemble
+version: 0.1.0
+entrypoint: tesseract_api:apply
+description: Tempered weighted population sampler for an exponential moment tilt.
+inputs:
+  - prior_parameters
+  - n_spins
+  - dual
+  - sampler_options
+  - seed
+outputs:
+  - atom_probabilities
+  - moment_mean
+  - moment_covariance
+  - effective_sample_size
+  - mode_plus_probability
+  - diagnostics
