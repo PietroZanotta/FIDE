@@ -23,6 +23,8 @@ The commands for reproducing them are also listed in [`notes.md`](notes.md).
 | Advanced level 2: many-body | 16 particles, 32D state, radial features | JAX and served Tesseract, standard | Independent train/fresh banks | Passed; backend parity passed |
 | Paper-facing level 2 | 32 particles, 64D, full MLP, baselines and CIs | JAX standard | Five independent banks | Passed declared gates |
 | Paper-facing Tesseract check | Served full-MLP correction kernel | Tesseract quick | One seed | Passed; parity passed |
+| Stage 3 rollout adaptation | Differentiate a 3-parameter time modulation through the frozen neural ODE | JAX standard | Five independent adaptation/selection/evaluation bank triples | Completed; surrogate improved, final-law interval crosses zero |
+| Stage 3B confirmation | Confirm Stage 3 and isolate temporal structure and full credit assignment | JAX standard | Ten new model seeds and bank triples | Confirmed all three prespecified effects |
 
 The metrics are not interchangeable across rows. Experiment A uses Wasserstein
 and KS distances; Experiment B uses MMD; the level-2 schedule studies primarily
@@ -502,12 +504,13 @@ near equality of reference-grid and off-grid gain within the random-time model.
 This improvement does not translate into a mean rollout-MMD improvement:
 random-time minus fixed-grid MMD² is 0.00023 with CI
 (-0.01201, 0.01247). Nor does the random-time model beat tangent in mean. That
-is not the progression criterion. Before examining the result, coupling
-readiness was defined as: off-grid gain must not decrease, and the mean
+is not the progression criterion. Before examining the result,
+rollout-adaptation readiness was defined as: off-grid gain must not decrease, and the mean
 reference/off-grid degradation must fall by at least 50%. The observed 94.2%
 reduction passes that criterion. Tangent MMD is explicitly not used by the
-criterion, so the next scoped experiment can proceed to coupling while the
-remaining end-to-end neural limitation is reported unchanged.
+criterion, so the next scoped experiment can test differentiable rollout-aware
+modulation while the remaining end-to-end neural limitation is reported
+unchanged.
 
 ### 8.8 Tesseract result
 
@@ -536,6 +539,334 @@ simulation to add derived interior-MMD effects and regenerate figures. That
 operation replaced the top-level `elapsed_seconds` with aggregation time. Use
 the recorded per-method and training timings for performance comparisons; do
 not interpret the current top-level elapsed value as total simulation runtime.
+
+### 8.9 Stage 3: rollout-aware differentiable correction adaptation
+
+#### Scientific question and frozen setup
+
+This single follow-up asks whether differentiation through the complete
+generated trajectory can convert the locally useful random-time neural
+correction into better global law-valued transport. It does not retrain or
+redesign the potential. Each run restores the completed random-continuous-time
+MLP and scalar Ritz gate from the five paper-facing seed artifacts and freezes
+the model parameters. SHA-256 hashes before and after adaptation are identical.
+
+Everything except the temporal amplitude was frozen:
+
+- seeds `401, 402, 403, 404, 405`, with 32 particles and a 64-dimensional state;
+- physical endpoint populations generated with seed `seed + 10000`, endpoint
+  calibration, target moments, and the three measured radial-RBF observables;
+- the deterministic polar-angle endpoint pairing used by the paper study;
+- the selected three-parameter stochastic-interpolant schedule, reference
+  velocity, invariant width-18 two-hidden-layer MLP, its random-time Deep-Ritz
+  weights, and its held-out scalar gate;
+- fixed-step Heun with 24 steps and 48 NFE, snapshots at
+  `t = 0.25, 0.50, 0.75, 1.00`;
+- the final radial-descriptor-plus-q4 weighted median-RBF MMD, moment-error
+  calculation, q4 definition, and endpoint reporting.
+
+The only new trainable object has three scalar parameters:
+
+\[
+a_\alpha(t)=\operatorname{sigmoid}\!\left(
+\operatorname{logit}(g)+\alpha_0+\alpha_1\cos(2\pi t)
++\alpha_2\sin(2\pi t)\right),
+\]
+
+where `g` is the frozen scalar Ritz gate. Thus `alpha = (0,0,0)` exactly
+reproduces the existing neural rollout, the modulation is smooth and bounded in
+`(0,1)`, and no state-dependent or neural parameters are added.
+
+Each seed uses three disjoint deterministic bank roles. Each role contains 64
+generated trajectories and an independently sampled oracle with 256 particles
+at each evaluation time. The RNG offsets are `81000`, `82000`, and `83000` for
+adaptation, selection, and untouched evaluation; all fifteen recorded bank
+fingerprints are role-distinct. Adaptation minimizes interior weighted
+median-RBF MMD² on only the three measured `Phi` values at `0.25, 0.50, 0.75`.
+The final radial-plus-q4 law feature and q4 itself are never evaluated by the
+optimizer or candidate selector. Adam runs for 40 steps at learning rate
+`0.04`; the fixed candidates at steps `0,5,...,40` are evaluated once on the
+selection bank, including the exact frozen baseline at step zero. The selected
+candidate is then evaluated once on the untouched bank against raw SI, tangent,
+and frozen neural rollouts using identical particles and oracle samples.
+
+The restored schedules, gates, selected parameters, and amplitudes were:
+
+| seed | frozen schedule raw | gate | selected step | selected alpha | a(0), a(.25), a(.5), a(.75), a(1) |
+|---:|---|---:|---:|---|---|
+| 401 | `[-1.05488348, 0, 0]` | 0.53962691 | 40 | `[-1.26969417, -1.36359399, -1.39916482]` | `[0.07766904, 0.07515884, 0.56285093, 0.57158269, 0.07766904]` |
+| 402 | `[-0.82104778, 0.16889917, 0.01738027]` | 0.67990922 | 40 | `[-1.41094248, -1.46022826, -1.44708283]` | `[0.10737721, 0.10864368, 0.69053901, 0.68772288, 0.10737721]` |
+| 403 | `[-0.90906500, 0.13898768, 0.03180078]` | 0.78580193 | 40 | `[-0.29173878, -1.45897299, -1.60210980]` | `[0.38914487, 0.35570730, 0.92179850, 0.93151354, 0.38914487]` |
+| 404 | `[-0.90164719, 0.10455292, -0.01122837]` | 0.60255511 | 40 | `[1.42313070, 0.75022799, -0.87796466]` | `[0.93018155, 0.72337978, 0.74819818, 0.93803504, 0.93018155]` |
+| 405 | `[-0.95929780, 0, 0]` | 0.76010873 | 35 | `[-0.63131950, 1.35861310, -1.29403764]` | `[0.86767651, 0.31602903, 0.30223935, 0.86008473, 0.86767651]` |
+
+The mean selected alpha was `[-0.43611285, -0.43479083, -1.32407195]`; the
+mean amplitudes at the five displayed times were
+`[0.47440984, 0.31578373, 0.64512519, 0.79778777, 0.47440984]`.
+
+#### Adaptation and selection objectives
+
+| seed | adaptation initial | adaptation selected | selection initial | selection selected |
+|---:|---:|---:|---:|---:|
+| 401 | 0.05863152 | 0.04528355 | 0.02561536 | 0.01838422 |
+| 402 | 0.05036908 | 0.03533874 | 0.05732235 | 0.04340959 |
+| 403 | 0.02191169 | 0.02068902 | 0.01190874 | 0.01079539 |
+| 404 | 0.02513193 | 0.02143046 | 0.03198214 | 0.02652568 |
+| 405 | 0.01821606 | 0.01360663 | 0.00626879 | 0.00348695 |
+| mean (95% CI) | 0.03485206 (0.01208775, 0.05761637) | 0.02726968 (0.01139919, 0.04314017) | 0.02661948 (0.00176700, 0.05147196) | 0.02052037 (0.00139560, 0.03964513) |
+
+The mean selected step was `39.0` with interval `(36.224, 41.776)`; four seeds
+selected step 40 and seed 405 selected step 35. Every selected candidate lowered
+both its adaptation-bank and selection-bank objective relative to alpha zero.
+
+#### Untouched evaluation results
+
+The primary `interior law MMD²` is the unchanged final MMD on eight radial
+descriptors plus held-out q4, integrated over `0.25, 0.50, 0.75`. `Integrated
+law MMD²` additionally includes the reported endpoint at `t=1`. Values are
+five-seed means with 95% t intervals.
+
+| method | interior law MMD² | integrated law MMD² | endpoint MMD² | maximum moment error | interior Phi MMD² | q4 change |
+|---|---:|---:|---:|---:|---:|---:|
+| raw SI | 0.01914905 (0.01098884, 0.02730927) | 0.02584914 (0.01719983, 0.03449846) | 0.01485990 (-0.00132650, 0.03104630) | 0.02683098 (0.01743078, 0.03623117) | 0.03350829 (0.01420223, 0.05281434) | 0.60280942 (0.57917483, 0.62644400) |
+| tangent | **0.00980376** (0.00453648, 0.01507105) | 0.02637707 (0.01101505, 0.04173908) | 0.09098961 (0.03314209, 0.14883714) | **0.00167379** (0.00105651, 0.00229107) | **0.00987402** (0.00416023, 0.01558781) | 0.56233342 (0.54354022, 0.58112663) |
+| frozen neural | 0.01968066 (0.00975290, 0.02960841) | 0.02890349 (0.01848875, 0.03931823) | 0.03414446 (0.01104101, 0.05724790) | 0.02493123 (0.01342103, 0.03644142) | 0.03155668 (0.01083869, 0.05227467) | 0.60587740 (0.58347166, 0.62828313) |
+| rollout-adapted | 0.01602761 (0.00776599, 0.02428922) | **0.02364048** (0.01685750, 0.03042346) | 0.02888677 (-0.00690430, 0.06467784) | 0.02324640 (0.01415000, 0.03234281) | 0.02476925 (0.00885448, 0.04068402) | 0.60567336 (0.58580674, 0.62553998) |
+
+Five-seed mean path values at each unchanged evaluation time were:
+
+| method | MMD² .25 | MMD² .50 | MMD² .75 | MMD² 1.0 | moment error .25 | moment error .50 | moment error .75 | moment error 1.0 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| raw SI | 0.03181126 | 0.04132016 | 0.03874084 | 0.01485990 | 0.02024833 | 0.02315727 | 0.02683098 | 0.00238356 |
+| tangent | 0.01586412 | 0.01048458 | 0.04159682 | 0.09098961 | 0.00165465 | 0.00163999 | 0.00164680 | 0.00166042 |
+| frozen neural | 0.03128508 | 0.04326097 | 0.03963823 | 0.03414446 | 0.01984766 | 0.02311119 | 0.02355032 | 0.01029990 |
+| rollout-adapted | 0.02536421 | 0.03542021 | 0.03201621 | 0.02888677 | 0.01737063 | 0.02013459 | 0.02045794 | 0.00763132 |
+
+| method | q4 .25 | q4 .50 | q4 .75 | q4 1.0 |
+|---|---:|---:|---:|---:|
+| raw SI | 0.16187317 | 0.23677430 | 0.40999435 | 0.76468258 |
+| tangent | 0.16332127 | 0.23092082 | 0.38567999 | 0.72565470 |
+| frozen neural | 0.15963565 | 0.23085568 | 0.40098408 | 0.76551305 |
+| rollout-adapted | 0.16056222 | 0.23229761 | 0.40126000 | 0.76623558 |
+| oracle | 0.16681301 | 0.24077210 | 0.42303026 | 0.77346496 |
+
+Per-seed primary interior law MMD² values were:
+
+| seed | raw SI | tangent | frozen neural | rollout-adapted |
+|---:|---:|---:|---:|---:|
+| 401 | 0.01914357 | 0.01260773 | 0.02804496 | 0.02044941 |
+| 402 | 0.01479483 | 0.00357138 | 0.02079690 | 0.01484126 |
+| 403 | 0.01592005 | 0.01434898 | 0.01774453 | 0.01716977 |
+| 404 | 0.03051441 | 0.01066273 | 0.02463715 | 0.02236217 |
+| 405 | 0.01537240 | 0.00782799 | 0.00717975 | 0.00531543 |
+
+All paired contrasts below are left method minus right method:
+
+| contrast | interior law MMD² | integrated law MMD² | endpoint MMD² | maximum moment error | interior Phi MMD² | q4 change |
+|---|---:|---:|---:|---:|---:|---:|
+| adapted - frozen | -0.00365305 (-0.00734731, **0.00004121**) | -0.00526301 (-0.01243602, 0.00190999) | -0.00525769 (-0.02997796, 0.01946258) | -0.00168482 (-0.00663284, 0.00326320) | **-0.00678743 (-0.01352129, -0.00005358)** | -0.00020404 (-0.00472932, 0.00432124) |
+| adapted - tangent | 0.00622384 (-0.00127566, 0.01372335) | -0.00273659 (-0.01477697, 0.00930380) | **-0.06210285 (-0.11686270, -0.00734299)** | **0.02157261 (0.01294964, 0.03019559)** | **0.01489523 (0.00002053, 0.02976993)** | **0.04333994 (0.02216806, 0.06451181)** |
+| adapted - raw | -0.00312144 (-0.00998198, 0.00373909) | -0.00220866 (-0.00898681, 0.00456948) | 0.01402687 (-0.01310475, 0.04115849) | -0.00358457 (-0.00811529, 0.00094615) | -0.00873904 (-0.02049191, 0.00301383) | 0.00286394 (-0.00615897, 0.01188685) |
+| frozen - tangent | 0.00987689 (-0.00002560, 0.01977939) | 0.00252643 (-0.01538032, 0.02043317) | -0.05684516 (-0.11995511, 0.00626480) | **0.02325744 (0.01221890, 0.03429597)** | **0.02168266 (0.00144373, 0.04192160)** | **0.04354397 (0.02334993, 0.06373802)** |
+
+The adapted-minus-frozen final-law effect is favorable in mean but its upper
+interval endpoint is `4.12e-5`, just above zero. The experiment therefore does
+not establish a replicated improvement in the final law-valued metric. It does
+establish improvement in the held-out measured-Phi rollout target, whose paired
+interval is entirely below zero. This is useful evidence that trajectory-level
+differentiation changes the frozen field in the intended direction, but that
+the measured-Phi surrogate still does not fully resolve global law mismatch.
+The adapted method also does not beat tangent: its mean interior law MMD² is
+`0.00622384` higher, with an interval crossing zero, and its moment error and
+measured-Phi MMD are significantly higher than tangent.
+
+#### Numerical validation and timing
+
+- differentiated-rollout directional derivative: autodiff
+  `0.0021100991006`, central finite difference `0.0021100990968`, relative
+  error `1.78e-9` at step `1e-4`;
+- functional JAX Heun versus the established Python Heun loop: maximum absolute
+  trajectory error `8.88e-16` across five evaluation banks;
+- static-shape differentiable weighted MMD versus the established MMD:
+  absolute error `0.0`;
+- all frozen neural hashes unchanged; all bank roles distinct; q4 and final
+  evaluation were absent from optimization and selection;
+- total wall time recorded by the full command: `125.11 s`; per-seed optimizer
+  wall times were `9.054, 6.341, 6.231, 6.382, 6.310 s` (the first includes
+  more compilation); every evaluated method used 48 NFE. Per-seed rollout wall
+  times are retained in the machine-readable summary because compilation makes
+  them unsuitable for a scientific ranking.
+
+Primary artifacts:
+
+- [`results/stage3_rollout_adaptation/summary.json`](results/stage3_rollout_adaptation/summary.json)
+- [`results/stage3_rollout_adaptation/stage3_metrics.csv`](results/stage3_rollout_adaptation/stage3_metrics.csv)
+- [`results/stage3_rollout_adaptation/REPORT.md`](results/stage3_rollout_adaptation/REPORT.md)
+- [`results/stage3_rollout_adaptation/stage3_summary.png`](results/stage3_rollout_adaptation/stage3_summary.png)
+- [`results/stage3_rollout_adaptation/stage3_optimization.png`](results/stage3_rollout_adaptation/stage3_optimization.png)
+- [`results/stage3_rollout_adaptation/stage3_paths.png`](results/stage3_rollout_adaptation/stage3_paths.png)
+
+### 8.10 Stage 3B: confirmatory replication and credit-assignment controls
+
+#### Predeclaration and unchanged protocol
+
+Stage 3B was predeclared in [`stage3b_protocol.json`](stage3b_protocol.json)
+before executing any of the new seeds. It uses ten new scientific seeds
+`406–415`; none overlaps the original Stage 3 seeds `401–405`. The primary
+confirmatory estimand is full-rollout-adapted minus frozen-neural interior
+radial-plus-q4 law MMD² on untouched evaluation banks. The predeclared
+confirmation rule is an upper 95% paired-t interval endpoint below zero.
+
+There were no changes to the original full-rollout method:
+
+- the same three-parameter bounded harmonic modulation and alpha-zero frozen
+  baseline;
+- Adam, learning rate `0.04`, 40 steps, gradient clipping, and checkpoints
+  `0,5,...,40` selected on the independent selection bank;
+- adaptation/selection/evaluation offsets `91000/92000/93000`, with 64
+  generated trajectories and 256 oracle particles per time in each role;
+- the three measured-Phi weighted median-RBF interior MMD² adaptation and
+  selection loss, with q4 and the final law MMD kept hidden;
+- 24-step Heun, 48 NFE, and evaluation times
+  `0.25, 0.50, 0.75, 1.00`;
+- the endpoint construction, calibration, selected schedule, reference field,
+  invariant MLP architecture, 18-time × 64-particle random-continuous-time
+  training, 420 Deep-Ritz steps, and held-out scalar gate procedure.
+
+The ten base objects were reconstructed by
+[`prepare_stage3b_base_models.py`](prepare_stage3b_base_models.py), which runs
+the unchanged paper pipeline exactly through schedule selection, random-time
+MLP training, and gating. It skips only unconsumed fixed-grid, angular-network,
+deployment, and diagnostic rollouts. A seed-406 comparison against the full
+runner gave a schedule difference below `6.4e-15`, gate difference `2.5e-6`,
+and model-parameter relative difference `3.64e-7`, consistent with numerical
+GPU rerun variation. Base preparation took `178.20 s`; Stage 3B took `422.77 s`.
+
+Two controls were added on the same new bank triples:
+
+1. **Scalar full-rollout adaptation:** optimize only `alpha0`, with
+   `alpha1=alpha2=0`, so `a(t)` is constant while retaining full trajectory
+   differentiation.
+2. **Stopped-state three-parameter adaptation:** use the identical
+   time-dependent forward rollout, but apply `stop_gradient` to the incoming
+   state and Heun proposal at every step. The direct dependence on the two
+   current-step field calls remains, while accumulated state-to-state temporal
+   credit is removed.
+
+Across every seed, full and stopped-state forward trajectories agreed exactly
+at the gradient probe (`0.0` maximum error), while the full-versus-stopped
+gradient-difference norm ranged from `0.00048913` to `0.00592903` with mean
+`0.00280268`. Thus this is a gradient-only control, not a changed simulator.
+All frozen MLP hashes remained unchanged, all thirty bank-role fingerprints
+were distinct within their seed, and no q4 or evaluation-bank value entered
+adaptation or selection.
+
+The new schedules and frozen gates were:
+
+| seed | selected schedule raw | frozen gate |
+|---:|---|---:|
+| 406 | `[-0.76793131, 0.20624515, -0.02002081]` | 0.49972780 |
+| 407 | `[-0.80991355, 0.17476388, 0.00089047]` | 0.68215865 |
+| 408 | `[-0.76829742, 0.20404200, 0.00706254]` | 0.66565714 |
+| 409 | `[-0.88245860, 0.17071452, -0.00618999]` | 0.75370248 |
+| 410 | `[-0.82947210, 0.17352714, 0.00819035]` | 0.83047033 |
+| 411 | `[-1.07051702, 0, 0]` | 0.55456209 |
+| 412 | `[-1.11119563, 0.03500000, 0.03500000]` | 0.73335786 |
+| 413 | `[-0.63393418, 0.25961182, 0.03494845]` | 0.37198000 |
+| 414 | `[-1.03398873, 0, 0]` | 0.68072177 |
+| 415 | `[-1.03528849, 0.03500000, 0.03500000]` | 0.68235628 |
+
+#### Optimization behavior
+
+Values below are ten-seed means with 95% intervals. All three controls start
+from the same alpha-zero loss on each seed.
+
+| control | adaptation initial | adaptation selected | selection initial | selection selected | mean selected checkpoint |
+|---|---:|---:|---:|---:|---:|
+| scalar full-gradient | 0.02257817 (0.01552354, 0.02963280) | 0.02092838 (0.01404510, 0.02781166) | 0.01990090 (0.01368739, 0.02611441) | 0.01860524 (0.01281843, 0.02439204) | 36.0 (26.952, 45.048) |
+| stopped-state 3-param | 0.02257817 (0.01552354, 0.02963280) | 0.02086301 (0.01369045, 0.02803558) | 0.01990090 (0.01368739, 0.02611441) | 0.01837760 (0.01241883, 0.02433637) | 25.5 (11.756, 39.244) |
+| full-rollout 3-param | 0.02257817 (0.01552354, 0.02963280) | **0.01917982** (0.01177787, 0.02658176) | 0.01990090 (0.01368739, 0.02611441) | **0.01669030** (0.01130776, 0.02207284) | 40.0 (40.0, 40.0) |
+
+Mean selected full-alpha vectors were `[0.55021565, 0, 0]` for scalar,
+`[0.75424258, -0.78713415, -0.32824718]` for stopped-state, and
+`[0.57638199, 0.08688137, -0.45554226]` for full rollout. Mean amplitudes at
+`t=(0,.25,.5,.75,1)` were respectively:
+
+- scalar: `[0.70498660, 0.70498660, 0.70498660, 0.70498660, 0.70498660]`;
+- stopped-state: `[0.63713923, 0.68163471, 0.85053519, 0.79941787, 0.63713923]`;
+- full rollout: `[0.72346570, 0.58529805, 0.70722257, 0.79534595, 0.72346570]`.
+
+#### Confirmatory untouched-bank results
+
+| method | interior law MMD² | integrated law MMD² | endpoint MMD² | maximum moment error | interior Phi MMD² | q4 change |
+|---|---:|---:|---:|---:|---:|---:|
+| raw SI | 0.01616719 (0.01249643, 0.01983795) | 0.02105137 (0.01663573, 0.02546700) | 0.00599468 (0.00363871, 0.00835064) | 0.02380353 (0.01991622, 0.02769083) | 0.02480190 (0.02046183, 0.02914198) | 0.60753661 (0.59508819, 0.61998503) |
+| tangent | **0.00867894** (0.00447191, 0.01288597) | 0.02001195 (0.01161057, 0.02841334) | 0.05658391 (0.03354898, 0.07961884) | **0.00207751** (0.00140184, 0.00275318) | **0.00690188** (0.00310673, 0.01069704) | 0.57037496 (0.55681256, 0.58393736) |
+| frozen neural | 0.01396672 (0.01035677, 0.01757668) | 0.01907115 (0.01469433, 0.02344796) | 0.01353036 (0.00656067, 0.02050006) | 0.01928118 (0.01649331, 0.02206905) | 0.02013301 (0.01542044, 0.02484558) | 0.61012911 (0.59821664, 0.62204158) |
+| scalar adapted | 0.01343881 (0.00972975, 0.01714787) | 0.01883303 (0.01423074, 0.02343532) | 0.01449500 (0.00696624, 0.02202375) | 0.01832717 (0.01567054, 0.02098381) | 0.01852957 (0.01402195, 0.02303719) | 0.60966924 (0.59774194, 0.62159654) |
+| stopped-state adapted | 0.01332811 (0.00956716, 0.01708907) | 0.01868846 (0.01427941, 0.02309752) | 0.01755738 (0.00914102, 0.02597374) | 0.01842250 (0.01586007, 0.02098492) | 0.01844929 (0.01410786, 0.02279073) | 0.60898064 (0.59750130, 0.62045998) |
+| **full rollout adapted** | **0.01238723** (0.00869682, 0.01607764) | **0.01781153** (0.01342017, 0.02220289) | 0.01886952 (0.00873614, 0.02900290) | **0.01771588** (0.01454453, 0.02088723) | **0.01655039** (0.01224662, 0.02085415) | 0.61056591 (0.59849046, 0.62264137) |
+
+Per-seed primary MMDs and the three prespecified paired effects were:
+
+| seed | frozen | scalar | stopped | full | full-frozen | full-scalar | full-stopped |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 406 | 0.01749975 | 0.01749975 | 0.01696997 | 0.01623942 | -0.00126032 | -0.00126032 | -0.00073054 |
+| 407 | 0.01235737 | 0.01138773 | 0.01235737 | 0.01010975 | -0.00224763 | -0.00127798 | -0.00224763 |
+| 408 | 0.01763463 | 0.01573210 | 0.01528886 | 0.01240788 | -0.00522675 | -0.00332422 | -0.00288098 |
+| 409 | 0.00842658 | 0.00777649 | 0.00828588 | 0.00768465 | -0.00074193 | -0.00009184 | -0.00060123 |
+| 410 | 0.02013874 | 0.02034301 | 0.02046835 | 0.01931914 | -0.00081960 | -0.00102387 | -0.00114921 |
+| 411 | 0.01070429 | 0.01142380 | 0.01070429 | 0.01015848 | -0.00054581 | -0.00126531 | -0.00054581 |
+| 412 | 0.01369390 | 0.01311780 | 0.01298332 | 0.01298889 | -0.00070500 | -0.00012891 | 0.00000558 |
+| 413 | 0.00918308 | 0.00745046 | 0.00636600 | 0.00569125 | -0.00349183 | -0.00175920 | -0.00067475 |
+| 414 | 0.00808210 | 0.00803108 | 0.00808210 | 0.00796257 | -0.00011954 | -0.00006851 | -0.00011954 |
+| 415 | 0.02194679 | 0.02162593 | 0.02177501 | 0.02131026 | -0.00063652 | -0.00031566 | -0.00046474 |
+
+The complete paired contrast table is:
+
+| contrast | interior law MMD² | integrated law MMD² | endpoint MMD² | maximum moment error | interior Phi MMD² | q4 change |
+|---|---:|---:|---:|---:|---:|---:|
+| full - frozen | **-0.00157949 (-0.00273881, -0.00042018)** | -0.00125962 (-0.00286942, 0.00035018) | 0.00533916 (0.00164107, 0.00903724) | -0.00156530 (-0.00322180, 0.00009119) | **-0.00358262 (-0.00596396, -0.00120129)** | 0.00043680 (-0.00230426, 0.00317787) |
+| full - scalar | **-0.00105158 (-0.00177035, -0.00033281)** | -0.00102150 (-0.00221775, 0.00017475) | 0.00437452 (0.00035724, 0.00839181) | -0.00061130 (-0.00218215, 0.00095956) | **-0.00197918 (-0.00350871, -0.00044966)** | 0.00089668 (-0.00133090, 0.00312425) |
+| full - stopped-state | **-0.00094088 (-0.00160246, -0.00027931)** | -0.00087693 (-0.00200030, 0.00024644) | 0.00131214 (-0.00545600, 0.00808028) | -0.00070662 (-0.00203934, 0.00062611) | **-0.00189891 (-0.00340648, -0.00039133)** | 0.00158527 (-0.00028628, 0.00345683) |
+| scalar - frozen | -0.00052791 (-0.00112134, 0.00006552) | -0.00023812 (-0.00121285, 0.00073661) | 0.00096463 (-0.00148069, 0.00340995) | **-0.00095401 (-0.00165921, -0.00024880)** | **-0.00160344 (-0.00265436, -0.00055251)** | -0.00045987 (-0.00179013, 0.00087038) |
+| stopped-state - frozen | -0.00063861 (-0.00140398, 0.00012676) | -0.00038268 (-0.00103160, 0.00026623) | 0.00402702 (-0.00117407, 0.00922811) | **-0.00085868 (-0.00160979, -0.00010758)** | **-0.00168372 (-0.00316011, -0.00020732)** | -0.00114847 (-0.00259798, 0.00030104) |
+| full - tangent | 0.00370829 (-0.00018266, 0.00759923) | -0.00220042 (-0.01019801, 0.00579716) | **-0.03771439 (-0.06524780, -0.01018098)** | **0.01563837 (0.01216110, 0.01911564)** | **0.00964850 (0.00370403, 0.01559297)** | **0.04019095 (0.03337834, 0.04700357)** |
+
+#### Answers to the three prespecified questions
+
+1. **Adapted vs frozen:** confirmed. Full rollout adaptation improved primary
+   MMD on all `10/10` new seeds. The mean effect was `-0.00157949`, with 95%
+   interval `(-0.00273881, -0.00042018)`.
+2. **Time-dependent vs scalar:** supported. Full time-dependent adaptation was
+   better on all `10/10` new seeds. The mean effect was `-0.00105158`, interval
+   `(-0.00177035, -0.00033281)`.
+3. **Full gradient vs stopped-state:** supported. Full credit assignment was
+   better on `9/10` seeds and worse by only `5.58e-6` on seed 412. The mean
+   effect was `-0.00094088`, interval
+   `(-0.00160246, -0.00027931)`.
+
+The original five and confirmatory ten are not used interchangeably for the
+confirmatory decision. As a secondary descriptive estimate across all 15
+independent model seeds, full minus frozen interior MMD² was `-0.00227068`,
+with interval `(-0.00342938, -0.00111198)`. The confirmatory magnitude is
+smaller than the original five-seed estimate (`-0.00158` versus `-0.00365`) but
+has the same direction and a resolved interval. This supports the stronger
+claim that both temporal modulation and full trajectory credit assignment
+contribute to improving the frozen correction. It still does not establish
+superiority to tangent: tangent has lower mean interior MMD and much lower
+moment error, while the full-minus-tangent MMD interval crosses zero.
+
+Primary artifacts:
+
+- [`stage3b_protocol.json`](stage3b_protocol.json)
+- [`results/stage3b_base_models/summary.json`](results/stage3b_base_models/summary.json)
+- [`results/stage3b_confirmatory/summary.json`](results/stage3b_confirmatory/summary.json)
+- [`results/stage3b_confirmatory/stage3b_metrics.csv`](results/stage3b_confirmatory/stage3b_metrics.csv)
+- [`results/stage3b_confirmatory/REPORT.md`](results/stage3b_confirmatory/REPORT.md)
+- [`results/stage3b_confirmatory/stage3b_summary.png`](results/stage3b_confirmatory/stage3b_summary.png)
+- [`results/stage3b_confirmatory/stage3b_contrasts.png`](results/stage3b_confirmatory/stage3b_contrasts.png)
+- [`results/stage3b_confirmatory/stage3b_selection.png`](results/stage3b_confirmatory/stage3b_selection.png)
 
 ## 9. MGD-specific numerical validation
 
@@ -584,7 +915,21 @@ Supported reasonably well:
   five independent banks.
 - Matched random-time training reduces mean reference/off-grid Ritz degradation
   by 94.2% while keeping the off-grid gain interval above zero; this passes the
-  predefined coupling-readiness criterion independently of tangent MMD.
+  predefined rollout-adaptation-readiness criterion independently of tangent
+  MMD.
+- Stage 3 rollout differentiation lowers held-out measured-Phi MMD relative to
+  the frozen correction by `-0.00678743`, with interval
+  `(-0.01352129, -0.00005358)`, while freezing the MLP and every established
+  transport component.
+- Stage 3B confirms a final-law improvement on ten new seeds: full-rollout
+  minus frozen MMD² is `-0.00157949` with interval
+  `(-0.00273881, -0.00042018)`.
+- Stage 3B supports nonconstant temporal structure: full time-dependent minus
+  scalar rollout adaptation is `-0.00105158` with interval
+  `(-0.00177035, -0.00033281)`.
+- Stage 3B supports full temporal credit assignment: full-gradient minus
+  identical-forward stopped-state MMD² is `-0.00094088` with interval
+  `(-0.00160246, -0.00027931)`.
 
 Not yet supported strongly enough:
 
@@ -596,6 +941,10 @@ Not yet supported strongly enough:
   a 95% interval entirely above zero for the fixed-grid model, while the
   random-time model's interval includes zero but does not establish an
   advantage.
+- Superiority of rollout-adapted MFSI to tangent: on the ten new seeds,
+  full-minus-tangent interior MMD² is `0.00370829` with interval
+  `(-0.00018266, 0.00759923)`, and tangent retains substantially lower moment
+  error.
 - Broad scaling claims beyond 32 particles or 64 state dimensions.
 - Claims about realistic molecular systems: the current many-body endpoints
   are controlled synthetic soft-particle phases.
@@ -663,6 +1012,23 @@ Paper-facing level 2:
 ./scripts/run_level2_paper_study.sh --backend jax --aggregate-existing
 ```
 
+Stage 3 frozen-correction rollout adaptation:
+
+```bash
+./scripts/run_stage3_rollout_adaptation.sh
+./scripts/run_stage3_rollout_adaptation.sh --aggregate-existing
+./.venv/bin/python validate_stage3_rollout_adaptation.py
+```
+
+Stage 3B predeclared confirmation:
+
+```bash
+./scripts/prepare_stage3b_base_models.sh
+./scripts/run_stage3b_confirmatory.sh
+./scripts/run_stage3b_confirmatory.sh --aggregate-existing
+./.venv/bin/python validate_stage3b_confirmatory.py
+```
+
 Validation and ablation commands:
 
 ```bash
@@ -688,10 +1054,20 @@ The most defensible current paper results are:
 - the five-bank N=32 endpoint/calibration construction;
 - the positive held-out full-MLP Ritz gain;
 - the matched random-time reduction in off-grid Ritz degradation; and
+- the Stage 3 held-out measured-Phi rollout-MMD improvement from differentiable
+  temporal modulation; and
+- the ten-seed Stage 3B confirmation of improved final-law MMD over the frozen
+  neural correction;
+- the Stage 3B evidence that time-dependent modulation outperforms scalar
+  rollout adaptation and that full temporal credit assignment outperforms an
+  identical-forward stopped-state gradient; and
 - the paired improvement of the N=32 tangent correction on interior MMD.
 
-The next scoped experiment is coupling, because the time-generalization
-criterion has been met. Proceeding does not depend on making neural MFSI beat
-tangent first. The unchanged end-to-end neural limitation remains part of the
-reported result rather than an invitation to optimize until the neural method
-wins.
+Stage 3B resolves the original five-seed uncertainty without changing the
+method: the final-law improvement over the frozen neural correction replicates
+on ten new model seeds. The two predeclared controls also supply the missing
+mechanistic evidence. Nonconstant temporal structure and full trajectory
+credit assignment each improve the primary law metric relative to their
+matched controls. The effect is real but modest, and tangent remains the
+stronger mean end-to-end comparator; no claim of tangent superiority reversal
+is supported.

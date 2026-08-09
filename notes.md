@@ -323,7 +323,7 @@ bundle: held-out gain at off-grid times, feature-space rollout shift, matched
 and a fixed-budget angular-augmented invariant MLP. It additionally compares
 the six-time regular-grid Ritz model with an 18-time stratified random-time
 model at identical initialization, optimizer-step, and total-configuration
-budgets. Coupling readiness depends on reducing the on/off-grid Ritz gap by at
+budgets. Rollout-adaptation readiness depends on reducing the on/off-grid Ritz gap by at
 least 50% without lowering mean off-grid gain; tangent MMD is explicitly absent
 from that criterion. These probes are secondary diagnostics and do not replace
 or tune against the primary radial/Ritz-gated result. Interior-time MMD is the

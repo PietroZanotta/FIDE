@@ -1118,7 +1118,7 @@ def aggregate(seed_reports):
                 "relative_reduction": reduction,
             }
             # This criterion deliberately does not inspect the tangent MMD.
-            diagnostics["continuous_time_training"]["coupling_readiness"] = {
+            diagnostics["continuous_time_training"]["rollout_adaptation_readiness"] = {
                 "criterion": (
                     "off-grid gain is not lower than the grid-trained field and "
                     "the mean on/off-grid degradation is reduced by at least 50%"
@@ -1126,7 +1126,7 @@ def aggregate(seed_reports):
                 "minimum_degradation_reduction_fraction": 0.50,
                 "offgrid_gain_not_lower": float(np.mean(continuous_offgrid)) >= float(np.mean(grid_off)),
                 "degradation_substantially_reduced": reduction >= 0.50,
-                "proceed_to_coupling": (
+                "proceed_to_rollout_adaptation": (
                     float(np.mean(continuous_offgrid)) >= float(np.mean(grid_off))
                     and reduction >= 0.50
                 ),

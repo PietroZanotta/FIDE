@@ -457,54 +457,39 @@ These runs live under `results/level2_suite/` and do not alter or join the
 existing A/B or scalar-level-2 workflows. See [`notes.md`](notes.md) for budgets,
 ports, outputs, and individual-experiment commands.
 
-### Stage 2: fiber-adapted coupling, coupling only
+### Stage 3: rollout-aware frozen-correction adaptation
 
-The endpoint-coupling ablation loads the already selected paper schedule for
-each bank and holds it fixed. It compares independent pairing, a conventional
-permutation/translation-aware geometric Sinkhorn plan, and a differentiable
-fiber-aware plan trained with correction energy plus the established ESS-floor
-penalty. Final MMD² and hidden q4 are evaluation-only quantities.
-
-```bash
-./scripts/run_coupling_study.sh --quick  # one-bank implementation check
-./scripts/run_coupling_study.sh          # five paired paper banks
-./.venv/bin/python validate_coupling_study.py
-```
-
-Optimization, validation, and final evaluation use distinct endpoint banks.
-The correction network keeps the established stratified random-continuous-time
-protocol. Machine-readable results, figures, and a concise scientific report
-are written below `results/coupling_study/`. This runner stops after Stage 2;
-there is no joint schedule-coupling implementation.
-
-Diagnose the completed five-bank result without changing schedules or
-re-optimizing a coupling:
+The Stage 3 experiment freezes the completed random-continuous-time invariant
+MLP, schedule, endpoint construction, and solver, then differentiates through
+the 24-step Heun trajectory to fit exactly three smooth temporal-amplitude
+parameters. Adaptation, selection, and final evaluation use disjoint rollout
+and oracle banks; q4 and the final radial-plus-q4 MMD remain evaluation-only.
 
 ```bash
-./scripts/run_coupling_diagnostics.sh
-./scripts/run_coupling_diagnostics.sh --reuse-computed  # rebuild report/plots
+./scripts/run_stage3_rollout_adaptation.sh
+./scripts/run_stage3_rollout_adaptation.sh --aggregate-existing
+./.venv/bin/python validate_stage3_rollout_adaptation.py
 ```
 
-The diagnostic workflow decomposes correction energy and ESS penalties on all
-three bank roles, performs repeated fixed-plan pair realizations (including
-fixed-field MMD² rollouts), and writes its decision under
-`results/coupling_study/diagnostics/`. It does not implement Stage 3.
+Artifacts are written under `results/stage3_rollout_adaptation/`. The completed
+five-seed run improves the held-out measured-Phi rollout objective, while the
+final-law improvement interval narrowly crosses zero and tangent remains the
+stronger end-to-end comparator.
 
-Run the single Stage 2B representation follow-up, which retains the geometric
-kernel and nine Phi interactions and adds exactly 36 bilinear interactions from
-the six unique entries of `JPhi(X) @ JPhi(X).T`:
+The predeclared Stage 3B confirmation uses ten new model seeds and adds two
+matched controls: scalar full-rollout adaptation and an identical-forward
+three-parameter stopped-state gradient. It freezes every Stage 3 setting.
 
 ```bash
-./scripts/run_stage2b_moment_gram.sh --aggregate-existing  # rebuild report/plots
-./scripts/run_stage2b_moment_gram.sh                       # full five-bank run
-./.venv/bin/python validate_stage2b_moment_gram.py
+./scripts/prepare_stage3b_base_models.sh
+./scripts/run_stage3b_confirmatory.sh
+./.venv/bin/python validate_stage3b_confirmatory.py
 ```
 
-Outputs live under `results/coupling_study/stage2b_moment_gram/`. The completed
-run did not improve held-out correction energy over geometric OT or Phi-only
-coupling, so its machine-readable decision stops fiber-aware coupling
-development for this paper. It does not implement joint schedule-coupling
-optimization or start another experimental suite.
+The new-ten result confirms the full method versus frozen neural and supports
+both time dependence versus scalar amplitude and full temporal credit
+assignment versus the stopped-state control. Outputs are under
+`results/stage3b_base_models/` and `results/stage3b_confirmatory/`.
 
 ## Multiple training seeds × multiple evaluation seeds
 
