@@ -178,6 +178,80 @@ path already stays on the mean/second-moment fiber and needs essentially no
 dynamic correction. This known optimum is shown in the plot but is not used by
 the optimizer.
 
+## 5a. Advanced level-2 two-experiment suite
+
+The scalar schedule study above remains available. A separate advanced suite
+adds two more demanding tests:
+
+1. `finite_neural`: the 2D ring-to-four-lobe bridge uses 512 training particles
+   per time, an independent 1024-particle validation bank, a three-parameter
+   time-dependent schedule, and a 64-feature neural Ritz potential.
+2. `manybody`: 16 particles in two dimensions give a 32-dimensional microscopic
+   state. It uses 72 training configurations and 160 fresh configurations per
+   time, periodic radial-pair neural features, three pair-gyration constraints,
+   and held-out fourfold order.
+
+The neural potential is a one-hidden-layer random-feature network: its hidden
+features are fixed reproducibly and its output layer is learned from empirical
+Deep-Ritz normal equations. Schedule differentiation passes through the neural
+solve and the implicit I-projection derivative.
+
+Run the standard suite with direct JAX:
+
+```bash
+./scripts/run_level2_suite.sh --backend jax
+```
+
+Run the actual served Tesseracts:
+
+```bash
+./scripts/build_level2_suite_tesseracts.sh
+./scripts/run_level2_suite.sh --backend tesseract
+```
+
+Run both implementations and require numerical parity:
+
+```bash
+./scripts/run_level2_suite_both.sh
+```
+
+Useful variants:
+
+```bash
+# plumbing-only budgets
+./scripts/run_level2_suite.sh --backend jax --quick
+
+# run only one study
+./scripts/run_level2_suite.sh --backend jax --experiment finite_neural
+./scripts/run_level2_suite.sh --backend jax --experiment manybody
+
+# compare existing backend outputs
+python scripts/compare_level2_suite_backends.py
+```
+
+The advanced Tesseracts use ports `18084` and `18085`. Override them with
+`MFSI_FINITE_NEURAL_TESSERACT_PORT` and
+`MFSI_MANYBODY_TESSERACT_PORT`, respectively.
+
+Outputs are separated by experiment and backend:
+
+```text
+results/level2_suite/finite_neural/jax/
+results/level2_suite/finite_neural/tesseract/
+results/level2_suite/manybody/jax/
+results/level2_suite/manybody/tesseract/
+```
+
+Each directory contains `results.json`, `arrays.npz`, a six-panel dashboard,
+and fresh-bank path snapshots. Standard-mode gates require lower correction
+energy and forcing power on the independent bank, improved ESS, fresh-bank calibration, an
+implicit/finite-difference gradient match, and positive initial-path neural
+Ritz gain. The many-body study additionally requires a 32D state and substantial
+held-out structural motion.
+
+Quick mode checks plumbing, calibration, gradients, energy, and ESS using much
+smaller banks; neural generalization is intentionally a standard-budget gate.
+
 ## 6. Validation, ablations, and paper workflow
 
 Validate the existing JAX kernels and the original two Tesseracts:
@@ -226,3 +300,5 @@ multi-seed commands are much more expensive than the level-2 schedule study.
 - Generated results are written only below `results/level2_schedule/`.
 - The existing A/B checkpoints, scripts, Tesseracts, and result directories are
   not read, rewritten, or deleted by the level-2 runner.
+- The advanced suite is likewise isolated: it does not participate in
+  `run_all.sh` or the Part-0 reproduction workflow unless invoked explicitly.

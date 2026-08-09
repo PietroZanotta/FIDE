@@ -421,6 +421,28 @@ the `mfsi-fiber-path-adapter:latest` container through `/apply`.
 Outputs are backend-specific under `results/level2_schedule/` and include two
 publication-style figures, JSON metrics/gates, and compressed numerical arrays.
 
+### Advanced level-2 suite
+
+Two isolated follow-up experiments exercise finite particle banks, neural
+corrections, three schedule parameters, and a 32-dimensional many-body state:
+
+```bash
+./scripts/run_level2_suite.sh --backend jax
+./scripts/run_level2_suite.sh --backend tesseract
+./scripts/run_level2_suite_both.sh  # both plus numerical parity
+```
+
+`finite_neural` learns on 512 particles per time and evaluates on an independent
+1024-particle bank. `manybody` uses 16 two-dimensional particles, periodic
+radial-pair neural features, pair-gyration constraints, and held-out fourfold
+order. Both use reproducible one-hidden-layer neural random-feature potentials
+whose output weights are learned by empirical Deep-Ritz solves. The schedule
+gradient differentiates through both the neural solve and implicit calibration.
+
+These runs live under `results/level2_suite/` and do not alter or join the
+existing A/B or scalar-level-2 workflows. See [`notes.md`](notes.md) for budgets,
+ports, outputs, and individual-experiment commands.
+
 ## Multiple training seeds × multiple evaluation seeds
 
 Recommended paper-facing robustness command:

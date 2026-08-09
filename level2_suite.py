@@ -185,6 +185,8 @@ def _summary(experiment: str, backend: str, result: dict[str, Any], payload: dic
     optimized_energy = _integral(result["optimized_validation_energy"], times)
     initial_ritz_gain = _integral(result["initial_validation_ritz_gain"], times)
     optimized_ritz_gain = _integral(result["optimized_validation_ritz_gain"], times)
+    initial_forcing = _integral(result["initial_validation_forcing_power"], times)
+    optimized_forcing = _integral(result["optimized_validation_forcing_power"], times)
     min_initial_ess = float(np.min(result["initial_validation_ess"]))
     min_optimized_ess = float(np.min(result["optimized_validation_ess"]))
     max_residual = float(np.max(result["optimized_validation_calibration_residual"]))
@@ -193,6 +195,7 @@ def _summary(experiment: str, backend: str, result: dict[str, Any], payload: dic
     gates = {
         "fresh_bank_energy_reduced": optimized_energy < 0.55 * initial_energy,
         "fresh_bank_overlap_improved": min_optimized_ess > min_initial_ess,
+        "fresh_bank_forcing_reduced": optimized_forcing < 0.55 * initial_forcing,
         "fresh_bank_calibrated": max_residual < 1e-8,
         "implicit_gradient_matches_finite_difference": gradient_error < 2e-4,
     }
@@ -227,6 +230,8 @@ def _summary(experiment: str, backend: str, result: dict[str, Any], payload: dic
             "optimized_min_fresh_ess": min_optimized_ess,
             "initial_integrated_fresh_ritz_gain": initial_ritz_gain,
             "optimized_integrated_fresh_ritz_gain": optimized_ritz_gain,
+            "initial_integrated_fresh_forcing_power": initial_forcing,
+            "optimized_integrated_fresh_forcing_power": optimized_forcing,
             "max_fresh_calibration_residual": max_residual,
             "gradient_relative_error": gradient_error,
             "initial_raw": np.asarray(result["initial_raw"]).tolist(),
@@ -286,14 +291,13 @@ def _plot_dashboard(experiment: str, backend: str, result: dict[str, Any], paylo
     ax.legend(frameon=False)
 
     ax = axes[1, 2]
-    width = 0.34
-    initial_gain = np.asarray(result["initial_validation_ritz_gain"])
-    optimized_gain = np.asarray(result["optimized_validation_ritz_gain"])
-    ax.bar(times - width / (2 * len(times)), initial_gain, width / len(times), color=coral, label="initial")
-    ax.bar(times + width / (2 * len(times)), optimized_gain, width / len(times), color=teal, label="adapted")
+    initial_gain = _integral(result["initial_validation_ritz_gain"], times)
+    optimized_gain = _integral(result["optimized_validation_ritz_gain"], times)
+    ax.bar(["initial path", "adapted path"], [initial_gain, optimized_gain], color=[coral, teal], width=0.58)
     ax.axhline(0.0, color=navy, lw=1)
-    ax.set(title="Fresh-bank Deep-Ritz gain vs zero", xlabel="t", ylabel="gain")
-    ax.legend(frameon=False)
+    ax.set(title="Integrated fresh-bank Ritz gain", ylabel="gain over zero correction")
+    ax.text(0, initial_gain, f" {initial_gain:.3f}", ha="center", va="bottom" if initial_gain >= 0 else "top")
+    ax.text(1, optimized_gain, f" {optimized_gain:.3f}", ha="center", va="bottom" if optimized_gain >= 0 else "top")
 
     title = "Finite-bank neural bridge" if experiment == "finite_neural" else "16-particle periodic bridge (32D)"
     fig.suptitle(f"MFSI level 2 · {title} · {backend.upper()}", fontsize=15, fontweight="bold")

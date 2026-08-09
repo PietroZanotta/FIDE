@@ -216,7 +216,8 @@ def _validate_time(raw, coefficients, t, x_minus, x_plus, noise, target, inputs)
     lhs = -jnp.einsum("m,mjnd,mnd->j", weights, test_gradients, correction)
     rhs = jnp.einsum("m,mj,m->j", weights, test_features, forcing)
     weak_residual = jnp.linalg.norm(lhs - rhs) / jnp.maximum(jnp.linalg.norm(rhs), 1e-10)
-    return state, weights, moments, lam, energy, ess, residual, q4, weak_residual, ritz_gain
+    forcing_power = jnp.sum(weights * forcing * forcing)
+    return state, weights, moments, lam, energy, ess, residual, q4, weak_residual, ritz_gain, forcing_power
 
 
 def _fit_path(raw, inputs):
@@ -342,6 +343,8 @@ def apply_jax(inputs: dict) -> dict:
         "optimized_validation_weak_residual": optimized_validation[8],
         "initial_validation_ritz_gain": initial_validation[9],
         "optimized_validation_ritz_gain": optimized_validation[9],
+        "initial_validation_forcing_power": initial_validation[10],
+        "optimized_validation_forcing_power": optimized_validation[10],
     }
 
 
@@ -436,6 +439,8 @@ class OutputSchema(BaseModel):
     optimized_validation_weak_residual: Differentiable[Array[(None,), Float64]]
     initial_validation_ritz_gain: Differentiable[Array[(None,), Float64]]
     optimized_validation_ritz_gain: Differentiable[Array[(None,), Float64]]
+    initial_validation_forcing_power: Differentiable[Array[(None,), Float64]]
+    optimized_validation_forcing_power: Differentiable[Array[(None,), Float64]]
 
 
 def _require_runtime():
