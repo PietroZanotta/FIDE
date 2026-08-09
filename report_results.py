@@ -200,6 +200,13 @@ def _metric_stats(method_data: dict[str, Any], metric: str, unit: str) -> dict[s
     return out if isinstance(out, dict) else {}
 
 
+def _cell_stats(method_data: dict[str, Any], metric: str) -> dict[str, Any]:
+    return (
+        _metric_stats(method_data, metric, "all_train_eval_cells")
+        or _metric_stats(method_data, metric, "all_train_eval_pairs")
+    )
+
+
 def _stats(values: list[float]) -> dict[str, float | int]:
     n = len(values)
     if not values:
@@ -223,12 +230,10 @@ def _stats(values: list[float]) -> dict[str, float | int]:
 
 
 def paired_training_seed_stats(per_run_path: Path) -> dict[str, dict[str, float | int]]:
-    """Compute paired MFSI-safe minus baseline MMD using training seeds as units.
+    """Legacy fallback for paired MFSI-safe minus baseline MMD.
 
-    For each training seed, first average each method over all evaluation seeds,
-    then take the paired difference.  The reported CI is therefore across
-    independent training-seed differences rather than across the Cartesian
-    train×eval pairs.
+    New sweeps persist a crossed-seed bootstrap and never use this calculation.
+    It is retained only so older partial artifacts remain printable.
     """
     if not per_run_path.exists():
         return {}
@@ -278,23 +283,25 @@ def print_live_multiseed(root: Path, backend: str) -> bool:
             ["mode", d.get("mode")],
             ["training seeds", d.get("n_training_seeds")],
             ["evaluation seeds", d.get("n_evaluation_seeds")],
-            ["train/eval pairs", d.get("n_train_eval_pairs")],
+            ["train/eval cells (descriptive)", d.get("n_train_eval_cells", d.get("n_train_eval_pairs"))],
+            ["design", d.get("design")],
         ],
     )
 
     rows = []
     for method, md in sorted(methods.items()):
-        mmd_all = _metric_stats(md, "mean_interior_mmd", "all_train_eval_pairs")
+        mmd_all = _cell_stats(md, "mean_interior_mmd")
         mmd_train = _metric_stats(md, "mean_interior_mmd", "training_seed_means")
         mmd_eval = _metric_stats(md, "mean_interior_mmd", "evaluation_seed_means")
-        max_mmd = _metric_stats(md, "max_interior_mmd", "all_train_eval_pairs")
-        angular = _metric_stats(md, "mean_interior_angular_error", "all_train_eval_pairs")
-        moment = _metric_stats(md, "max_moment_error", "all_train_eval_pairs")
+        mmd_crossed = _metric_stats(md, "mean_interior_mmd", "crossed_seed_bootstrap")
+        max_mmd = _cell_stats(md, "max_interior_mmd")
+        angular = _cell_stats(md, "mean_interior_angular_error")
+        moment = _cell_stats(md, "max_moment_error")
         rows.append([
             method,
             mmd_all.get("mean"),
+            fmt_ci(mmd_crossed.get("ci95_low"), mmd_crossed.get("ci95_high")),
             mmd_train.get("std"),
-            fmt_ci(mmd_train.get("ci95_low"), mmd_train.get("ci95_high")),
             mmd_eval.get("std"),
             mmd_all.get("std"),
             max_mmd.get("mean"),
@@ -303,27 +310,35 @@ def print_live_multiseed(root: Path, backend: str) -> bool:
         ])
 
     table(
-        "Experiment B — multi-seed aggregate (training seeds are inferential units)",
+        "Experiment B — crossed training/evaluation-seed aggregate",
         [
-            "method", "mean MMD", "train std", "train 95% CI", "eval std",
-            "pair std", "mean max MMD", "angular err", "mean max moment err",
+            "method", "mean MMD", "crossed 95% CI", "train std", "eval std",
+            "cell std", "mean max MMD", "angular err", "mean max moment err",
         ],
         rows,
     )
 
-    paired = paired_training_seed_stats(sweep_dir / "per_run.csv")
+    paired = d.get("paired_contrasts", {})
+    persisted_crossed = isinstance(paired, dict) and bool(paired)
+    if not persisted_crossed:
+        paired = paired_training_seed_stats(sweep_dir / "per_run.csv")
     if paired:
         paired_rows = []
-        for name, st in paired.items():
+        for name, contrast_data in paired.items():
+            st = (
+                _metric_stats(contrast_data, "mean_interior_mmd", "crossed_seed_bootstrap")
+                if persisted_crossed else contrast_data
+            )
             baseline = name.removeprefix("mfsi_learned_safe_minus_")
             paired_rows.append([
                 f"safe MFSI - {baseline}",
-                st.get("n"), st.get("mean"), st.get("std"),
+                f"{d.get('n_training_seeds')}×{d.get('n_evaluation_seeds')}",
+                st.get("mean"), st.get("bootstrap_se", st.get("std")),
                 fmt_ci(st.get("ci95_low"), st.get("ci95_high")),
             ])
         table(
-            "Experiment B — paired MMD differences across training seeds",
-            ["comparison", "n train seeds", "mean ΔMMD", "std ΔMMD", "95% CI"],
+            "Experiment B — paired MMD differences, crossed-seed bootstrap",
+            ["comparison", "seed design", "mean ΔMMD", "bootstrap SE", "95% CI"],
             paired_rows,
         )
         print("  Negative ΔMMD favors safe MFSI.")

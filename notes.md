@@ -252,6 +252,80 @@ held-out structural motion.
 Quick mode checks plumbing, calibration, gradients, energy, and ESS using much
 smaller banks; neural generalization is intentionally a standard-budget gate.
 
+## 5b. Paper-facing level-2 study (the six-point experiment)
+
+This additional workflow is isolated from every experiment above. It addresses
+the six publication gaps directly:
+
+1. five independent finite endpoint banks, with hand-constant, optimized
+   scalar, and nested three-parameter schedules;
+2. a fully trained two-hidden-layer invariant MLP potential and corrected ODE;
+3. generated-versus-independent projected-law MMD on radial descriptors plus
+   held-out fourfold order;
+4. a validation-selected correction amplitude with an exact zero fallback and
+   a separately reported held-out Ritz gain;
+5. 32 particles in two dimensions (64D state), three smooth radial-pair
+   constraints, finite-temperature energy-relaxed endpoints, and a hidden q4
+   phase change;
+6. raw and instantaneous tangent-projection baselines, paired seed-level 95%
+   intervals, wall time, and matched Heun NFE.
+
+The schedule model is selected on a bank distinct from both its optimization
+bank and final test bank. The common endpoint radial target is found inside the
+intersection of the two finite empirical convex hulls, so exact endpoint
+calibration does not depend on shared configurations. Quick mode is one seed;
+standard mode is five seeds (`401` through `405`).
+
+Fast direct-JAX plumbing run:
+
+```bash
+./scripts/run_level2_paper_study.sh --backend jax --quick
+```
+
+Five-bank standard run with confidence intervals and figures:
+
+```bash
+./scripts/run_level2_paper_study.sh --backend jax
+```
+
+Build and exercise the invariant correction through a served Tesseract while
+the training/orchestration remains in JAX:
+
+```bash
+./scripts/build_level2_paper_tesseract.sh
+./scripts/run_level2_paper_study.sh --backend tesseract --quick
+./scripts/run_level2_paper_study.sh --backend tesseract
+```
+
+The Tesseract wrapper uses port `18086`; override it with
+`MFSI_PAPER_LEVEL2_TESSERACT_PORT`. To rebuild summaries and plots from complete
+seed files without repeating the simulation:
+
+```bash
+./scripts/run_level2_paper_study.sh --backend jax --aggregate-existing
+```
+
+Outputs never overwrite between component backends:
+
+```text
+results/level2_paper_study/jax/
+results/level2_paper_study/tesseract/
+```
+
+Each contains `seed_<seed>.json`, `summary.json`,
+`paper_level2_summary.png`, `paper_level2_path_diagnostics.png`, and (when the
+five-bank diagnostics are present) `paper_level2_failure_diagnostics.png`. The JSON
+records raw seed values, marginal intervals, paired-effect intervals, schedule
+selection decisions, endpoint residuals, neural gate/gain, wall time, NFE, and
+JAX/component parity. It also records the N=32 local-to-rollout diagnostic
+bundle: held-out gain at off-grid times, feature-space rollout shift, matched
+24/48/96-step Heun comparisons, a gate selected on a separate rollout bank,
+and a fixed-budget angular-augmented invariant MLP. These probes are secondary
+diagnostics and do not replace or tune against the primary radial/Ritz-gated
+result. Interior-time MMD is the primary path-law metric;
+endpoint MMD is reported separately because the endpoint banks themselves are
+given to the bridge.
+
 ## 6. Validation, ablations, and paper workflow
 
 Validate the existing JAX kernels and the original two Tesseracts:
@@ -302,3 +376,6 @@ multi-seed commands are much more expensive than the level-2 schedule study.
   not read, rewritten, or deleted by the level-2 runner.
 - The advanced suite is likewise isolated: it does not participate in
   `run_all.sh` or the Part-0 reproduction workflow unless invoked explicitly.
+- The paper-facing study is also opt-in and writes only below
+  `results/level2_paper_study/`; it does not load or modify level-0/1
+  checkpoints or outputs.

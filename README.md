@@ -100,7 +100,20 @@ Run the isolated level-2 schedule experiment:
 ./scripts/run_level2_both.sh
 ```
 
+Run the paper-facing N=32, five-bank level-2 study with full invariant MLP,
+independent-law MMD, baselines, confidence intervals, timing, NFE, and
+local-to-rollout failure diagnostics (off-grid time gain, distribution shift,
+ODE resolution, rollout gate selection, and angular representation):
+
+```bash
+./scripts/run_level2_paper_study.sh --backend jax --quick  # smoke test
+./scripts/run_level2_paper_study.sh --backend jax          # standard study
+./scripts/run_level2_paper_study.sh --backend tesseract    # served kernel
+```
+
 See [`notes.md`](notes.md) for the complete experiment runbook.
+See [`EXPERIMENT_RESULTS.md`](EXPERIMENT_RESULTS.md) for the consolidated record
+of experiments, numerical results, evidence strength, and current limitations.
 
 Run **Experiments A and B and then print all main result tables directly in the terminal**:
 
@@ -646,15 +659,18 @@ For independent training-seed and evaluation-seed uncertainty in Experiment B:
   --eval-seeds  "201 202 203 204 205"
 ```
 
-The sweep reports three distinct uncertainty summaries:
+The sweep treats Experiment B as a complete crossed design and reports:
 
-1. descriptive variability across all train/evaluation pairs;
+1. descriptive variability across all train/evaluation cells;
 2. variability across **training-seed means** after averaging evaluation seeds;
 3. variability across **evaluation-seed means** after averaging training seeds.
+4. a 95% crossed-bootstrap interval obtained by independently resampling rows
+   and columns, plus balanced two-way random-effect variance components.
 
-The paper-facing uncertainty interval is the training-seed interval. The sweep
-also reports paired MFSI-safe minus moment-tangent differences on identical
-train/evaluation pairs.
+The paper-facing interval is the crossed bootstrap, not an ordinary interval
+with `n=training_seeds × evaluation_seeds`. The sweep persists paired
+MFSI-safe-minus-tangent, minus-MGD, and minus-raw contrasts; all methods are
+paired within each cell before the two seed dimensions are resampled.
 
 ### New Part-0 outputs
 

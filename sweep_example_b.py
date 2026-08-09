@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -71,26 +72,153 @@ def budgets(mode: str) -> dict:
 
 
 def aggregate(records: list[dict]) -> dict:
-    by_method: dict[str, list[dict]] = defaultdict(list)
-    for row in records:
-        by_method[row["method"]].append(row)
-    metrics = [
-        k for k, v in records[0].items()
-        if k not in {"train_seed", "eval_seed", "method"} and isinstance(v, (int, float))
+    """Summarize a complete training-seed x evaluation-seed design.
+
+    The Cartesian cells are repeated measurements, not iid replications.  We
+    retain their pooled distribution as a descriptive quantity, but scientific
+    uncertainty comes from independently resampling the two seed dimensions.
+    """
+    return crossed_seed_analysis(records)["methods"]
+
+
+BOOTSTRAP_REPLICATES = 20_000
+BOOTSTRAP_SEED = 20260809
+
+
+def _sample_stats(values: np.ndarray) -> dict:
+    values = np.asarray(values, dtype=np.float64)
+    return {
+        "n": int(values.size),
+        "mean": float(values.mean()),
+        "std": float(values.std(ddof=1) if values.size > 1 else 0.0),
+        "min": float(values.min()),
+        "max": float(values.max()),
+    }
+
+
+def _crossed_bootstrap_stats(matrix: np.ndarray, train_draws: np.ndarray,
+                             eval_draws: np.ndarray) -> dict:
+    draws = matrix[train_draws[:, :, None], eval_draws[:, None, :]].mean(axis=(1, 2))
+    low, high = np.quantile(draws, [0.025, 0.975])
+    return {
+        "method": "crossed_seed_percentile_bootstrap",
+        "n_bootstrap": int(draws.size),
+        "mean": float(matrix.mean()),
+        "bootstrap_se": float(draws.std(ddof=1)),
+        "ci95_low": float(low),
+        "ci95_high": float(high),
+    }
+
+
+def _variance_components(matrix: np.ndarray) -> dict:
+    """Balanced two-way random-effects method-of-moments diagnostics."""
+    n_train, n_eval = matrix.shape
+    grand = matrix.mean()
+    train_means = matrix.mean(axis=1)
+    eval_means = matrix.mean(axis=0)
+    residual = matrix - train_means[:, None] - eval_means[None, :] + grand
+    if n_train < 2 or n_eval < 2:
+        return {
+            "training_seed": 0.0, "evaluation_seed": 0.0,
+            "residual_or_interaction": 0.0,
+            "grand_mean_se": 0.0,
+        }
+    ms_train = n_eval * np.var(train_means, ddof=1)
+    ms_eval = n_train * np.var(eval_means, ddof=1)
+    ms_residual = np.sum(residual * residual) / ((n_train - 1) * (n_eval - 1))
+    var_train = max(float((ms_train - ms_residual) / n_eval), 0.0)
+    var_eval = max(float((ms_eval - ms_residual) / n_train), 0.0)
+    var_residual = float(ms_residual)
+    mean_se = math.sqrt(
+        var_train / n_train + var_eval / n_eval
+        + var_residual / (n_train * n_eval)
+    )
+    return {
+        "training_seed": var_train,
+        "evaluation_seed": var_eval,
+        "residual_or_interaction": var_residual,
+        "grand_mean_se": mean_se,
+    }
+
+
+def _matrix(records: list[dict], method: str, metric: str,
+            train_seeds: list[int], eval_seeds: list[int]) -> np.ndarray:
+    values = {
+        (int(row["train_seed"]), int(row["eval_seed"])): float(row[metric])
+        for row in records if row["method"] == method
+    }
+    missing = [
+        (train_seed, eval_seed)
+        for train_seed in train_seeds for eval_seed in eval_seeds
+        if (train_seed, eval_seed) not in values
     ]
-    out = {}
-    for method, rows in sorted(by_method.items()):
-        entry = {"n_runs": len(rows)}
+    if missing:
+        raise ValueError(f"incomplete crossed design for {method}/{metric}: missing {missing[:5]}")
+    return np.asarray([
+        [values[(train_seed, eval_seed)] for eval_seed in eval_seeds]
+        for train_seed in train_seeds
+    ], dtype=np.float64)
+
+
+def _matrix_summary(matrix: np.ndarray, train_draws: np.ndarray,
+                    eval_draws: np.ndarray) -> dict:
+    return {
+        "all_train_eval_cells": _sample_stats(matrix.ravel()),
+        "training_seed_means": _sample_stats(matrix.mean(axis=1)),
+        "evaluation_seed_means": _sample_stats(matrix.mean(axis=0)),
+        "crossed_seed_bootstrap": _crossed_bootstrap_stats(matrix, train_draws, eval_draws),
+        "random_effect_variance_components": _variance_components(matrix),
+    }
+
+
+def crossed_seed_analysis(records: list[dict]) -> dict:
+    if not records:
+        raise ValueError("cannot aggregate an empty sweep")
+    train_seeds = sorted({int(row["train_seed"]) for row in records})
+    eval_seeds = sorted({int(row["eval_seed"]) for row in records})
+    methods = sorted({row["method"] for row in records})
+    metrics = [
+        key for key, value in records[0].items()
+        if key not in {"train_seed", "eval_seed", "method"}
+        and isinstance(value, (int, float))
+    ]
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    train_draws = rng.integers(0, len(train_seeds), (BOOTSTRAP_REPLICATES, len(train_seeds)))
+    eval_draws = rng.integers(0, len(eval_seeds), (BOOTSTRAP_REPLICATES, len(eval_seeds)))
+
+    matrices: dict[tuple[str, str], np.ndarray] = {}
+    method_output = {}
+    for method in methods:
+        entry = {"n_train_eval_cells": len(train_seeds) * len(eval_seeds)}
         for metric in metrics:
-            x = np.asarray([float(r[metric]) for r in rows], dtype=float)
-            entry[metric] = {
-                "mean": float(x.mean()),
-                "std": float(x.std(ddof=1) if len(x) > 1 else 0.0),
-                "min": float(x.min()),
-                "max": float(x.max()),
-            }
-        out[method] = entry
-    return out
+            matrix = _matrix(records, method, metric, train_seeds, eval_seeds)
+            matrices[(method, metric)] = matrix
+            entry[metric] = _matrix_summary(matrix, train_draws, eval_draws)
+        method_output[method] = entry
+
+    contrasts = {}
+    focal = "mfsi_learned_safe"
+    if focal in methods:
+        for baseline in ("moment_tangent", "mgd_style", "raw_si"):
+            if baseline not in methods:
+                continue
+            name = f"{focal}_minus_{baseline}"
+            contrasts[name] = {}
+            for metric in metrics:
+                difference = matrices[(focal, metric)] - matrices[(baseline, metric)]
+                contrasts[name][metric] = _matrix_summary(difference, train_draws, eval_draws)
+
+    return {
+        "design": "complete_crossed_training_seed_by_evaluation_seed",
+        "inferential_unit": "training and evaluation seed dimensions; cells are not iid",
+        "bootstrap": {
+            "method": "independently resample training-seed rows and evaluation-seed columns",
+            "replicates": BOOTSTRAP_REPLICATES,
+            "seed": BOOTSTRAP_SEED,
+        },
+        "methods": method_output,
+        "paired_contrasts": contrasts,
+    }
 
 
 def main() -> None:
@@ -196,32 +324,54 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=list(records[0]))
         writer.writeheader(); writer.writerows(records)
 
-    agg = aggregate(records)
+    analysis = crossed_seed_analysis(records)
+    agg = analysis["methods"]
     result = {
         "mode": run_mode,
         "backend": args.backend,
         "n_training_seeds": len(args.train_seeds),
         "n_evaluation_seeds": len(args.eval_seeds),
-        "n_train_eval_pairs": len(args.train_seeds) * len(args.eval_seeds),
+        "n_train_eval_cells": len(args.train_seeds) * len(args.eval_seeds),
+        "design": analysis["design"],
+        "inferential_unit": analysis["inferential_unit"],
+        "bootstrap": analysis["bootstrap"],
         "methods": agg,
+        "paired_contrasts": analysis["paired_contrasts"],
     }
     (out / "aggregate.json").write_text(json.dumps(result, indent=2))
 
     flat_rows = []
     for method, vals in sorted(agg.items()):
-        row = {"method": method, "n_runs": vals["n_runs"]}
+        row = {"method": method, "n_train_eval_cells": vals["n_train_eval_cells"]}
         for metric, stats in vals.items():
-            if metric == "n_runs":
+            if metric == "n_train_eval_cells":
                 continue
-            row[f"{metric}_mean"] = stats["mean"]
-            row[f"{metric}_std"] = stats["std"]
+            cells = stats["all_train_eval_cells"]
+            bootstrap = stats["crossed_seed_bootstrap"]
+            row[f"{metric}_mean"] = cells["mean"]
+            row[f"{metric}_cell_std"] = cells["std"]
+            row[f"{metric}_crossed_ci95_low"] = bootstrap["ci95_low"]
+            row[f"{metric}_crossed_ci95_high"] = bootstrap["ci95_high"]
         flat_rows.append(row)
     with (out / "aggregate.csv").open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(flat_rows[0]))
         writer.writeheader(); writer.writerows(flat_rows)
 
-    print("\n=== aggregate ===")
-    print(json.dumps(result, indent=2))
+    print("\n=== crossed-seed aggregate: mean interior MMD ===")
+    for method, values in sorted(agg.items()):
+        stats = values["mean_interior_mmd"]["crossed_seed_bootstrap"]
+        print(
+            f"{method:20s} {stats['mean']:.6f} "
+            f"({stats['ci95_low']:.6f}, {stats['ci95_high']:.6f})"
+        )
+    print("\n=== paired safe-MFSI contrasts ===")
+    for name, values in analysis["paired_contrasts"].items():
+        stats = values["mean_interior_mmd"]["crossed_seed_bootstrap"]
+        print(
+            f"{name:44s} {stats['mean']:.6f} "
+            f"({stats['ci95_low']:.6f}, {stats['ci95_high']:.6f})"
+        )
+    print(f"\nauthoritative crossed analysis: {out / 'aggregate.json'}")
 
 
 if __name__ == "__main__":

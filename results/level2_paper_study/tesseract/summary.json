@@ -1,0 +1,458 @@
+{
+  "experiment": "paper-facing-level2-manybody",
+  "mode": "quick",
+  "component_backend": "tesseract",
+  "seeds": [
+    401
+  ],
+  "n_particles": 32,
+  "state_dimension": 64,
+  "measured_observables": "three smooth radial pair RBF coefficients",
+  "neural_correction": "fully trained two-hidden-layer invariant MLP with conservative held-out amplitude gate",
+  "elapsed_seconds": 66.21426559702377,
+  "seed_reports": [
+    {
+      "seed": 401,
+      "endpoint": {
+        "minus_calibration_residual": 2.9893669801409083e-16,
+        "plus_calibration_residual": 1.3597399555105182e-16,
+        "minus_q4": 0.09603233157400475,
+        "plus_q4": 0.7609195485019253
+      },
+      "schedules": {
+        "hand_constant": {
+          "raw": [
+            -0.31026445539162756
+          ],
+          "integrated_correction_energy": 0.8604608715271704,
+          "integrated_forcing_power": 31.452344845191504,
+          "minimum_ess": 0.4128890365705501,
+          "wall_seconds": 0.4296182740072254
+        },
+        "optimized_scalar": {
+          "raw": [
+            -0.3570162067823554
+          ],
+          "integrated_correction_energy": 0.8258027074010796,
+          "integrated_forcing_power": 29.79438794854821,
+          "minimum_ess": 0.42661569885065187,
+          "wall_seconds": 6.885753070993815
+        },
+        "optimized_multi": {
+          "raw": [
+            -0.6308438748368339,
+            0.23415080150439774,
+            -0.04303764649219708
+          ],
+          "integrated_correction_energy": 0.1261898116968298,
+          "integrated_forcing_power": 9.894078763377818,
+          "minimum_ess": 0.5460287353052476,
+          "wall_seconds": 4.715899375005392,
+          "selection": "multi_candidate",
+          "candidate_raw": [
+            -0.6308438748368339,
+            0.23415080150439774,
+            -0.04303764649219708
+          ],
+          "selection_objectives": {
+            "nested_scalar": 1.3667642325663572,
+            "multi_candidate": 0.33029100130515215
+          }
+        }
+      },
+      "neural": {
+        "gate": 1.0,
+        "gate_bank_gain": 0.1351019641700662,
+        "gate_bank_standard_error": 0.41816175405353573,
+        "test_gain": 0.0704233427043758,
+        "test_energy": 0.21385980179239092,
+        "training_seconds": 4.528036374016665,
+        "training_initial_loss": -6.418527404963284e-05,
+        "training_final_loss": -0.10618289473743585
+      },
+      "component": {
+        "backend": "tesseract",
+        "correction_relative_error": 6.346192094841982e-16,
+        "descriptor_relative_error": 1.350110839319076e-16,
+        "particle_count": 32,
+        "state_dimension": 64
+      },
+      "methods": {
+        "raw": {
+          "integrated_mmd2": 0.016763538994337357,
+          "interior_mmd2": 0.012303502691083129,
+          "max_moment_error": 0.020102838461500558,
+          "endpoint_mmd2": 0.006936530367132043,
+          "wall_seconds": 0.8269572239951231,
+          "nfe": 24,
+          "rows": [
+            {
+              "t": 0.25,
+              "mmd2": 0.026928183254623317,
+              "moment_error": 0.018666889386347675,
+              "q4": 0.17008412258149308,
+              "oracle_q4": 0.16492902032616968
+            },
+            {
+              "t": 0.5,
+              "mmd2": 0.02137803910756997,
+              "moment_error": 0.020102838461500558,
+              "q4": 0.22124447752909282,
+              "oracle_q4": 0.23101398093663092
+            },
+            {
+              "t": 0.75,
+              "mmd2": 0.02874376005890178,
+              "moment_error": 0.01956692634312035,
+              "q4": 0.33486778065999545,
+              "oracle_q4": 0.3362124295391815
+            },
+            {
+              "t": 1.0,
+              "mmd2": 0.006936530367132043,
+              "moment_error": 0.005416880264355445,
+              "q4": 0.7573960716991099,
+              "oracle_q4": 0.7569142676227267
+            }
+          ]
+        },
+        "tangent": {
+          "integrated_mmd2": 0.008632245013888679,
+          "interior_mmd2": 0.004670664584125878,
+          "max_moment_error": 0.002487331207271564,
+          "endpoint_mmd2": 0.017611860729179973,
+          "wall_seconds": 3.0656957649916876,
+          "nfe": 24,
+          "rows": [
+            {
+              "t": 0.25,
+              "mmd2": 0.015763289966823857,
+              "moment_error": 0.00217379152916465,
+              "q4": 0.1807151133864879,
+              "oracle_q4": 0.16492902032616968
+            },
+            {
+              "t": 0.5,
+              "mmd2": 0.0037606219986303646,
+              "moment_error": 0.002271391349098952,
+              "q4": 0.22622346743755734,
+              "oracle_q4": 0.23101398093663092
+            },
+            {
+              "t": 0.75,
+              "mmd2": 0.014080782708922435,
+              "moment_error": 0.002346085139212997,
+              "q4": 0.33202425683281467,
+              "oracle_q4": 0.3362124295391815
+            },
+            {
+              "t": 1.0,
+              "mmd2": 0.017611860729179973,
+              "moment_error": 0.002487331207271564,
+              "q4": 0.7310362174718014,
+              "oracle_q4": 0.7569142676227267
+            }
+          ]
+        },
+        "neural": {
+          "integrated_mmd2": 0.009861960634109102,
+          "interior_mmd2": 0.005879290205940607,
+          "max_moment_error": 0.011634264288408958,
+          "endpoint_mmd2": 0.019741444911411055,
+          "wall_seconds": 2.8070673710026313,
+          "nfe": 24,
+          "rows": [
+            {
+              "t": 0.25,
+              "mmd2": 0.011154692559455004,
+              "moment_error": 0.011634264288408958,
+              "q4": 0.16201500110472952,
+              "oracle_q4": 0.16492902032616968
+            },
+            {
+              "t": 0.5,
+              "mmd2": 0.011879855287066476,
+              "moment_error": 0.010375133790067161,
+              "q4": 0.21187287961857562,
+              "oracle_q4": 0.23101398093663092
+            },
+            {
+              "t": 0.75,
+              "mmd2": 0.0121199185139369,
+              "moment_error": 0.008217269486937524,
+              "q4": 0.32821373823415706,
+              "oracle_q4": 0.3362124295391815
+            },
+            {
+              "t": 1.0,
+              "mmd2": 0.019741444911411055,
+              "moment_error": 0.007898642394796597,
+              "q4": 0.7644227323156456,
+              "oracle_q4": 0.7569142676227267
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "schedules": {
+      "hand_constant": {
+        "integrated_correction_energy": {
+          "mean": 0.8604608715271704,
+          "ci95_low": 0.8604608715271704,
+          "ci95_high": 0.8604608715271704,
+          "n": 1
+        },
+        "integrated_forcing_power": {
+          "mean": 31.452344845191504,
+          "ci95_low": 31.452344845191504,
+          "ci95_high": 31.452344845191504,
+          "n": 1
+        },
+        "minimum_ess": {
+          "mean": 0.4128890365705501,
+          "ci95_low": 0.4128890365705501,
+          "ci95_high": 0.4128890365705501,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 0.4296182740072254,
+          "ci95_low": 0.4296182740072254,
+          "ci95_high": 0.4296182740072254,
+          "n": 1
+        }
+      },
+      "optimized_scalar": {
+        "integrated_correction_energy": {
+          "mean": 0.8258027074010796,
+          "ci95_low": 0.8258027074010796,
+          "ci95_high": 0.8258027074010796,
+          "n": 1
+        },
+        "integrated_forcing_power": {
+          "mean": 29.79438794854821,
+          "ci95_low": 29.79438794854821,
+          "ci95_high": 29.79438794854821,
+          "n": 1
+        },
+        "minimum_ess": {
+          "mean": 0.42661569885065187,
+          "ci95_low": 0.42661569885065187,
+          "ci95_high": 0.42661569885065187,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 6.885753070993815,
+          "ci95_low": 6.885753070993815,
+          "ci95_high": 6.885753070993815,
+          "n": 1
+        }
+      },
+      "optimized_multi": {
+        "integrated_correction_energy": {
+          "mean": 0.1261898116968298,
+          "ci95_low": 0.1261898116968298,
+          "ci95_high": 0.1261898116968298,
+          "n": 1
+        },
+        "integrated_forcing_power": {
+          "mean": 9.894078763377818,
+          "ci95_low": 9.894078763377818,
+          "ci95_high": 9.894078763377818,
+          "n": 1
+        },
+        "minimum_ess": {
+          "mean": 0.5460287353052476,
+          "ci95_low": 0.5460287353052476,
+          "ci95_high": 0.5460287353052476,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 4.715899375005392,
+          "ci95_low": 4.715899375005392,
+          "ci95_high": 4.715899375005392,
+          "n": 1
+        }
+      }
+    },
+    "methods": {
+      "raw": {
+        "integrated_mmd2": {
+          "mean": 0.016763538994337357,
+          "ci95_low": 0.016763538994337357,
+          "ci95_high": 0.016763538994337357,
+          "n": 1
+        },
+        "interior_mmd2": {
+          "mean": 0.012303502691083129,
+          "ci95_low": 0.012303502691083129,
+          "ci95_high": 0.012303502691083129,
+          "n": 1
+        },
+        "max_moment_error": {
+          "mean": 0.020102838461500558,
+          "ci95_low": 0.020102838461500558,
+          "ci95_high": 0.020102838461500558,
+          "n": 1
+        },
+        "endpoint_mmd2": {
+          "mean": 0.006936530367132043,
+          "ci95_low": 0.006936530367132043,
+          "ci95_high": 0.006936530367132043,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 0.8269572239951231,
+          "ci95_low": 0.8269572239951231,
+          "ci95_high": 0.8269572239951231,
+          "n": 1
+        },
+        "nfe": {
+          "mean": 24.0,
+          "ci95_low": 24.0,
+          "ci95_high": 24.0,
+          "n": 1
+        }
+      },
+      "tangent": {
+        "integrated_mmd2": {
+          "mean": 0.008632245013888679,
+          "ci95_low": 0.008632245013888679,
+          "ci95_high": 0.008632245013888679,
+          "n": 1
+        },
+        "interior_mmd2": {
+          "mean": 0.004670664584125878,
+          "ci95_low": 0.004670664584125878,
+          "ci95_high": 0.004670664584125878,
+          "n": 1
+        },
+        "max_moment_error": {
+          "mean": 0.002487331207271564,
+          "ci95_low": 0.002487331207271564,
+          "ci95_high": 0.002487331207271564,
+          "n": 1
+        },
+        "endpoint_mmd2": {
+          "mean": 0.017611860729179973,
+          "ci95_low": 0.017611860729179973,
+          "ci95_high": 0.017611860729179973,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 3.0656957649916876,
+          "ci95_low": 3.0656957649916876,
+          "ci95_high": 3.0656957649916876,
+          "n": 1
+        },
+        "nfe": {
+          "mean": 24.0,
+          "ci95_low": 24.0,
+          "ci95_high": 24.0,
+          "n": 1
+        }
+      },
+      "neural": {
+        "integrated_mmd2": {
+          "mean": 0.009861960634109102,
+          "ci95_low": 0.009861960634109102,
+          "ci95_high": 0.009861960634109102,
+          "n": 1
+        },
+        "interior_mmd2": {
+          "mean": 0.005879290205940607,
+          "ci95_low": 0.005879290205940607,
+          "ci95_high": 0.005879290205940607,
+          "n": 1
+        },
+        "max_moment_error": {
+          "mean": 0.011634264288408958,
+          "ci95_low": 0.011634264288408958,
+          "ci95_high": 0.011634264288408958,
+          "n": 1
+        },
+        "endpoint_mmd2": {
+          "mean": 0.019741444911411055,
+          "ci95_low": 0.019741444911411055,
+          "ci95_high": 0.019741444911411055,
+          "n": 1
+        },
+        "wall_seconds": {
+          "mean": 2.8070673710026313,
+          "ci95_low": 2.8070673710026313,
+          "ci95_high": 2.8070673710026313,
+          "n": 1
+        },
+        "nfe": {
+          "mean": 24.0,
+          "ci95_low": 24.0,
+          "ci95_high": 24.0,
+          "n": 1
+        }
+      }
+    },
+    "neural": {
+      "gate": {
+        "mean": 1.0,
+        "ci95_low": 1.0,
+        "ci95_high": 1.0,
+        "n": 1
+      },
+      "test_gain": {
+        "mean": 0.0704233427043758,
+        "ci95_low": 0.0704233427043758,
+        "ci95_high": 0.0704233427043758,
+        "n": 1
+      },
+      "test_energy": {
+        "mean": 0.21385980179239092,
+        "ci95_low": 0.21385980179239092,
+        "ci95_high": 0.21385980179239092,
+        "n": 1
+      },
+      "training_seconds": {
+        "mean": 4.528036374016665,
+        "ci95_low": 4.528036374016665,
+        "ci95_high": 4.528036374016665,
+        "n": 1
+      }
+    },
+    "paired_effects": {
+      "multi_minus_scalar_energy": {
+        "mean": -0.6996128957042498,
+        "ci95_low": -0.6996128957042498,
+        "ci95_high": -0.6996128957042498,
+        "n": 1
+      },
+      "tangent_minus_raw_interior_mmd2": {
+        "mean": -0.0076328381069572515,
+        "ci95_low": -0.0076328381069572515,
+        "ci95_high": -0.0076328381069572515,
+        "n": 1
+      },
+      "neural_minus_raw_interior_mmd2": {
+        "mean": -0.006424212485142522,
+        "ci95_low": -0.006424212485142522,
+        "ci95_high": -0.006424212485142522,
+        "n": 1
+      },
+      "neural_minus_raw_moment_error": {
+        "mean": -0.0084685741730916,
+        "ci95_low": -0.0084685741730916,
+        "ci95_high": -0.0084685741730916,
+        "n": 1
+      }
+    },
+    "acceptance_gates": {
+      "multi_beats_hand_correction_energy": true,
+      "multi_selected_gain_over_scalar": true,
+      "test_neural_gain_positive": true,
+      "corrected_interior_mmd_improves": true,
+      "physical_endpoint_calibration": true,
+      "hidden_endpoint_gap": true,
+      "jax_tesseract_kernel_parity": true
+    },
+    "passed": true
+  }
+}
