@@ -474,7 +474,42 @@ distribution shift as a secondary concern. Finer ODE integration is ruled out
 at the tested resolutions. Representation and gate selection remain promising
 follow-ups, but five banks do not support claiming either as the fix.
 
-### 8.7 Tesseract result
+### 8.7 Matched random-continuous-time training
+
+The time-approximation hypothesis was tested directly without expanding the
+network or tuning against the final law metric. The existing model trains on
+six fixed times with 192 configurations per time. Its comparator uses 18
+stratified uniform random times with 64 configurations per time. Both therefore
+see 1,152 training configurations, take 420 optimizer steps, start from exactly
+the same MLP initialization, and use the same untouched gate, off-grid test,
+generation, and projected-law banks.
+
+| Quantity | Fixed-grid training | Random-time training |
+|---|---:|---:|
+| Reference-grid time-averaged Ritz gain | 0.05809 (0.02740, 0.08878) | 0.04404 (0.00836, 0.07972) |
+| Off-grid time-averaged Ritz gain | 0.02284 (-0.00105, 0.04673) | **0.04201 (0.01324, 0.07078)** |
+| Mean reference-minus-off-grid degradation | 0.03525 | **0.00203** |
+| Interior rollout MMD² | 0.01830 (0.01313, 0.02347) | 0.01853 (0.00388, 0.03318) |
+| Neural minus tangent MMD² | 0.00932 (0.00673, 0.01190) | 0.00955 (-0.00057, 0.01967) |
+
+Random-time training reduces the mean on/off-grid Ritz degradation by 94.2%.
+Its off-grid interval is entirely positive, whereas the fixed-grid off-grid
+interval touches zero. The paired random-time-minus-fixed-grid off-grid gain is
+0.01917 with CI (-0.01327, 0.05161), so the between-model improvement itself is
+not yet statistically resolved with five banks; the stronger evidence is the
+near equality of reference-grid and off-grid gain within the random-time model.
+
+This improvement does not translate into a mean rollout-MMD improvement:
+random-time minus fixed-grid MMD² is 0.00023 with CI
+(-0.01201, 0.01247). Nor does the random-time model beat tangent in mean. That
+is not the progression criterion. Before examining the result, coupling
+readiness was defined as: off-grid gain must not decrease, and the mean
+reference/off-grid degradation must fall by at least 50%. The observed 94.2%
+reduction passes that criterion. Tangent MMD is explicitly not used by the
+criterion, so the next scoped experiment can proceed to coupling while the
+remaining end-to-end neural limitation is reported unchanged.
+
+### 8.8 Tesseract result
 
 The paper-facing Tesseract was built and called through a real served Docker
 container in quick mode. On seed 401:
@@ -547,6 +582,9 @@ Supported reasonably well:
   MMD with a paired interval below zero.
 - The full invariant neural correction has positive held-out Ritz gain across
   five independent banks.
+- Matched random-time training reduces mean reference/off-grid Ritz degradation
+  by 94.2% while keeping the off-grid gain interval above zero; this passes the
+  predefined coupling-readiness criterion independently of tangent MMD.
 
 Not yet supported strongly enough:
 
@@ -555,7 +593,9 @@ Not yet supported strongly enough:
 - An end-to-end N=32 neural MMD advantage; its paired interval is centered near
   zero.
 - An N=32 neural advantage over tangent; neural-minus-tangent is positive with
-  a 95% interval entirely above zero.
+  a 95% interval entirely above zero for the fixed-grid model, while the
+  random-time model's interval includes zero but does not establish an
+  advantage.
 - Broad scaling claims beyond 32 particles or 64 state dimensions.
 - Claims about realistic molecular systems: the current many-body endpoints
   are controlled synthetic soft-particle phases.
@@ -646,9 +686,12 @@ The most defensible current paper results are:
 - the implicit-gradient correctness and stop-gradient ablation;
 - the controlled scalar schedule recovery;
 - the five-bank N=32 endpoint/calibration construction;
-- the positive held-out full-MLP Ritz gain; and
+- the positive held-out full-MLP Ritz gain;
+- the matched random-time reduction in off-grid Ritz degradation; and
 - the paired improvement of the N=32 tangent correction on interior MMD.
 
-The next scientific priority is to turn the positive neural Ritz result into a
-reliable end-to-end neural law improvement, then increase the number of banks
-and introduce less synthetic many-body endpoints.
+The next scoped experiment is coupling, because the time-generalization
+criterion has been met. Proceeding does not depend on making neural MFSI beat
+tangent first. The unchanged end-to-end neural limitation remains part of the
+reported result rather than an invitation to optimize until the neural method
+wins.

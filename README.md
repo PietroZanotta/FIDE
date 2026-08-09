@@ -103,7 +103,8 @@ Run the isolated level-2 schedule experiment:
 Run the paper-facing N=32, five-bank level-2 study with full invariant MLP,
 independent-law MMD, baselines, confidence intervals, timing, NFE, and
 local-to-rollout failure diagnostics (off-grid time gain, distribution shift,
-ODE resolution, rollout gate selection, and angular representation):
+ODE resolution, rollout gate selection, angular representation, and a matched
+fixed-grid-versus-random-time training comparison):
 
 ```bash
 ./scripts/run_level2_paper_study.sh --backend jax --quick  # smoke test

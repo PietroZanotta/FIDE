@@ -320,9 +320,14 @@ selection decisions, endpoint residuals, neural gate/gain, wall time, NFE, and
 JAX/component parity. It also records the N=32 local-to-rollout diagnostic
 bundle: held-out gain at off-grid times, feature-space rollout shift, matched
 24/48/96-step Heun comparisons, a gate selected on a separate rollout bank,
-and a fixed-budget angular-augmented invariant MLP. These probes are secondary
-diagnostics and do not replace or tune against the primary radial/Ritz-gated
-result. Interior-time MMD is the primary path-law metric;
+and a fixed-budget angular-augmented invariant MLP. It additionally compares
+the six-time regular-grid Ritz model with an 18-time stratified random-time
+model at identical initialization, optimizer-step, and total-configuration
+budgets. Coupling readiness depends on reducing the on/off-grid Ritz gap by at
+least 50% without lowering mean off-grid gain; tangent MMD is explicitly absent
+from that criterion. These probes are secondary diagnostics and do not replace
+or tune against the primary radial/Ritz-gated result. Interior-time MMD is the
+primary path-law metric;
 endpoint MMD is reported separately because the endpoint banks themselves are
 given to the bridge.
 

@@ -744,6 +744,35 @@ def _seed_run(seed, populations, quick, backend):
         augmented_gate * augmented_test_alignment
         - 0.5 * augmented_gate * augmented_gate * augmented_test_energy
     )
+
+    # Matched time-approximation experiment.  The base model sees 6 x 192
+    # configurations (4 x 96 in quick mode) on a fixed regular grid.  This
+    # model sees the same total number of configurations and optimizer steps,
+    # but spreads them over stratified random continuous times.  Reusing the
+    # same PRNG key gives both MLPs exactly the same initialization.
+    continuous_rng = np.random.default_rng(seed + 60000)
+    continuous_time_count = 8 if quick else 18
+    continuous_particles_per_time = (len(times) * (96 if quick else 192)) // continuous_time_count
+    strata = (np.arange(continuous_time_count) + continuous_rng.uniform(size=continuous_time_count))
+    continuous_times = jnp.asarray(0.12 + 0.76 * strata / continuous_time_count)
+    continuous_train = make_bridge_bank(
+        populations, continuous_rng, np.asarray(continuous_times),
+        continuous_particles_per_time,
+    )
+    continuous_model, continuous_trace, continuous_training_time = train_neural_correction(
+        jax.random.PRNGKey(seed), jnp.asarray(multi), continuous_train,
+        continuous_times, target, 180 if quick else 420,
+    )
+    continuous_gate, continuous_gate_gain, _ = select_gate(
+        continuous_model, jnp.asarray(multi), gate_bank, times, target
+    )
+    continuous_grid_rows = local_gain_rows(
+        continuous_model, continuous_gate, jnp.asarray(multi), test_bank, times, target
+    )
+    continuous_offgrid_rows = local_gain_rows(
+        continuous_model, continuous_gate, jnp.asarray(multi), offgrid_bank,
+        offgrid_times, target,
+    )
     component = validate_component_backend(
         backend, model, jnp.asarray(multi), test_bank, times, target
     )
@@ -829,6 +858,14 @@ def _seed_run(seed, populations, quick, backend):
         augmented_generated, oracle_bank, jnp.asarray(multi), evaluation_times, target
     )
     augmented_test_mmd = interior_mmd2(augmented_evaluation)
+    continuous_generated, _, _ = integrate_method(
+        "neural", continuous_model, continuous_gate, jnp.asarray(multi), minus,
+        plus, noise, target, integration_steps, evaluation_times,
+    )
+    continuous_evaluation = evaluate_generated(
+        continuous_generated, oracle_bank, jnp.asarray(multi), evaluation_times, target
+    )
+    continuous_test_mmd = interior_mmd2(continuous_evaluation)
     shift_rows = rollout_shift_rows(
         model, generated_by_method["neural"], oracle_bank, jnp.asarray(multi),
         evaluation_times, target,
@@ -871,6 +908,25 @@ def _seed_run(seed, populations, quick, backend):
                 "training_final_loss": augmented_trace[-1],
                 "model_parameters": serialize_mlp(augmented_model),
             },
+            "continuous_time_training": {
+                "design": "stratified random times with matched configuration and optimizer budgets",
+                "times": np.asarray(continuous_times).tolist(),
+                "n_times": continuous_time_count,
+                "particles_per_time": continuous_particles_per_time,
+                "total_training_configurations": continuous_time_count * continuous_particles_per_time,
+                "optimizer_steps": 180 if quick else 420,
+                "same_initialization_as_grid_model": True,
+                "gate": continuous_gate,
+                "gate_bank_gain": continuous_gate_gain,
+                "reference_grid_gain_rows": continuous_grid_rows,
+                "offgrid_gain_rows": continuous_offgrid_rows,
+                "test_interior_mmd2": continuous_test_mmd,
+                "test_rows": continuous_evaluation,
+                "training_seconds": continuous_training_time,
+                "training_initial_loss": continuous_trace[0],
+                "training_final_loss": continuous_trace[-1],
+                "model_parameters": serialize_mlp(continuous_model),
+            },
         },
         "component": component,
         "methods": method_rows,
@@ -889,6 +945,13 @@ def mean_ci(values):
     critical = {5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365, 10: 2.262}.get(len(values), 1.96)
     half = critical * float(np.std(values, ddof=1)) / math.sqrt(len(values))
     return {"mean": mean, "ci95_low": mean - half, "ci95_high": mean + half, "n": len(values)}
+
+
+def time_averaged_gain(rows):
+    duration = rows[-1]["t"] - rows[0]["t"]
+    return float(np.trapezoid(
+        [row["ritz_gain"] for row in rows], [row["t"] for row in rows]
+    ) / duration)
 
 
 def aggregate(seed_reports):
@@ -941,19 +1004,13 @@ def aggregate(seed_reports):
             for report in seed_reports
         ])
         diagnostics["training_grid_time_averaged_ritz_gain"] = mean_ci([
-            float(np.trapezoid(
-                [row["ritz_gain"] for row in report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"]],
-                [row["t"] for row in report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"]],
-            ) / (
-                report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"][-1]["t"]
-                - report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"][0]["t"]
-            )) for report in seed_reports
+            time_averaged_gain(
+                report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"]
+            ) for report in seed_reports
         ])
         diagnostics["offgrid_time_averaged_ritz_gain"] = mean_ci([
-            float(report["rollout_diagnostics"]["offgrid_integrated_ritz_gain"] / (
-                report["rollout_diagnostics"]["offgrid_local_gain_rows"][-1]["t"]
-                - report["rollout_diagnostics"]["offgrid_local_gain_rows"][0]["t"]
-            )) for report in seed_reports
+            time_averaged_gain(report["rollout_diagnostics"]["offgrid_local_gain_rows"])
+            for report in seed_reports
         ])
         diagnostics["mean_rollout_feature_mahalanobis"] = mean_ci([
             float(np.mean([
@@ -1003,6 +1060,78 @@ def aggregate(seed_reports):
             - report["methods"]["neural"]["interior_mmd2"]
             for report in seed_reports
         ])
+        if all(
+            "continuous_time_training" in report["rollout_diagnostics"]
+            for report in seed_reports
+        ):
+            continuous_grid = [
+                time_averaged_gain(
+                    report["rollout_diagnostics"]["continuous_time_training"]["reference_grid_gain_rows"]
+                ) for report in seed_reports
+            ]
+            continuous_offgrid = [
+                time_averaged_gain(
+                    report["rollout_diagnostics"]["continuous_time_training"]["offgrid_gain_rows"]
+                ) for report in seed_reports
+            ]
+            grid_on = [
+                time_averaged_gain(
+                    report["rollout_diagnostics"]["local_test_gain_by_training_grid_time"]
+                ) for report in seed_reports
+            ]
+            grid_off = [
+                time_averaged_gain(report["rollout_diagnostics"]["offgrid_local_gain_rows"])
+                for report in seed_reports
+            ]
+            diagnostics["continuous_time_training"] = {
+                "reference_grid_time_averaged_ritz_gain": mean_ci(continuous_grid),
+                "offgrid_time_averaged_ritz_gain": mean_ci(continuous_offgrid),
+                "offgrid_gain_minus_grid_trained_offgrid_gain": mean_ci([
+                    continuous - fixed
+                    for continuous, fixed in zip(continuous_offgrid, grid_off)
+                ]),
+                "test_interior_mmd2": mean_ci([
+                    report["rollout_diagnostics"]["continuous_time_training"]["test_interior_mmd2"]
+                    for report in seed_reports
+                ]),
+                "continuous_minus_grid_trained_test_mmd2": mean_ci([
+                    report["rollout_diagnostics"]["continuous_time_training"]["test_interior_mmd2"]
+                    - report["methods"]["neural"]["interior_mmd2"]
+                    for report in seed_reports
+                ]),
+                "continuous_minus_tangent_test_mmd2": mean_ci([
+                    report["rollout_diagnostics"]["continuous_time_training"]["test_interior_mmd2"]
+                    - report["methods"]["tangent"]["interior_mmd2"]
+                    for report in seed_reports
+                ]),
+            }
+            grid_gap = float(np.mean(np.asarray(grid_on) - np.asarray(grid_off)))
+            continuous_gap = float(np.mean(
+                np.asarray(continuous_grid) - np.asarray(continuous_offgrid)
+            ))
+            reduction = (
+                1.0 - continuous_gap / grid_gap if grid_gap > 0.0 else float("nan")
+            )
+            diagnostics["continuous_time_training"]["degradation"] = {
+                "grid_trained_mean_on_minus_offgrid": grid_gap,
+                "continuous_trained_mean_reference_minus_offgrid": continuous_gap,
+                "relative_reduction": reduction,
+            }
+            # This criterion deliberately does not inspect the tangent MMD.
+            diagnostics["continuous_time_training"]["coupling_readiness"] = {
+                "criterion": (
+                    "off-grid gain is not lower than the grid-trained field and "
+                    "the mean on/off-grid degradation is reduced by at least 50%"
+                ),
+                "minimum_degradation_reduction_fraction": 0.50,
+                "offgrid_gain_not_lower": float(np.mean(continuous_offgrid)) >= float(np.mean(grid_off)),
+                "degradation_substantially_reduced": reduction >= 0.50,
+                "proceed_to_coupling": (
+                    float(np.mean(continuous_offgrid)) >= float(np.mean(grid_off))
+                    and reduction >= 0.50
+                ),
+                "tangent_result_used_in_criterion": False,
+            }
         diagnostics["mmd2_by_time"] = {}
         for row_index, row in enumerate(seed_reports[0]["methods"]["raw"]["rows"]):
             time_key = str(row["t"])
@@ -1022,6 +1151,14 @@ def aggregate(seed_reports):
                 - report["methods"]["tangent"]["rows"][row_index]["mmd2"]
                 for report in seed_reports
             ])
+            if all(
+                "continuous_time_training" in report["rollout_diagnostics"]
+                for report in seed_reports
+            ):
+                diagnostics["mmd2_by_time"][time_key]["continuous_time"] = mean_ci([
+                    report["rollout_diagnostics"]["continuous_time_training"]["test_rows"][row_index]["mmd2"]
+                    for report in seed_reports
+                ])
     output["acceptance_gates"] = {
         "multi_beats_hand_correction_energy": output["schedules"]["optimized_multi"]["integrated_correction_energy"]["mean"] < output["schedules"]["hand_constant"]["integrated_correction_energy"]["mean"],
         "multi_selected_gain_over_scalar": output["paired_effects"]["multi_minus_scalar_energy"]["mean"] <= 0.0,
@@ -1094,17 +1231,26 @@ def make_plots(report, output):
     diagnostics = report["aggregate"].get("rollout_diagnostics")
     if diagnostics:
         figure, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
-        gain_stats = [
-            diagnostics["training_grid_time_averaged_ritz_gain"],
-            diagnostics["offgrid_time_averaged_ritz_gain"],
-        ]
+        continuous = diagnostics.get("continuous_time_training")
+        gain_stats = [diagnostics["training_grid_time_averaged_ritz_gain"],
+                      diagnostics["offgrid_time_averaged_ritz_gain"]]
+        gain_labels = ["grid\nreference", "grid\noff-grid"]
+        gain_colors = ["#2a9d8f", "#e9c46a"]
+        if continuous:
+            gain_stats.extend([
+                continuous["reference_grid_time_averaged_ritz_gain"],
+                continuous["offgrid_time_averaged_ritz_gain"],
+            ])
+            gain_labels.extend(["random time\nreference", "random time\noff-grid"])
+            gain_colors.extend(["#457b9d", "#8ecae6"])
         means = [item["mean"] for item in gain_stats]
         errors = [
             [mean - item["ci95_low"] for mean, item in zip(means, gain_stats)],
             [item["ci95_high"] - mean for mean, item in zip(means, gain_stats)],
         ]
-        axes[0, 0].bar(["training grid", "off-grid"], means, color=["#2a9d8f", "#e9c46a"],
+        axes[0, 0].bar(gain_labels, means, color=gain_colors,
                        yerr=errors, capsize=4)
+        axes[0, 0].tick_params(axis="x", labelsize=8)
         axes[0, 0].axhline(0.0, color="black", linewidth=1)
         axes[0, 0].set(title="Held-out local Ritz gain", ylabel="time-averaged gain")
 
@@ -1124,6 +1270,12 @@ def make_plots(report, output):
             diagnostics["augmented_minus_radial_test_mmd2"],
         ]
         labels = ["neural − raw", "neural − tangent", "rollout gate − Ritz gate", "angular − radial"]
+        if continuous:
+            effects.extend([
+                continuous["continuous_minus_grid_trained_test_mmd2"],
+                continuous["continuous_minus_tangent_test_mmd2"],
+            ])
+            labels.extend(["random time − fixed grid", "random time − tangent"])
         means = [item["mean"] for item in effects]
         xerr = [
             [mean - item["ci95_low"] for mean, item in zip(means, effects)],
@@ -1141,6 +1293,12 @@ def make_plots(report, output):
                 [float(value) for value in time_keys],
                 [by_time[value][method]["mean"] for value in time_keys],
                 "o-", label=method, color=color,
+            )
+        if continuous:
+            axes[1, 1].plot(
+                [float(value) for value in time_keys],
+                [by_time[value]["continuous_time"]["mean"] for value in time_keys],
+                "o--", label="random-time neural", color="#457b9d",
             )
         axes[1, 1].set(title="Where rollout fidelity is lost", xlabel="time", ylabel="MMD²")
         axes[1, 1].legend(frameon=False)
@@ -1184,6 +1342,12 @@ def main():
             populations = build_physical_populations(seed + 10000, args.quick)
             report = _seed_run(seed, populations, args.quick, backend)
             print(f"[paper-level2] seed {seed}: gate={report['neural']['gate']:.3f}, test_gain={report['neural']['test_gain']:.3e}", flush=True)
+            continuous = report["rollout_diagnostics"]["continuous_time_training"]
+            print(
+                f"[paper-level2] seed {seed}: random-time gate={continuous['gate']:.3f}, "
+                f"test_mmd2={continuous['test_interior_mmd2']:.3e}",
+                flush=True,
+            )
         seed_reports.append(report)
         seed_path.write_text(json.dumps(report, indent=2) + "\n")
     summary = {
