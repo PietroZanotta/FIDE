@@ -223,6 +223,38 @@ def precompute_statistics(raw: jax.Array, bank: EndpointBank, times: jax.Array,
     return result
 
 
+@jax.jit
+def _paired_statistics(raw: jax.Array, times: jax.Array, minus: jax.Array,
+                       plus: jax.Array, noise: jax.Array) -> FiberStatistics:
+    """Sufficient statistics for an already-realized paired bridge bank."""
+    def one_time(t, x_minus, x_plus, z):
+        state, velocity = paper.bridge_state(raw, t, x_minus, x_plus, z)
+        observables = paper.v_observables(state)
+        observable_jacobian = paper.v_jphi(state)
+        observable_velocity = jnp.einsum(
+            "mrnd,mnd->mr", observable_jacobian, velocity
+        )
+        descriptors = paper.v_descriptors(state)
+        descriptor_jacobian = paper.v_jdesc(state)
+        descriptor_gram = jnp.einsum(
+            "mknd,mlnd->mkl", descriptor_jacobian, descriptor_jacobian
+        )
+        return FiberStatistics(
+            observables, observable_velocity, descriptors, descriptor_gram,
+            paper.v_q4(state),
+        )
+
+    return jax.vmap(one_time)(times, minus, plus, noise)
+
+
+def precompute_paired_statistics(raw: jax.Array, times: jax.Array,
+                                 bank: tuple[jax.Array, jax.Array, jax.Array]
+                                 ) -> FiberStatistics:
+    result = _paired_statistics(raw, times, *bank)
+    jax.block_until_ready(result.descriptor_gram)
+    return result
+
+
 def _weighted_tilt(log_base: jax.Array, lam: jax.Array, observables: jax.Array):
     weights = jax.nn.softmax(log_base + observables @ lam)
     moments = weights @ observables

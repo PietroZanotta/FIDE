@@ -477,6 +477,19 @@ protocol. Machine-readable results, figures, and a concise scientific report
 are written below `results/coupling_study/`. This runner stops after Stage 2;
 there is no joint schedule-coupling implementation.
 
+Diagnose the completed five-bank result without changing schedules or
+re-optimizing a coupling:
+
+```bash
+./scripts/run_coupling_diagnostics.sh
+./scripts/run_coupling_diagnostics.sh --reuse-computed  # rebuild report/plots
+```
+
+The diagnostic workflow decomposes correction energy and ESS penalties on all
+three bank roles, performs repeated fixed-plan pair realizations (including
+fixed-field MMD² rollouts), and writes its decision under
+`results/coupling_study/diagnostics/`. It does not implement Stage 3.
+
 ## Multiple training seeds × multiple evaluation seeds
 
 Recommended paper-facing robustness command:
