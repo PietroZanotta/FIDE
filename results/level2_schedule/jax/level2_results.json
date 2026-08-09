@@ -1,0 +1,44 @@
+{
+  "experiment": "level-2-fiber-adapted-reference-schedule",
+  "backend": "jax",
+  "mode": "standard",
+  "description": "Optimize the constant stochastic-interpolant noise amplitude beta for Experiment A using integrated exact correction energy plus an ESS penalty.",
+  "configuration": {
+    "amplitude": 0.8,
+    "target_moments": [
+      0.0,
+      1.0
+    ],
+    "time_points": 17,
+    "quadrature_points": 801,
+    "initial_beta": 0.25,
+    "ess_floor": 0.6,
+    "ess_penalty": 25.0,
+    "optimization_steps": 128,
+    "learning_rate": 0.05
+  },
+  "metrics": {
+    "optimized_beta": 1.0010075026750278,
+    "initial_objective": 0.4600983496759093,
+    "optimized_objective": 1.2604530929441408e-06,
+    "initial_integrated_correction_energy": 0.45372446366500996,
+    "optimized_integrated_correction_energy": 1.2604530929441408e-06,
+    "correction_energy_reduction_fraction": 0.9999972219856017,
+    "initial_min_ess_fraction": 0.5498531749364951,
+    "optimized_min_ess_fraction": 0.9999994796871026,
+    "initial_max_moment_error": 6.661338147750939e-16,
+    "optimized_max_moment_error": 4.440892098500626e-16,
+    "optimized_max_calibration_residual": 4.593025109124077e-16,
+    "implicit_gradient": -0.21402784701312288,
+    "finite_difference_gradient": -0.2140278391532524,
+    "gradient_relative_error": 3.6723589360081796e-08
+  },
+  "acceptance_gates": {
+    "correction_energy_reduced": true,
+    "optimized_path_meets_ess_floor": true,
+    "implicit_gradient_matches_finite_difference": true,
+    "fiber_moments_calibrated": true,
+    "calibration_solver_converged": true
+  },
+  "passed": true
+}

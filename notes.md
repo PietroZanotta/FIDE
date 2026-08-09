@@ -1,30 +1,228 @@
-# 1. Install Python dependencies + Tesseract Core CLI/runtime
-chmod +x scripts/install.sh
+# Experiment runbook
+
+Run every command below from the repository root:
+
+```bash
+cd /home/zanot/projects/tesseract2026
+```
+
+## 1. Install
+
+For both direct JAX and Tesseract/Docker execution:
+
+```bash
 ./scripts/install.sh
-
-# 2. Build both actual Tesseracts
 source .venv/bin/activate
-chmod +x scripts/build_tesseracts.sh
-./scripts/build_tesseracts.sh
+```
 
-# 3. Run with Tesseract backend — default
-chmod +x scripts/_run_with_backend.sh
-chmod +x scripts/run_example_a.sh
-chmod +x scripts/run_example_b.sh
+Docker must be installed and its daemon running for Tesseract runs. The direct
+JAX backend does not need Docker. A JAX-only environment can be installed with:
+
+```bash
+./scripts/install.sh --jax-only
+source .venv/bin/activate
+```
+
+Keep the virtual environment activated for the remaining commands so the
+`tesseract` executable in `.venv/bin/` is available.
+
+## 2. What the levels and experiment names mean
+
+- **Experiment A** is the exact one-dimensional diagnostic.
+- **Experiment B** is the two-dimensional equal-covariance multimodal study.
+- **Level 0** is the core MFSI method used by A/B: stop-gradient calibration,
+  fiber calculus, and the learned Deep-Ritz correction.
+- **Level 1** is the implicit multiplier derivative. Its finite-difference
+  check is part of Experiment A validation.
+- **Level 2** is the new small fiber-adapted-path study. It optimizes the
+  stochastic-interpolant noise amplitude `beta` to minimize integrated exact
+  correction energy while penalizing relative ESS below `0.60`.
+
+The new level-2 code is isolated from A/B. It has its own Tesseract image,
+runner, port, and output directories.
+
+## 3. Experiments A and B (levels 0 and 1)
+
+Tesseract is the default component backend:
+
+```bash
+./scripts/build_tesseracts.sh
 ./scripts/run_example_a.sh
 ./scripts/run_example_b.sh
+```
 
-# Equivalent, explicit
-./scripts/run_example_a.sh --backend tesseract
-./scripts/run_example_b.sh --backend tesseract
+The same experiment paths with the direct in-process JAX backend:
 
-# Direct-JAX reference path
+```bash
 ./scripts/run_example_a.sh --backend jax
 ./scripts/run_example_b.sh --backend jax
+```
 
-# Generate report
-chmod +x scripts/run_experiments_and_report.sh 
+Useful development variants:
+
+```bash
+# A: retrain, refine, or validate without the matched benchmark
+./scripts/run_example_a.sh --retrain
+./scripts/run_example_a.sh --refine
+./scripts/run_example_a.sh --validate-only
+
+# B: short smoke run or full retraining with an explicit seed
+./scripts/run_example_b.sh --backend jax --quick --seed 123
+./scripts/run_example_b.sh --retrain --seed 20260808
+```
+
+Run the existing full A/B workflow:
+
+```bash
+./scripts/run_all.sh                    # Tesseract backend
+./scripts/run_all.sh --backend jax      # direct JAX backend
+```
+
+Run A/B and print the main tables:
+
+```bash
+./scripts/run_experiments_and_report.sh
 ./scripts/run_experiments_and_report.sh --backend jax
+```
 
-chmod +x scripts/show_results.sh --backend jax
-./scripts/show_results.sh
+Print already-generated results without rerunning anything:
+
+```bash
+./scripts/show_results.sh --backend tesseract
+./scripts/show_results.sh --backend jax
+```
+
+## 4. Level-2 fiber-adapted schedule
+
+### Fast JAX smoke run
+
+```bash
+./scripts/run_level2.sh --backend jax --quick
+```
+
+### Standard JAX run
+
+```bash
+./scripts/run_level2.sh --backend jax
+```
+
+### Standard Tesseract run
+
+The runner builds only `mfsi-fiber-path-adapter:latest` if it is missing,
+serves it on port `18083`, calls the REST `/apply` endpoint, and tears it down:
+
+```bash
+./scripts/run_level2.sh --backend tesseract
+```
+
+To build the image explicitly first:
+
+```bash
+./scripts/build_level2_tesseract.sh
+./scripts/run_level2.sh --backend tesseract
+```
+
+### Run both implementations and enforce parity
+
+```bash
+./scripts/run_level2_both.sh
+```
+
+For a faster parity smoke test:
+
+```bash
+./scripts/run_level2_both.sh --quick
+```
+
+If both results already exist, compare without rerunning:
+
+```bash
+python scripts/compare_level2_backends.py
+```
+
+Use another served-component port if `18083` is occupied:
+
+```bash
+MFSI_LEVEL2_TESSERACT_PORT=19083 \
+  ./scripts/run_level2.sh --backend tesseract
+```
+
+Add `--no-plots` to any level-2 run when only numerical validation is needed.
+
+## 5. Level-2 outputs and acceptance criteria
+
+Backends never overwrite one another:
+
+```text
+results/level2_schedule/jax/
+results/level2_schedule/tesseract/
+```
+
+Each directory contains:
+
+- `level2_results.json` — configuration, metrics, and pass/fail gates;
+- `level2_arrays.npz` — full time curves, optimization trace, densities, and
+  objective landscape;
+- `level2_schedule_summary.png` — objective landscape, optimization trace,
+  correction-energy profile, and ESS profile;
+- `level2_density_paths.png` — raw reference versus I-projected density before
+  and after schedule adaptation.
+
+The run fails if the optimized schedule does not substantially lower
+correction energy, misses the ESS floor, loses moment calibration, or if the
+implicit gradient disagrees with a central finite difference.
+
+The expected controlled result is `beta` near `1`: at this value the chosen
+noise schedule exactly restores unit raw-bridge variance, so the reference
+path already stays on the mean/second-moment fiber and needs essentially no
+dynamic correction. This known optimum is shown in the plot but is not used by
+the optimizer.
+
+## 6. Validation, ablations, and paper workflow
+
+Validate the existing JAX kernels and the original two Tesseracts:
+
+```bash
+./scripts/run_tesseracts.sh --build
+./scripts/run_validations.sh --backend jax
+```
+
+Run the paper-facing level-0 workflow:
+
+```bash
+./scripts/run_part0_paper.sh                   # Tesseract
+./scripts/run_part0_paper.sh --backend jax
+./scripts/run_part0_paper.sh --backend jax --quick
+```
+
+Run prescribed level-0 ablations:
+
+```bash
+./scripts/run_part0_ablations.sh
+./scripts/run_part0_ablations.sh --quick
+```
+
+Run Experiment-B seed/evaluation uncertainty:
+
+```bash
+./scripts/run_multiseed_b.sh \
+  --train-seeds "101 102 103 104 105" \
+  --eval-seeds  "201 202 203 204 205"
+```
+
+Use `--backend jax` for the corresponding direct-JAX evaluation path. The
+multi-seed commands are much more expensive than the level-2 schedule study.
+
+## 7. Reproducibility and safety notes
+
+- The level-2 time grid, quadrature grid, starting parameter, optimizer budget,
+  ESS threshold, and finite-difference step are recorded in its JSON output.
+- Level-2 uses deterministic quadrature and no random seed.
+- The multiplier derivative is implicit; Newton iterates are not unrolled in
+  the reported gradient.
+- Tesseract and direct JAX execute the same `apply_jax` scientific recipe, and
+  `compare_level2_backends.py` enforces numerical agreement.
+- Quick mode is for plumbing checks. Use standard mode for figures/results.
+- Generated results are written only below `results/level2_schedule/`.
+- The existing A/B checkpoints, scripts, Tesseracts, and result directories are
+  not read, rewritten, or deleted by the level-2 runner.

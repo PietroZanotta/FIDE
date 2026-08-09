@@ -1,6 +1,6 @@
 # Moment-Fiber Stochastic Interpolants (MFSI)
 
-Runnable research repository for the two low-dimensional experiments in the current MFSI draft.
+Runnable research repository for the two low-dimensional experiments in the current MFSI draft, plus a small level-2 fiber-adapted reference-path experiment.
 
 The repository supports **two execution backends for the learned MFSI component maps**:
 
@@ -89,6 +89,18 @@ Run the full workflow:
 ./scripts/run_all.sh                       # Tesseract backend
 ./scripts/run_all.sh --backend jax         # direct JAX backend
 ```
+
+Run the isolated level-2 schedule experiment:
+
+```bash
+./scripts/run_level2.sh --backend tesseract
+./scripts/run_level2.sh --backend jax
+
+# run both and enforce numerical parity
+./scripts/run_level2_both.sh
+```
+
+See [`notes.md`](notes.md) for the complete experiment runbook.
 
 Run **Experiments A and B and then print all main result tables directly in the terminal**:
 
@@ -385,6 +397,29 @@ target   = (0, 0, 1, 0, 1)
 Angular Fourier features are evaluation-only diagnostics. At every evaluation time the target law is estimated from a fresh stochastic-interpolant bank followed by a fresh empirical I-projection.
 
 The comparison contains raw SI, moment tangent, MGD-style guidance, learned MFSI, and learned MFSI plus the optional population safety layer.
+
+## Level 2: fiber-adapted reference schedule
+
+This small controlled experiment implements the paper's level-2 hierarchy
+without attempting the full many-body Experiment C. It reuses the exact
+one-dimensional endpoint pair and optimizes a scalar stochastic-interpolant
+noise amplitude using integrated exact Poisson-correction energy plus a relative
+ESS penalty. Calibration derivatives use an implicit custom JVP and are checked
+against central finite differences.
+
+The implementation is isolated in `tesseracts/fiber_path_adapter/`. Direct JAX
+executes its `apply_jax` recipe in-process; Tesseract executes the same recipe in
+the `mfsi-fiber-path-adapter:latest` container through `/apply`.
+
+```bash
+./scripts/run_level2.sh --backend jax          # standard direct-JAX run
+./scripts/run_level2.sh --backend jax --quick  # smoke run
+./scripts/run_level2.sh --backend tesseract    # actual Tesseract REST boundary
+./scripts/run_level2_both.sh                   # both + parity check
+```
+
+Outputs are backend-specific under `results/level2_schedule/` and include two
+publication-style figures, JSON metrics/gates, and compressed numerical arrays.
 
 ## Multiple training seeds × multiple evaluation seeds
 
