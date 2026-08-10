@@ -1,6 +1,6 @@
 # MFSI experiment record and results
 
-Last consolidated: 2026-08-09
+Last consolidated: 2026-08-10
 
 This document records the MFSI experiments currently present in this
 repository, how they were evaluated, the results produced so far, and the main
@@ -26,6 +26,7 @@ The commands for reproducing them are also listed in [`notes.md`](notes.md).
 | Stage 3 rollout adaptation | Differentiate a 3-parameter time modulation through the frozen neural ODE | JAX standard | Five independent adaptation/selection/evaluation bank triples | Completed; surrogate improved, final-law interval crosses zero |
 | Stage 3B confirmation | Confirm Stage 3 and isolate temporal structure and full credit assignment | JAX standard | Ten new model seeds and bank triples | Confirmed all three prespecified effects |
 | Stage 4 fiber design | Differentiate a rank-three radial-observable subspace through the fixed moment-fiber construction | JAX standard | Five independent adaptation/selection/evaluation bank triples | Completed; mean improved, paired interval narrowly crosses zero |
+| Stage 4B confirmation | Confirm Stage 4 and compare the full implicit gradient with an identical-forward stop-gradient optimizer | JAX standard | Ten new seeds and bank triples | Confirmed full-gradient design over hand; full-gradient over stop-gradient did not confirm |
 
 The metrics are not interchangeable across rows. Experiment A uses Wasserstein
 and KS distances; Experiment B uses MMD; the level-2 schedule studies primarily
@@ -919,6 +920,67 @@ Primary artifacts:
 - [`results/stage4_fiber_design/stage4_summary.png`](results/stage4_fiber_design/stage4_summary.png)
 - [`results/stage4_fiber_design/stage4_selection_q4.png`](results/stage4_fiber_design/stage4_selection_q4.png)
 
+### 8.12 Stage 4B: confirmatory fiber design and gradient control
+
+Stage 4B was predeclared before execution and used ten untouched scientific
+seeds `426–435`, without pooling the Stage-4 pilot seeds. It froze the Stage-4
+dictionary, rank-three orthonormal parameterization, hand initialization,
+endpoint construction, schedule, I-projection, objective, optimizer, checkpoint
+cadence, and bank sizes. Each seed used disjoint adaptation, selection, and
+evaluation banks. q4 and angular descriptors remained excluded from adaptation
+and selection.
+
+Three fibers were compared on untouched evaluation banks:
+
+- `hand`: the original three-observable fiber;
+- `full_grad`: the frozen Stage-4 optimizer differentiated through the complete
+  fiber construction and I-projection; and
+- `stop_grad`: identical forward computation and selection, but with gradients
+  stopped through the calibrated multipliers, projected weights, and implicit
+  multiplier/time-derivative terms.
+
+Checkpoint zero was the exact hand fiber for both optimized arms, so either
+optimizer could fall back to the control. The mean evaluation metrics were:
+
+| fiber | construction objective | correction energy | forcing power | minimum ESS | median ESS |
+|---|---:|---:|---:|---:|---:|
+| hand | 0.79511099 | 0.26493856 | 25.718351 | 0.13651606 | 0.26276994 |
+| stop-gradient | 0.45569867 | 0.14980830 | 15.276212 | 0.36191332 | 0.55583612 |
+| full-gradient | **0.29471313** | **0.11046128** | **9.1653937** | **0.52628154** | **0.66841762** |
+
+The two predeclared paired contrasts were:
+
+| contrast | mean paired difference | paired SD | 95% paired t interval | favorable seeds | decision |
+|---|---:|---:|---:|---:|---|
+| full-gradient - hand | **-0.50039786** | 0.33106403 | **(-0.73722681, -0.26356892)** | 9/10 | confirmed |
+| full-gradient - stop-gradient | -0.16098554 | 0.24970648 | (-0.33961479, 0.01764371) | 7/10 | did not confirm |
+
+Thus the original five-seed Stage-4 signal replicated: differentiable fiber
+optimization improved the held-out construction objective over the hand fiber.
+The experiment did not establish that correct differentiation through the
+I-projection outperforms the matched stop-gradient optimizer, because the
+mechanistic interval still crosses zero. Under the predeclared strong-success
+rule, both contrasts had to pass, so Stage 5 is not scientifically justified
+from this branch.
+
+All required numerical and protocol checks passed. Full-gradient and
+stop-gradient forward objectives agreed exactly at four deterministic fibers;
+the full-gradient directional derivative had relative finite-difference error
+`1.082e-9`. The gradient-difference norm was `25.697737`, with relative
+discrepancy `1.2204035`, confirming that the ablation changed the backward path
+while preserving the forward path. Maximum row-orthonormality,
+endpoint-equivalence, and nullspace residuals were `1.000e-12`, `7.792e-18`,
+and `7.792e-18`.
+
+Primary artifacts:
+
+- [`stage4b_protocol.json`](stage4b_protocol.json)
+- [`results/stage4b_fiber_design_confirmatory/summary.json`](results/stage4b_fiber_design_confirmatory/summary.json)
+- [`results/stage4b_fiber_design_confirmatory/paired_contrasts.json`](results/stage4b_fiber_design_confirmatory/paired_contrasts.json)
+- [`results/stage4b_fiber_design_confirmatory/per_seed_metrics.csv`](results/stage4b_fiber_design_confirmatory/per_seed_metrics.csv)
+- [`results/stage4b_fiber_design_confirmatory/fiber_geometry.csv`](results/stage4b_fiber_design_confirmatory/fiber_geometry.csv)
+- [`results/stage4b_fiber_design_confirmatory/REPORT.md`](results/stage4b_fiber_design_confirmatory/REPORT.md)
+
 ## 9. MGD-specific numerical validation
 
 The archived reference validation sweeps predictor/corrector noise levels
@@ -981,12 +1043,15 @@ Supported reasonably well:
 - Stage 3B supports full temporal credit assignment: full-gradient minus
   identical-forward stopped-state MMD² is `-0.00094088` with interval
   `(-0.00160246, -0.00027931)`.
+- Stage 4B confirms that full-gradient fiber design improves the held-out
+  construction objective over the hand fiber: the mean paired difference is
+  `-0.50039786`, with interval `(-0.73722681, -0.26356892)`.
 
 Not yet supported strongly enough:
 
-- A Stage-4 advantage of the differentiably designed three-observable fiber:
-  its mean construction objective is substantially lower, but the paired
-  five-seed interval `(-0.65720, 0.01441)` narrowly includes zero.
+- A Stage-4B advantage of correct implicit differentiation over the matched
+  identical-forward stop-gradient optimizer: full-minus-stop is favorable in
+  mean, but its interval `(-0.33961479, 0.01764371)` includes zero.
 - A statistically significant advantage of the three-parameter schedule over
   the optimized scalar schedule; its paired five-bank interval includes zero.
 - An end-to-end N=32 neural MMD advantage; its paired interval is centered near
@@ -1091,6 +1156,13 @@ Stage 4 differentiable observable design:
 ./.venv/bin/python validate_stage4_fiber_design.py
 ```
 
+Stage 4B predeclared confirmation:
+
+```bash
+./.venv/bin/python stage4b_fiber_design_confirmatory.py
+./.venv/bin/python validate_stage4b_fiber_design.py
+```
+
 Validation and ablation commands:
 
 ```bash
@@ -1123,6 +1195,8 @@ The most defensible current paper results are:
 - the Stage 3B evidence that time-dependent modulation outperforms scalar
   rollout adaptation and that full temporal credit assignment outperforms an
   identical-forward stopped-state gradient; and
+- the ten-seed Stage 4B confirmation that full-gradient fiber design improves
+  the held-out construction objective over the hand-designed fiber; and
 - the paired improvement of the N=32 tangent correction on interior MMD.
 
 Stage 3B resolves the original five-seed uncertainty without changing the
@@ -1133,3 +1207,11 @@ credit assignment each improve the primary law metric relative to their
 matched controls. The effect is real but modest, and tangent remains the
 stronger mean end-to-end comparator; no claim of tangent superiority reversal
 is supported.
+
+Stage 4B likewise resolves the original Stage-4 five-seed uncertainty for the
+primary fiber-design claim. The designed fiber beats the hand fiber on the ten
+new evaluation banks under the predeclared interval rule. The matched
+stop-gradient contrast is favorable on average but remains unresolved, so the
+experiment supports fiber-design success without establishing that the full
+implicit gradient is essential; the predeclared strong-success rule therefore
+does not authorize Stage 5.

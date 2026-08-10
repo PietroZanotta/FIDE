@@ -1,0 +1,81 @@
+{
+  "experiment": "MFSI Stage 4B — confirmatory fiber design",
+  "protocol_version": 1,
+  "status": "predeclared-before-scientific-results",
+  "scientific_replication_n": 10,
+  "seeds": [426, 427, 428, 429, 430, 431, 432, 433, 434, 435],
+  "seed_contamination_check": {
+    "rule": "If any seed in the block was used in prior exploratory artifacts, replace the whole block with the next untouched consecutive block.",
+    "result_at_registration": "No exact seed field for 426 through 435 was found in existing repository results; the declared block is retained."
+  },
+  "bank_roles": {
+    "adaptation": {"seed_offset": 111000, "count_per_time": 96},
+    "selection": {"seed_offset": 112000, "count_per_time": 128},
+    "evaluation": {"seed_offset": 113000, "count_per_time": 256},
+    "gradient_validation": {"seed_offset": 114000, "count_per_time": 48}
+  },
+  "methods": {
+    "hand": "The original hand-designed three-observable fiber, with no optimization.",
+    "full_grad": "The frozen Stage-4 optimizer initialized at hand and differentiated through the complete fiber construction, including the converged I-projection custom JVP and time-derivative solve.",
+    "stop_grad": "The same forward construction and optimizer protocol as full_grad, with only the backward derivative ablated as specified in stop_gradient_definition."
+  },
+  "primary_estimand": {
+    "name": "delta_full_minus_hand",
+    "definition": "evaluation-bank construction_objective(full_grad) - construction_objective(hand)",
+    "success_rule": "upper endpoint of the paired two-sided 95% Student-t confidence interval is less than zero"
+  },
+  "mechanistic_estimand": {
+    "name": "delta_full_minus_stop",
+    "definition": "evaluation-bank construction_objective(full_grad) - construction_objective(stop_grad)",
+    "success_rule": "upper endpoint of the paired two-sided 95% Student-t confidence interval is less than zero"
+  },
+  "selection_rule": "For each optimized method independently, choose the minimum selection-bank construction objective among checkpoints 0,5,...,40. Checkpoint 0 is the exact hand fiber. Evaluation-bank metrics and q4 are unavailable to selection.",
+  "frozen_objective": {
+    "formula": "L = E_corr + 0.02 * P_forcing + P_ESS",
+    "E_corr": "trapezoidal integral of weighted Ritz correction energy over construction times",
+    "P_forcing": "trapezoidal integral of weighted forcing power over construction times",
+    "P_ESS": "15 * trapezoidal integral of relu(0.18 - ESS)^2 over construction times"
+  },
+  "frozen_config": {
+    "particle_count": 32,
+    "state_dimension": 64,
+    "observable_count": 3,
+    "candidate_dictionary": "11 radial pair-distance RBFs: the three hand centers followed by the fixed eight Ritz centers; no q4 or angular descriptor",
+    "dictionary_centers": [0.72, 1.22, 1.82, 0.45, 0.7642857142857142, 1.0785714285714285, 1.3928571428571428, 1.707142857142857, 2.0214285714285714, 2.335714285714286, 2.65],
+    "rbf_width": 0.32,
+    "fiber_parameterization": "rank-three Euclidean row-orthonormal coefficients in the endpoint-gap nullspace, initialized at the exact hand subspace",
+    "construction_times": [0.12, 0.272, 0.42400000000000004, 0.5760000000000001, 0.728, 0.88],
+    "endpoint_coupling": "deterministic polar-angle sorting",
+    "reference_schedule": "per-seed optimized_multi schedule selected by the established standard-mode Level-2 schedule prefix",
+    "calibration_steps": 640,
+    "calibration_ridge": 2e-8,
+    "ritz_dictionary_size": 8,
+    "ritz_ridge": 0.0002,
+    "optimizer": "Adam",
+    "optimizer_steps": 40,
+    "learning_rate": 0.03,
+    "gradient_global_norm_clip": 5.0,
+    "checkpoint_cadence": 5,
+    "ess_floor": 0.18,
+    "ess_penalty_weight": 15.0,
+    "forcing_weight": 0.02
+  },
+  "stop_gradient_definition": {
+    "forward_semantics": "Bit-for-bit the same operations as full_grad at identical fiber parameters.",
+    "backward_semantics": [
+      "Apply stop_gradient to the converged I-projection multiplier lambda_star.",
+      "Apply stop_gradient to the projected weights, calibrated moments, and calibrated covariance.",
+      "Apply stop_gradient to the weighted expected observable time derivative and covariance time-derivative term.",
+      "Apply stop_gradient to the solved multiplier time derivative lambda_dot.",
+      "Retain direct derivatives of observables, observable Jacobians/time derivatives, forcing, Ritz coefficients, correction energy, forcing power, and the objective while treating the stopped calibrated quantities as constants."
+    ]
+  },
+  "numerical_checks_before_scientific_runs": {
+    "forward_equivalence": "At several deterministic candidate fibers, absolute full_grad versus stop_grad forward difference <= 1e-10.",
+    "full_gradient": "One full-objective directional autodiff derivative must agree with a central finite difference comparably to the prior Stage-4 check.",
+    "gradient_ablation": "Forward values agree while the full and stopped gradients have nonzero norm discrepancy."
+  },
+  "q4_rule": "q4 is strictly evaluation-only and cannot enter the dictionary, objective, optimization, or checkpoint selection.",
+  "downstream_test": "Not part of the required confirmation and not run unless separately undertaken after Stage-4B analysis is frozen.",
+  "stage5_rule": "Do not implement Stage 5. It is scientifically justified only if both predeclared confidence-interval criteria pass."
+}

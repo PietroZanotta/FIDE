@@ -1,0 +1,74 @@
+{
+  "particle_count": 32,
+  "state_dimension": 64,
+  "observable_count": 3,
+  "candidate_dictionary": "11 radial pair-distance RBFs: the three hand centers followed by the fixed eight Ritz centers; no q4 or angular descriptor",
+  "dictionary_centers": [
+    0.72,
+    1.22,
+    1.82,
+    0.45,
+    0.7642857142857142,
+    1.0785714285714285,
+    1.3928571428571428,
+    1.707142857142857,
+    2.0214285714285714,
+    2.335714285714286,
+    2.65
+  ],
+  "rbf_width": 0.32,
+  "fiber_parameterization": "rank-three Euclidean row-orthonormal coefficients in the endpoint-gap nullspace, initialized at the exact hand subspace",
+  "construction_times": [
+    0.12,
+    0.272,
+    0.42400000000000004,
+    0.5760000000000001,
+    0.728,
+    0.88
+  ],
+  "endpoint_coupling": "deterministic polar-angle sorting",
+  "reference_schedule": "per-seed optimized_multi schedule selected by the established standard-mode Level-2 schedule prefix",
+  "calibration_steps": 640,
+  "calibration_ridge": 2e-08,
+  "ritz_dictionary_size": 8,
+  "ritz_ridge": 0.0002,
+  "optimizer": "Adam",
+  "optimizer_steps": 40,
+  "learning_rate": 0.03,
+  "gradient_global_norm_clip": 5.0,
+  "checkpoint_cadence": 5,
+  "ess_floor": 0.18,
+  "ess_penalty_weight": 15.0,
+  "forcing_weight": 0.02,
+  "seeds": [
+    426,
+    427,
+    428,
+    429,
+    430,
+    431,
+    432,
+    433,
+    434,
+    435
+  ],
+  "scientific_replication_n": 10,
+  "bank_offsets": {
+    "adaptation": 111000,
+    "selection": 112000,
+    "evaluation": 113000,
+    "gradient_validation": 114000
+  },
+  "bank_counts": {
+    "adaptation": 96,
+    "selection": 128,
+    "evaluation": 256,
+    "gradient_validation": 48
+  },
+  "methods": [
+    "hand",
+    "stop_grad",
+    "full_grad"
+  ],
+  "d_proj_available_in_frozen_code": false
+}
