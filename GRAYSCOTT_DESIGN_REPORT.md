@@ -946,3 +946,259 @@ and no learned-method comparison was run. The next scientifically valid action
 is to improve the reference model/training protocol under a new versioned,
 predeclared Phase-3B design and re-evaluate it on disjoint seeds; the Phase-3A
 path and all failures remain frozen as v7 evidence.
+
+## Phase-3B reference-quality continuation v8
+
+This continuation keeps the v7 Phase-3A construction exactly fixed: Phi-2,
+`v6_F0280_k05950__v6_F0280_k05800`, the exact-marginal maximal-same-IC
+coupling, the frozen target and affine standardization, and the
+`0.07 sin(pi t) Z` bridge without clamping. v6 and v7 are source artifacts;
+v8 writes only to `results/grayscott/phase3_reference_quality_v8`.
+
+### Corrected reference-fidelity semantics
+
+The v7 rollout-to-fixed-`c` test is retained as historical output but is not a
+valid raw-reference gate. The stochastic interpolant is an unprojected moving
+prior, so its raw intermediate law need not lie on the fixed moment fiber.
+The Experiment B audit agrees: reference selection uses held-out
+stochastic-interpolant velocity regression, while rollout validation compares
+the generated law against independently sampled oracle/interpolant laws. v8
+therefore separates three quantities at every reported time:
+
+1. learned raw rollout versus direct raw stochastic interpolant (reference
+   fidelity);
+2. direct raw stochastic interpolant Phi versus frozen `c` (descriptive only);
+3. empirical I-projection Phi versus `c` (projection correctness).
+
+The old v7 value `max |Phi(rollout)-c| = 1.78665` was not deleted or relabeled
+as a pass. Under the corrected comparison, the same checkpoint has maximum
+learned-versus-direct standardized Phi error `2.35977`, integrated raw-field
+MMD2 `0.0140219`, integrated downsampled-field MMD2 `0.0146034`, and endpoint
+Phi error `1.87243`; it still fails, now for the scientifically relevant
+reason.
+
+### Target, coupling, and validation-bank audit
+
+The analytic FM target agrees with a shared-noise central finite difference to
+relative error `2.02e-5` (maximum absolute error `2.89e-5`) and with the closed
+form to `1.19e-7`. State and target are float32, the same sampled `Z` is used
+in both, the CNN input gradient norm is `0.06369`, and no accidental
+stop-gradient was found. Endpoint coupling marginal errors are
+`4.34e-19/1.39e-17`; standardized noise has maximum spatial-mean magnitude
+`9.31e-9` and maximum RMS error `5.96e-8`. The optimized objective remains
+uniform continuous time, with stratified uniform draws used only for the fixed
+audit.
+
+The old 128-particle model-selection bank had minimum endpoint ESS `0.02984`.
+The predeclared replacement rule generated the first contiguous 1024-seed
+chunk, seeds 61001--62024, and accepted it without changing `c`:
+
+| endpoint | max standardized residual | ESS fraction | entropy fraction | max weight | covariance condition |
+|---|---:|---:|---:|---:|---:|
+| minus | `6.66e-16` | `0.96855` | `0.99763` | `0.002265` | `19.85` |
+| plus | `1.02e-14` | `0.51489` | `0.97452` | `0.010017` | `486.05` |
+
+Both endpoint residuals remain far inside `1e-5`; the minimum ESS exceeds the
+preferred `0.25` level. No extra chunk was added.
+
+### Saved-v7 checkpoint diagnosis
+
+| evaluation bank | normalized FM MSE | cosine alignment | prediction/target velocity RMS | low/mid/high frequency error fraction |
+|---|---:|---:|---:|---|
+| old degenerate model-selection bank | `0.42649` | `0.7573` | `0.1596/0.2101` | `0.729/0.580/0.085` |
+| fresh draws from training endpoint bank | `0.33389` | `0.8162` | `0.1629/0.1983` | `0.626/0.458/0.077` |
+| healthy independent validation bank | `0.33718` | `0.8141` | `0.1624/0.1985` | `0.634/0.455/0.077` |
+
+The new healthy bank and fresh training-bank draws both pass the local `0.35`
+gate and agree closely. The old bank's failure is therefore a finite-bank
+importance pathology, not evidence of ordinary endpoint-bank generalization
+failure. The per-time normalized error nevertheless ranges from `0.213` to
+`0.965` on the healthy bank and is worst at `t=0`; low-frequency error remains
+dominant. The training-trace tail is still slightly decreasing. The combined
+diagnosis is (i) a bad old validation bank and (ii) rollout accumulation from
+imperfect conditional-velocity approximation. There is no positive evidence
+that float precision, target construction, marginal coupling, or a detached
+input caused the failure.
+
+### Predeclared controlled sweep
+
+Direct-SI split variability fixed time-specific Phi and raw/downsampled MMD
+thresholds before training. Model choice used only healthy-validation FM and
+direct-SI reference fidelity; hidden morphology, projected-target, tangent,
+MFSI, and future comparison performance were excluded.
+
+| variant | parameters | normalized FM | integrated raw MMD2 | integrated downsampled MMD2 | max / endpoint Phi error | failed time points | result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| A: exact saved v7 | 17,593 | `0.33685` | `0.0140215` | `0.0146031` | `2.35976 / 1.87242` | 18 | reject: rollout |
+| B: v7 + 8,000 steps | 17,593 | `0.25176` | `0.0090991` | `0.0047269` | `1.51165 / 0.37683` | 12 | reject: rollout Phi |
+| C: residual receptive CNN, 12,000 steps | 37,717 | `0.19496` | `0.0078729` | `0.0036646` | `0.93136 / 0.31297` | 8 | reject: rollout Phi |
+
+All variants pass the local FM gate and the declared serious field-range gate.
+Variant C is the diagnostic best model, but it fails the predeclared Phi gate
+at `t = 0.203125, 0.296875, 0.3515625, 0.3984375, 0.453125, 0.5,
+0.546875, 0.6015625`. It is not promoted based on being the best near miss.
+The per-time tables retain raw/direct/projected Phi, field MMDs, smooth hidden
+observables, field extrema, empirical projection residual, and ESS. Near-flat
+states can make the descriptive structure-tensor anisotropy ratio numerically
+sensitive; it is not used for selection.
+
+For variant C, the common-grid ODE audit gives:
+
+| Heun steps | integrated raw MMD2 | integrated downsampled MMD2 | max Phi error | endpoint Phi error |
+|---:|---:|---:|---:|---:|
+| 64 | `0.0074533` | `0.0050975` | `1.06596` | `0.29202` |
+| 128 | `0.0071739` | `0.0050598` | `0.99788` | `0.28264` |
+| 256 | `0.0070485` | `0.0050530` | `0.96125` | `0.28121` |
+
+The 128-to-256 downsampled-MMD improvement is only `0.134%`, so integration
+under-resolution is not the explanation.
+
+**Current go/no-go decision:** Phase 3B remains failed. No sweep candidate
+satisfies both local conditional-velocity and direct-SI rollout fidelity.
+Phase 4 is not authorized; `B_tan` was not computed. No Deep-Ritz MFSI model,
+final learned-method comparison, benchmark selection, or simplification was
+performed. The remaining obstacle is accumulated raw-flow error from the
+conditional-velocity approximation, concentrated in morphology-scale Phi
+modes. The next run must be another versioned reference-only investigation;
+v8 does not silently continue training or alter the frozen Phase-3A path.
+
+## Final global spectral reference attempt v9
+
+### Frozen diagnosis and hypothesis
+
+v9 consumes the exact v7/v8 Phase-3A geometry read-only: Phi-2, endpoint pair
+`v6_F0280_k05950__v6_F0280_k05800`, frozen target and affine
+standardization, exact-marginal maximal-same-IC coupling, and the unclamped
+`0.07 sin(pi t) Z` bridge. The healthy 1024-seed validation bank remains at
+minimum endpoint ESS `0.51489`. Exact target, center, and scale equality was
+checked before training. Pre/post SHA-256 manifests show no change in v6, v7,
+or v8.
+
+The final rescue hypothesis was that v8's approximately 43-pixel receptive
+field allowed small systematic domain-scale velocity errors that accumulated
+under rollout. v9 therefore tested one explicitly global periodic spectral
+family. It did not redesign the benchmark or recompute the v8 thresholds.
+
+### Predeclared spectral model and protocol
+
+Before held-out rollout evaluation, v9 froze a compact periodic Fourier neural
+operator with width 32, four spectral residual blocks, one positive and one
+negative 12x12 low-mode multiplier per block, a parallel physical-space
+pointwise path, SiLU activations, residual connections, and a direct
+input/output skip. Raw time plus three Fourier time frequencies are spatially
+constant; no positional coordinates, clipping, or nonperiodic operations are
+used. The model has 2,364,899 float32 parameters and full-domain dependence.
+Twelve modes reach 11/64 cycles per pixel, covering global and much of the
+morphology-scale band without learning the full 64x64 spectrum.
+
+The sole standard run used AdamW, cosine learning rate `8e-4 -> 1e-5`, weight
+decay `1e-6`, global gradient clip 5, batch 32, continuous uniform time, and a
+hard cap of 18,000 steps. It used only the frozen raw-SI flow-matching loss.
+Checkpoint selection used only healthy-validation normalized FM MSE. The best
+checkpoint occurred at the final step, with validation ratio `0.15616`; total
+training time was 208 seconds. The v8 control checkpoint was not retrained.
+
+The architecture, seeds, adaptation trigger, optimizer, step cap, and exact v8
+threshold source are serialized in `v9_predeclared_protocol.json`.
+
+### Paired FM and frequency diagnosis
+
+Both models were evaluated on the same fresh direct-SI draws:
+
+| diagnostic | v8 residual CNN control | v9 global spectral |
+|---|---:|---:|
+| parameters | 37,717 | 2,364,899 |
+| training steps | 12,000 total | 18,000 |
+| FM MSE per pixel | `0.0075926` | `0.0062199` |
+| normalized FM MSE | `0.19269` | `0.15785` |
+| cosine alignment | `0.89850` | `0.91772` |
+| predicted / target velocity RMS | `0.17822 / 0.19850` | `0.18385 / 0.19850` |
+| low-frequency error / target energy | `0.35755` | `0.27985` |
+| middle-frequency error / target energy | `0.32222` | `0.26655` |
+| high-frequency error / target energy | `0.03471` | `0.03828` |
+
+The spectral model passes the unchanged local `0.35` gate comfortably and
+does address the proposed local frequency defect: at the 21 fixed times it has
+lower low-band error at 19 times and lower middle-band error at 17. Mean
+per-time low-band error fraction drops from `0.37772` to `0.31475`; mean
+middle-band error drops from `0.46570` to `0.43753`. The high-band aggregate is
+slightly worse. Full fixed-time band energies and ratios are retained in
+`paired_fm_by_time.csv` and `paired_fm_radial_bands_by_time.png`.
+
+Short-horizon diagnostics do not convert that local gain into better flow.
+Across the frozen 1/16, 1/8, and 1/4 horizons, maximum standardized Phi error
+is `0.46733` for v8 and `0.78441` for the spectral model. Mean low-frequency
+power MMD2 is `0.00885` versus `0.02398`. These diagnostics were never used as
+a training loss.
+
+### Direct-SI rollout comparison
+
+Reference fidelity remains learned raw rollout versus independently sampled
+direct raw SI. Raw-SI Phi versus `c` and empirical I-projection versus `c`
+remain separate descriptive and correctness diagnostics.
+
+| paired 128-step diagnostic | v8 residual CNN control | v9 global spectral |
+|---|---:|---:|
+| maximum standardized Phi discrepancy | `0.89646` | `1.43550` |
+| endpoint standardized Phi discrepancy | `0.37150` | `1.18274` |
+| integrated raw MMD2 | `0.0093037` | `0.0104678` |
+| integrated downsampled MMD2 | `0.0042814` | `0.0054428` |
+| failed time points | 6 | 13 |
+| serious field-range fraction | `0` | `0` |
+| local FM gate | pass | pass |
+| complete rollout gate | fail | fail |
+
+All raw and downsampled MMD thresholds pass for both models. Failure is
+entirely the frozen time-specific Phi gate. The spectral failures occur at
+`t = 0.203125, 0.25, 0.296875, 0.3515625, 0.3984375, 0.453125, 0.5,
+0.546875, 0.6015625, 0.6484375, 0.703125, 0.75, 0.953125`. Learned/direct
+mean and second-moment trajectories, radial powers, smooth hidden statistics,
+MMD trajectories, empirical projection residual/ESS, and extrema are retained
+per time in `paired_rollout_by_time.csv`.
+
+Thus genuine global context improves the supervised conditional-velocity
+regression, including its low-frequency component, but makes accumulated Phi
+transport substantially worse. The v9 hypothesis is only locally supported
+and fails at the flow-realization level.
+
+### ODE convergence
+
+The common-grid paired resolution audit gives:
+
+| model | Heun steps | integrated raw MMD2 | integrated downsampled MMD2 | max Phi error | endpoint Phi error |
+|---|---:|---:|---:|---:|---:|
+| v8 control | 64 | `0.0086503` | `0.0036223` | `0.94366` | `0.26466` |
+| v8 control | 128 | `0.0083049` | `0.0035729` | `0.87647` | `0.25449` |
+| v8 control | 256 | `0.0081500` | `0.0035624` | `0.84040` | `0.25261` |
+| v9 spectral | 64 | `0.0117300` | `0.0063289` | `1.54927` | `1.09695` |
+| v9 spectral | 128 | `0.0118201` | `0.0065662` | `1.55150` | `1.13274` |
+| v9 spectral | 256 | `0.0118329` | `0.0066614` | `1.54952` | `1.13449` |
+
+For v9, 128-to-256 refinement changes integrated downsampled MMD by `-1.45%`
+(a slight worsening), and maximum Phi error is essentially unchanged. The
+failure is model-flow error, not ODE under-resolution.
+
+### Optional rescue and hard stopping decision
+
+The single optional harmonic velocity adaptation was predeclared but not
+permitted. Although local FM and field-range conditions pass and all MMD gates
+pass, the spectral model fails 13 rather than at most 4 times, its largest Phi
+error is `3.51x` its applicable threshold rather than at most `1.35x`, maximum
+Phi error worsens by `60.1%` relative to the paired v8 control, and integrated
+downsampled MMD worsens by `27.1%`. It is neither an improving model nor a
+genuine near miss. No adaptation seeds were consumed and no repeated tuning
+occurred.
+
+Phase 3B therefore fails after the final permitted reference family.
+`gray_scott_reference_failed_after_v9 = true`. Endpoint fiber feasibility and
+intermediate empirical I-projection overlap remain successful; the obstacle is
+faithful realization of the raw stochastic-interpolant reference flow.
+
+Phase 4 is not authorized and was not run. No `B_tan`, tangent comparison,
+Deep-Ritz/MFSI training, final learned-method comparison,
+`benchmark_selection.yaml`, endpoint/Phi/target/coupling change, threshold
+relaxation, or further architecture search was performed. Gray–Scott is
+retained as a documented negative/high-complexity benchmark-design result and
+is parked as the headline Experiment C path.
+
+`GRAY_SCOTT_PARKED_AFTER_V9`

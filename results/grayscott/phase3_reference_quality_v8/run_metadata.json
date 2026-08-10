@@ -1,0 +1,96 @@
+{
+  "batch_size": 64,
+  "checkpoints": {
+    "results/grayscott/phase3_reference_quality_v8/checkpoint_A_v7_saved_baseline.pkl": {
+      "model_kind": "v7_sequential",
+      "parameter_count": 17593,
+      "sha256": "bb030fe7ee21ccbb5cbedf297803d84e1a1c29122f51b6e1402e2529e598fc27"
+    },
+    "results/grayscott/phase3_reference_quality_v8/checkpoint_B_baseline_longer.pkl": {
+      "model_kind": "v7_sequential",
+      "parameter_count": 17593,
+      "sha256": "9536af9b5666a7fe645c0bfac0d6705fe34c816c7dce26889ea20a15e9de3b0d"
+    },
+    "results/grayscott/phase3_reference_quality_v8/checkpoint_C_moderate_residual_receptive.pkl": {
+      "model_kind": "residual_periodic",
+      "parameter_count": 37717,
+      "sha256": "6c04e2ef787365ba2a00eb2eb2dbb0eb93390994d6a1ce5113df22ebe116d3a8"
+    }
+  },
+  "config": "configs/expC_grayscott_phase3_quality_v8.json",
+  "config_sha256": "505e33dc5d45eb340a0172f5ca7e42448d74204b9870cf666333ffe4e7e0ceaa",
+  "deep_ritz_training_performed": false,
+  "experiment": "C",
+  "frozen_phase3a": {
+    "clamping": false,
+    "coupling": "maximal_same_ic",
+    "observation_dimension": 2,
+    "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+    "schedule_amplitude": 0.07,
+    "schedule_envelope": "sin(pi*t)",
+    "target_source": "v7 exact frozen target"
+  },
+  "generated_utc": "2026-08-10T17:10:10Z",
+  "git_commit": "4b3eb009df254b436e6080e849a1d68656c0d034",
+  "git_status_at_materialization": [
+    " M GRAYSCOTT_DESIGN_REPORT.md",
+    " M GRAYSCOTT_IMPLEMENTATION_NOTES.md",
+    " M configs/expC_grayscott_phase3_quality_v8_sweep.json",
+    " M experiments/grayscott/phase3_reference_quality.py",
+    " M tests/test_grayscott.py",
+    "?? results/grayscott/phase3_reference_quality_v8/checkpoint_A_v7_saved_baseline.pkl",
+    "?? results/grayscott/phase3_reference_quality_v8/checkpoint_B_baseline_longer.pkl",
+    "?? results/grayscott/phase3_reference_quality_v8/checkpoint_C_moderate_residual_receptive.pkl",
+    "?? results/grayscott/phase3_reference_quality_v8/controlled_sweep_protocol.json",
+    "?? results/grayscott/phase3_reference_quality_v8/controlled_sweep_summary.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/controlled_sweep_summary.json",
+    "?? results/grayscott/phase3_reference_quality_v8/ode_resolution_summary.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/phase3b_final_decision.json",
+    "?? results/grayscott/phase3_reference_quality_v8/preserved_source_manifests.json",
+    "?? results/grayscott/phase3_reference_quality_v8/rollout_A_v7_saved_baseline_by_time.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/rollout_B_baseline_longer_by_time.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/rollout_C_moderate_residual_receptive_by_time.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/run_metadata.json",
+    "?? results/grayscott/phase3_reference_quality_v8/training_trace_A_v7_saved_baseline.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/training_trace_B_baseline_longer.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/training_trace_C_moderate_residual_receptive.csv",
+    "?? results/grayscott/phase3_reference_quality_v8/v8_artifact_sha256.json",
+    "?? results/grayscott/phase3_reference_quality_v8/variant_A_v7_saved_baseline_summary.json",
+    "?? results/grayscott/phase3_reference_quality_v8/variant_B_baseline_longer_summary.json",
+    "?? results/grayscott/phase3_reference_quality_v8/variant_C_moderate_residual_receptive_summary.json"
+  ],
+  "jax_devices": [
+    "cuda:0"
+  ],
+  "jax_enable_x64": true,
+  "jax_version": "0.8.1",
+  "learned_method_comparison_performed": false,
+  "numpy_version": "2.5.1",
+  "ode_steps": [
+    64,
+    128,
+    256
+  ],
+  "optimizer": "AdamW with global gradient clipping and cosine learning-rate decay",
+  "phase3b_status": "phase3b_failed_after_controlled_sweep",
+  "phase4_performed": false,
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+  "sweep_protocol": "configs/expC_grayscott_phase3_quality_v8_sweep.json",
+  "sweep_protocol_sha256": "58b966505e4c401a8eea3407a599eb27e68af292e7e37335e61e46cea16515c9",
+  "time_sampling": "stratified uniform continuous time on [0,1]",
+  "training_and_evaluation_seeds": {
+    "fixed_training_interpolant_seed": 73002,
+    "fixed_validation_interpolant_seed": 73001,
+    "moderate_model_initialization_seed": 74003
+  },
+  "validation_bank": {
+    "minimum_ess_fraction": 0.5148910635575579,
+    "seeds": [
+      61001,
+      62024
+    ],
+    "size_per_endpoint": 1024
+  },
+  "version": "phase3-reference-quality-v8"
+}

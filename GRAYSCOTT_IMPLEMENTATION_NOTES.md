@@ -179,3 +179,122 @@ The Gray–Scott suite now contains 23 passing tests. New v7 coverage includes
 geometric/independent marginal preservation, OT cost ordering, fixed-endpoint
 noise normalization, the bridge second-moment identity under reparameterization,
 and requested CNN dtype preservation.
+
+## Phase-3B reference-quality implementation v8
+
+`experiments/grayscott/phase3_reference_quality.py` and
+`scripts/run_grayscott_phase3_quality_v8.py` implement the v8-only diagnostic
+workflow. The frozen v7 endpoint banks, target, standardization, coupling, and
+bridge are consumed read-only. Source manifests cover Phase-2 v6, Phase-3 v7,
+and Experiment B; checkpoints and all v8 outputs have SHA-256 records in the
+new result directory.
+
+The raw-reference audit uses a four-weight median-RBF MMD generalized from the
+validated Experiment B convention. It compares learned Heun rollouts with
+independent direct samples from the exact stochastic interpolant, both at raw
+64x64 resolution and after deterministic 4x block averaging. A separate
+empirical I-projection is solved at each time to verify the fixed target. Raw
+SI-versus-target and projected-versus-target diagnostics are never conflated
+with learned-versus-direct reference fidelity.
+
+FM instrumentation now reports global and fixed-time MSE, normalized MSE,
+predicted/target velocity RMS, cosine alignment, and radial low/mid/high
+frequency error. Tests cover the exact analytic bridge derivative against a
+shared-`Z` finite difference, empirical endpoint marginals, the semantic
+separation of raw SI and fiber projection, a known-vector-field Heun rollout,
+an oracle bridge integration, validation-bank replacement logic, residual-CNN
+translation equivariance, and generic NumPy-scalar JSON serialization.
+`phase2_continuation._json_default` accepts all `np.generic` scalars, including
+`np.bool_`, via `.item()`.
+
+The validation-bank builder follows a deterministic append-only rule: start
+at seed 61001, simulate contiguous 1024-seed endpoint chunks with the unchanged
+Gray–Scott/IC protocol, calibrate the frozen target, and append only if either
+endpoint ESS is below `0.20`. The first chunk passed with minimum ESS
+`0.51489`; the saved bank records seeds 61001--62024 and target equality.
+
+The controlled-sweep protocol was serialized before v8 training. Variant A
+loads the exact v7 checkpoint; B resets AdamW state and continues it for 8,000
+steps with cosine decay; C initializes a 28-channel periodic residual CNN with
+dilations `1,2,4,8,4` and trains for 12,000 steps. All share the same frozen
+training roles, fixed healthy validation draws, continuous-time objective,
+batch size 64, global clip 5, and reference-only selection rule. Checkpoints,
+training curves, aggregate tables, and per-time rollout CSVs are retained.
+
+The residual CNN remains periodic and translation-equivariant. It has 37,717
+parameters versus 17,593 for v7, raw time plus three Fourier frequencies, and
+an approximately 43-pixel receptive field. Its improved local FM ratio
+(`0.19496`) did not override the failed rollout gate. The 64/128/256 Heun audit
+uses a common 1/16 time grid and classifies the residual discrepancy as model
+flow accumulation, not numerical integration error.
+
+Reproducibility metadata in `run_metadata.json` records the git commit and
+dirty status, Python/JAX/NumPy versions, JAX device and x64 setting, config and
+protocol hashes, seeds, optimizer, time sampling, ODE steps, checkpoint hashes,
+model kind, and parameter counts. `preserved_source_manifests.json` and
+`v8_artifact_sha256.json` provide source/result hashes. The final Gray–Scott
+suite has 31 passing tests.
+
+Phase 3B is false in `phase3b_final_decision.json`. The code therefore does not
+enter Phase 4, compute `B_tan`, train Deep-Ritz MFSI, create benchmark selection,
+or run any learned-method comparison.
+
+## Final global spectral reference implementation v9
+
+`experiments/grayscott/field_transport.py` now provides
+`init_spectral_reference_model`, `spectral_conv2d`, and
+`spectral_reference_model`. The spectral layer uses normalized JAX `rfft2` and
+`irfft2`, separately learned positive/negative vertical low-mode complex
+multipliers represented by float32 real/imaginary arrays, and a real-valued
+inverse. Every block adds a learned physical-space pointwise path before SiLU
+and a normalized residual connection. Spatially constant raw/Fourier time
+channels preserve translation equivariance. The output has a learned direct
+physical-space skip and is not clipped.
+
+`experiments/grayscott/phase3_reference_global.py` implements four explicit
+stages:
+
+1. `prepare` creates the append-only v9 directory, validates exact target and
+   standardization identity, records v6/v7/v8 manifests, and freezes the full
+   protocol before held-out rollout evaluation;
+2. `train` performs the one 18,000-step raw-SI FM run and saves the best
+   healthy-validation checkpoint and full optimization trace;
+3. `evaluate` applies the exact same fresh draws to the unmodified v8 control
+   and v9 spectral model, writing per-time FM bands, short-horizon diagnostics,
+   rollout/Phi/MMD/hidden/radial-power trajectories, summaries, and plots;
+4. `finalize` evaluates the predeclared adaptation trigger, performs paired
+   64/128/256 Heun audits, applies the hard stopping rule, verifies source
+   manifests, and writes reproducibility metadata and artifact hashes.
+
+The v9 config fixes 12 modes, width 32, four blocks, 2,364,899 parameters,
+float32, batch 32, AdamW with cosine `8e-4 -> 1e-5`, weight decay `1e-6`, clip
+5, seed-separated training/validation/paired evaluation roles, and the exact
+v8 threshold file. The smaller batch relative to v8 is predeclared and limits
+reverse-mode FFT memory. The sole checkpoint is selected by healthy-validation
+normalized FM only.
+
+The v8 evaluation helpers now dispatch `spectral_global` checkpoints and add
+low/middle/high radial powers to each learned/direct rollout law record. This
+does not rewrite v8 outputs. `paired_fm_by_time.csv`,
+`paired_rollout_by_time.csv`, `paired_short_horizon.csv`, and
+`paired_ode_resolution.csv` are the compact numerical audit tables.
+`paired_frequency_and_rollout_diagnostics.png` and
+`paired_fm_radial_bands_by_time.png` visualize the primary frequency and flow
+failure.
+
+Six new architecture tests require periodic translation equivariance, a real
+FFT round trip, finite spectral gradients, batching invariance, float32
+parameters/output, and nonzero distant response to a localized perturbation.
+The algebraic equivariance/batching checks run on the CPU FFT backend to avoid
+cuFFT plan-dependent float32 reduction-order noise; GPU observations differed
+only at roundoff scale and are not hidden. All earlier tests remain unchanged,
+for a total of 37 passing Gray–Scott tests.
+
+The optional adaptation branch was not executed because its frozen trigger was
+false. Final state and negative controls are serialized in
+`phase3b_v9_final_decision.json`: Phase 4 is unauthorized, no tangent or
+`B_tan` computation occurred, and no MFSI/Deep-Ritz/final comparison or
+benchmark selection was created. `run_metadata.json` records git/dirty state,
+config hash, architecture, modes, parameters, optimizer, seeds, bank roles,
+software/device/dtype, checkpoint hash, and Heun resolutions;
+`v9_artifact_sha256.json` hashes the complete v9 output set.

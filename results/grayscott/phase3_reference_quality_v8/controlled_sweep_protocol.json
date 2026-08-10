@@ -1,0 +1,68 @@
+{
+  "batch_size": 64,
+  "evaluation_interval": 250,
+  "fixed_training_interpolant_seed": 73002,
+  "fixed_validation_interpolant_count": 4096,
+  "fixed_validation_interpolant_seed": 73001,
+  "frozen_after_audit": true,
+  "frozen_reference_path": "exactly the v7 Phi-2 pair, target, maximal-same-IC coupling, and 0.07*sin(pi*t) noise schedule",
+  "gradient_clip": 5.0,
+  "model_selection": {
+    "forbidden_inputs": "no hidden morphology, projected-target, tangent, MFSI, or future evaluation performance",
+    "primary": "minimum healthy-validation FM MSE divided by zero-predictor MSE, required <= 0.35",
+    "secondary": "128-step learned rollout versus direct raw SI must pass the thresholds frozen in v7_checkpoint_audit.json",
+    "tie_break": "lower integrated downsampled-field MMD2, then lower integrated raw-field MMD2, then smaller model"
+  },
+  "model_selection_endpoint_bank": "v8 healthy seeds 61001-62024 with frozen target calibration",
+  "moderate_model_initialization_seed": 74003,
+  "ode_common_time_grid": [
+    0.0,
+    0.0625,
+    0.125,
+    0.1875,
+    0.25,
+    0.3125,
+    0.375,
+    0.4375,
+    0.5,
+    0.5625,
+    0.625,
+    0.6875,
+    0.75,
+    0.8125,
+    0.875,
+    0.9375,
+    1.0
+  ],
+  "optimizer": "AdamW with global gradient clipping and cosine learning-rate decay",
+  "time_sampling": "stratified uniform continuous time on [0,1]",
+  "training_endpoint_bank": "v7 seeds 41001-41512 with frozen endpoint weights",
+  "variants": [
+    {
+      "action": "no retraining; use exact saved v7 checkpoint",
+      "architecture": "four 24-channel periodic dilated layers, dilations 1,2,4,1, raw time plus 3 Fourier frequencies",
+      "id": "A_v7_saved_baseline",
+      "total_training_steps": 4000
+    },
+    {
+      "action": "continue the exact v7 checkpoint for 8000 additional steps; reset optimizer state",
+      "additional_training_steps": 8000,
+      "architecture": "identical to A",
+      "id": "B_baseline_longer",
+      "learning_rate_end": 1e-05,
+      "learning_rate_start": 0.0005,
+      "reported_total_training_steps": 12000
+    },
+    {
+      "action": "train from scratch",
+      "architecture": "28-channel periodic input layer plus five residual blocks with dilations 1,2,4,8,4; raw time plus 3 Fourier frequencies; periodic output layer",
+      "id": "C_moderate_residual_receptive",
+      "learning_rate_end": 2e-05,
+      "learning_rate_start": 0.001,
+      "rationale": "v7 audit localizes remaining regression error in low-frequency morphology-scale modes and shows the existing model already has Fourier time conditioning",
+      "training_steps": 12000
+    }
+  ],
+  "version": "phase3-reference-quality-v8-controlled-sweep",
+  "weight_decay": 1e-06
+}

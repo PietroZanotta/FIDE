@@ -247,6 +247,136 @@ def periodic_reference_cnn(params: dict, time: Array | float, fields: Array) -> 
     return periodic_conv2d(hidden, params["output"]["weight"], params["output"]["bias"])
 
 
+def _init_pointwise(key: Array, output_channels: int, input_channels: int, dtype=jnp.float32):
+    scale = jnp.asarray(np.sqrt(2.0 / input_channels), dtype=dtype)
+    return {
+        "weight": scale * jax.random.normal(
+            key, (output_channels, input_channels), dtype=dtype
+        ),
+        "bias": jnp.zeros((output_channels,), dtype=dtype),
+    }
+
+
+def _pointwise(inputs: Array, parameters: dict) -> Array:
+    return (
+        jnp.einsum("bihw,oi->bohw", inputs, parameters["weight"])
+        + parameters["bias"][None, :, None, None]
+    )
+
+
+def init_spectral_reference_model(
+    key: Array,
+    *,
+    width: int = 32,
+    blocks: int = 4,
+    modes: int = 12,
+    time_frequencies: int = 3,
+    dtype=jnp.float32,
+) -> tuple[dict, dict]:
+    """Initialize a compact full-domain periodic spectral residual velocity."""
+    if width < 1 or blocks < 1 or modes < 1:
+        raise ValueError("width, blocks, and modes must be positive")
+    keys = iter(jax.random.split(key, 4 + 5 * blocks))
+    input_channels = 1 + 1 + 2 * time_frequencies
+    lift = _init_pointwise(next(keys), width, input_channels, dtype)
+    spectral_blocks = []
+    spectral_scale = jnp.asarray(1.0 / width, dtype=dtype)
+    for _ in range(blocks):
+        # rfft2 retains nonnegative x frequencies. Positive and negative y
+        # blocks are learned separately, as in the standard periodic FNO layer.
+        spectral_blocks.append({
+            "positive_real": spectral_scale * jax.random.normal(
+                next(keys), (width, width, modes, modes), dtype=dtype
+            ),
+            "positive_imag": spectral_scale * jax.random.normal(
+                next(keys), (width, width, modes, modes), dtype=dtype
+            ),
+            "negative_real": spectral_scale * jax.random.normal(
+                next(keys), (width, width, modes, modes), dtype=dtype
+            ),
+            "negative_imag": spectral_scale * jax.random.normal(
+                next(keys), (width, width, modes, modes), dtype=dtype
+            ),
+            "physical": _init_pointwise(next(keys), width, width, dtype),
+        })
+    project_hidden = _init_pointwise(next(keys), width, width, dtype)
+    project_output = _init_pointwise(next(keys), 1, width, dtype)
+    direct = _init_pointwise(next(keys), 1, 1, dtype)
+    direct = jax.tree_util.tree_map(jnp.zeros_like, direct)
+    architecture = {
+        "width": int(width), "blocks": int(blocks), "modes": int(modes),
+        "time_frequencies": int(time_frequencies),
+        "spectral_transform": "jax.numpy.fft.rfft2/irfft2 norm=ortho",
+        "low_mode_support_cycles_per_pixel": float((modes - 1) / 64.0),
+    }
+    return {
+        "lift": lift, "blocks": spectral_blocks,
+        "project_hidden": project_hidden, "project_output": project_output,
+        "direct": direct,
+    }, architecture
+
+
+def spectral_conv2d(inputs: Array, parameters: dict, modes: int) -> Array:
+    """Periodic low-mode Fourier multiplier with a real-valued inverse."""
+    inputs = jnp.asarray(inputs)
+    _, _, height, width = inputs.shape
+    available_y = min(int(modes), height // 2)
+    available_x = min(int(modes), width // 2 + 1)
+    transformed = jnp.fft.rfft2(inputs, axes=(-2, -1), norm="ortho")
+    output = jnp.zeros(
+        (inputs.shape[0], parameters["positive_real"].shape[0], height, width // 2 + 1),
+        dtype=transformed.dtype,
+    )
+
+    def multiplier(prefix: str):
+        real = parameters[f"{prefix}_real"][:, :, :available_y, :available_x]
+        imag = parameters[f"{prefix}_imag"][:, :, :available_y, :available_x]
+        return real.astype(inputs.dtype) + 1j * imag.astype(inputs.dtype)
+
+    positive = jnp.einsum(
+        "biyx,oiyx->boyx",
+        transformed[:, :, :available_y, :available_x], multiplier("positive"),
+    )
+    negative = jnp.einsum(
+        "biyx,oiyx->boyx",
+        transformed[:, :, -available_y:, :available_x], multiplier("negative"),
+    )
+    output = output.at[:, :, :available_y, :available_x].set(positive)
+    output = output.at[:, :, -available_y:, :available_x].set(negative)
+    # irfft2 supplies the omitted conjugate x frequencies and returns a real
+    # field. Casting protects the requested float32 contract across JAX builds.
+    return jnp.fft.irfft2(output, s=(height, width), axes=(-2, -1), norm="ortho").astype(inputs.dtype)
+
+
+def spectral_reference_model(
+    parameters: dict, architecture: dict, time: Array | float, fields: Array
+) -> Array:
+    """Full-domain, periodic, translation-equivariant spectral reference CNN."""
+    fields = jnp.asarray(fields)
+    if fields.ndim != 4 or fields.shape[1] != 1:
+        raise ValueError("fields must have shape [B,1,H,W]")
+    batch, _, height, width = fields.shape
+    modes = int(architecture["modes"])
+    if modes > height // 2 or modes > width // 2 + 1:
+        raise ValueError("spectral mode count exceeds the grid's non-aliased support")
+    time_features = _time_channels(
+        time, batch, height, width, fields.dtype,
+        int(architecture["time_frequencies"]),
+    )
+    hidden = jax.nn.silu(_pointwise(
+        jnp.concatenate([fields, time_features], axis=1), parameters["lift"]
+    ))
+    normalizer = jnp.sqrt(jnp.asarray(2.0, dtype=fields.dtype))
+    for block in parameters["blocks"]:
+        global_update = spectral_conv2d(hidden, block, modes)
+        local_update = _pointwise(hidden, block["physical"])
+        update = jax.nn.silu(global_update + local_update)
+        hidden = (hidden + update) / normalizer
+    output = _pointwise(jax.nn.silu(_pointwise(hidden, parameters["project_hidden"])),
+                        parameters["project_output"])
+    return output + _pointwise(fields, parameters["direct"])
+
+
 def reference_flow_matching_loss(params: dict, times: Array, states: Array, targets: Array) -> Array:
     prediction = periodic_reference_cnn(params, times, states)
     return jnp.mean(jnp.sum((prediction - targets) ** 2, axis=(1, 2, 3)))

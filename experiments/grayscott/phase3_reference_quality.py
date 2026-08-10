@@ -5,6 +5,10 @@ import csv
 import hashlib
 import json
 import pickle
+import platform
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import jax
@@ -19,6 +23,7 @@ from .field_transport import (
     noisy_field_interpolant,
     periodic_reference_cnn,
     periodic_conv2d,
+    spectral_reference_model,
     smooth_hidden_observables,
     standardized_noise_bank,
 )
@@ -147,6 +152,10 @@ def heun_rollout_snapshots(apply, initial: np.ndarray, steps: int, snapshot_time
 
 
 def _checkpoint_apply(checkpoint):
+    if checkpoint.get("model_kind") == "spectral_global":
+        return jax.jit(lambda time, fields: spectral_reference_model(
+            checkpoint["trainable"], checkpoint["architecture"], time, fields
+        ))
     if checkpoint.get("model_kind", "v7_sequential") == "residual_periodic":
         return jax.jit(lambda time, fields: residual_reference_cnn(
             checkpoint["trainable"], checkpoint["architecture"], time, fields
@@ -283,7 +292,7 @@ def evaluate_fm_bank(
         "dtype": {
             "state": str(states.dtype), "target": str(targets.dtype),
             "prediction": str(predictions.dtype),
-            "convolution_weight": str(checkpoint["trainable"]["layers"][0]["weight"].dtype),
+            "convolution_weight": str(jax.tree_util.tree_leaves(checkpoint["trainable"])[0].dtype),
         },
     }
 
@@ -302,12 +311,20 @@ def _law_row(fields: np.ndarray, center, scale, target, shells, threshold) -> di
     )).mean(axis=0)
     standardized = (phi_physical - center) / scale
     hidden = _extended_hidden(fields, threshold).mean(axis=0)
+    spectrum = np.abs(np.fft.fft2(np.asarray(fields)[:, 0], norm="ortho")) ** 2
+    height, width = fields.shape[-2:]
+    fy, fx = np.fft.fftfreq(height), np.fft.fftfreq(width)
+    radius = np.sqrt(fy[:, None] ** 2 + fx[None, :] ** 2)
+    radial_power = [float(spectrum[:, (radius >= low) & (radius < high)].mean())
+                    for low, high in ((0.0, 0.125), (0.125, 0.25), (0.25, np.inf))]
     return {
         "phi_physical": phi_physical, "phi_standardized": standardized,
         "phi_minus_frozen_c": standardized - target,
         "smooth_tv": hidden[0], "anisotropy": hidden[1], "soft_area": hidden[2],
         "soft_perimeter": hidden[3], "heldout_power_1": hidden[4],
-        "heldout_power_2": hidden[5], "field_minimum": float(fields.min()),
+        "heldout_power_2": hidden[5],
+        "radial_power_low": radial_power[0], "radial_power_middle": radial_power[1],
+        "radial_power_high": radial_power[2], "field_minimum": float(fields.min()),
         "field_maximum": float(fields.max()),
     }
 
@@ -675,13 +692,437 @@ def audit_v7_checkpoint(config_path: Path = DEFAULT_CONFIG) -> dict:
     return result
 
 
+def _apply_trainable(model_kind, trainable, architecture, times, states):
+    if model_kind == "spectral_global":
+        return spectral_reference_model(trainable, architecture, times, states)
+    if model_kind == "residual_periodic":
+        return residual_reference_cnn(trainable, architecture, times, states)
+    return periodic_reference_cnn(
+        _assemble_parameters(trainable, **architecture), times, states
+    )
+
+
+def _tree_global_norm(tree):
+    return jnp.sqrt(sum(jnp.sum(value * value) for value in jax.tree_util.tree_leaves(tree)))
+
+
+def _evaluate_fixed_fm(model_kind, trainable, architecture, times, states, targets, batch_size=256):
+    apply = jax.jit(lambda t, x: _apply_trainable(model_kind, trainable, architecture, t, x))
+    squared = 0.0
+    for start in range(0, len(times), batch_size):
+        prediction = np.asarray(apply(
+            jnp.asarray(times[start:start + batch_size]), jnp.asarray(states[start:start + batch_size])
+        ))
+        squared += float(np.sum((prediction - targets[start:start + batch_size]) ** 2))
+    return squared / (len(times) * np.prod(states.shape[1:]))
+
+
+def _train_reference_variant(
+    *, variant, initial_trainable, model_kind, architecture,
+    train_minus, train_plus, train_coupling,
+    validation_times, validation_states, validation_targets,
+    amplitude, protocol, output,
+):
+    steps = int(variant.get("additional_training_steps", variant.get("training_steps", 0)))
+    batch_size = int(protocol["batch_size"])
+    clip = float(protocol["gradient_clip"]); weight_decay = float(protocol["weight_decay"])
+    lr_start = float(variant["learning_rate_start"]); lr_end = float(variant["learning_rate_end"])
+    trainable = jax.tree_util.tree_map(jnp.asarray, initial_trainable)
+    first = jax.tree_util.tree_map(jnp.zeros_like, trainable)
+    second = jax.tree_util.tree_map(jnp.zeros_like, trainable)
+
+    @jax.jit
+    def step_fn(parameters, first_moment, second_moment, step_index, times, states, targets):
+        def objective(value):
+            prediction = _apply_trainable(model_kind, value, architecture, times, states)
+            return jnp.mean((prediction - targets) ** 2)
+        loss, gradient = jax.value_and_grad(objective)(parameters)
+        gradient_norm = _tree_global_norm(gradient)
+        factor = jnp.minimum(1.0, clip / jnp.maximum(gradient_norm, 1e-30))
+        gradient = jax.tree_util.tree_map(lambda value: value * factor, gradient)
+        first_moment = jax.tree_util.tree_map(lambda old, grad: 0.9 * old + 0.1 * grad, first_moment, gradient)
+        second_moment = jax.tree_util.tree_map(lambda old, grad: 0.999 * old + 0.001 * grad * grad, second_moment, gradient)
+        corrected_first = jax.tree_util.tree_map(lambda value: value / (1.0 - 0.9 ** step_index), first_moment)
+        corrected_second = jax.tree_util.tree_map(lambda value: value / (1.0 - 0.999 ** step_index), second_moment)
+        fraction = jnp.minimum((step_index - 1) / jnp.maximum(steps - 1, 1), 1.0)
+        learning_rate = lr_end + 0.5 * (lr_start - lr_end) * (1.0 + jnp.cos(jnp.pi * fraction))
+        parameters = jax.tree_util.tree_map(
+            lambda value, m, v: value - learning_rate * (
+                m / (jnp.sqrt(v) + 1e-8) + weight_decay * value
+            ), parameters, corrected_first, corrected_second,
+        )
+        return parameters, first_moment, second_moment, loss, gradient_norm, learning_rate
+
+    rng = np.random.default_rng(int(protocol["fixed_training_interpolant_seed"]))
+    validation_zero = float(np.mean(validation_targets * validation_targets))
+    best, best_ratio, trace = trainable, float("inf"), []
+    start_time = time.perf_counter()
+    for step in range(1, steps + 1):
+        batch_times = _stratified_times(rng, batch_size)
+        batch_states, batch_targets, _ = sample_frozen_bridge(
+            rng, train_minus, train_plus, train_coupling, batch_times, amplitude
+        )
+        trainable, first, second, loss, gradient_norm, learning_rate = step_fn(
+            trainable, first, second, step, jnp.asarray(batch_times),
+            jnp.asarray(batch_states), jnp.asarray(batch_targets),
+        )
+        if step == 1 or step % int(protocol["evaluation_interval"]) == 0 or step == steps:
+            validation_mse = _evaluate_fixed_fm(
+                model_kind, trainable, architecture,
+                validation_times, validation_states, validation_targets,
+            )
+            ratio = validation_mse / validation_zero
+            if ratio < best_ratio:
+                best_ratio = ratio
+                best = jax.tree_util.tree_map(lambda value: np.asarray(value), trainable)
+            trace.append({
+                "step": step, "training_mse_per_pixel": float(loss),
+                "validation_mse_per_pixel": validation_mse,
+                "validation_normalized_fm_mse": ratio,
+                "gradient_norm_before_clip": float(gradient_norm),
+                "learning_rate": float(learning_rate),
+            })
+        if step % 1000 == 0:
+            print(f"{variant['id']} step {step}/{steps}: validation ratio={trace[-1]['validation_normalized_fm_mse']:.5f}", flush=True)
+    jax.block_until_ready(jax.tree_util.tree_leaves(trainable)[0])
+    return best, trace, time.perf_counter() - start_time
+
+
+def run_controlled_sweep(
+    config_path: Path = DEFAULT_CONFIG,
+    sweep_path: Path = DEFAULT_SWEEP_CONFIG,
+) -> dict:
+    config = _read_json(config_path.resolve()); protocol = _read_json(sweep_path.resolve())
+    output = ROOT / config["output_directory"]
+    v7 = ROOT / config["source_phase3_v7_directory"]
+    audit = _read_json(output / "v7_checkpoint_audit.json")
+    if not audit["fm_target_verification"]["same_noise_used_for_state_and_target"]:
+        raise RuntimeError("FM target verification must pass before the sweep")
+    healthy_summary = _read_json(output / "validation_bank_summary.json")
+    if healthy_summary["minimum_ess_fraction"] < float(config["reference_quality_gates"]["validation_endpoint_minimum_ess_fraction"]):
+        raise RuntimeError("validation endpoint bank is not healthy")
+    _write_json(output / "controlled_sweep_protocol.json", protocol)
+    with (v7 / "reference_cnn_checkpoint.pkl").open("rb") as handle:
+        v7_checkpoint = pickle.load(handle)
+    training = np.load(v7 / "reference_training_endpoint_banks.npz")
+    validation = np.load(output / "healthy_validation_endpoint_bank.npz")
+    train_minus, train_plus = np.asarray(training["training_minus"]), np.asarray(training["training_plus"])
+    train_mw, train_pw = np.asarray(training["training_minus_weights"]), np.asarray(training["training_plus_weights"])
+    validation_minus, validation_plus = np.asarray(validation["minus"]), np.asarray(validation["plus"])
+    validation_mw, validation_pw = np.asarray(validation["minus_weights"]), np.asarray(validation["plus_weights"])
+    train_coupling = maximal_same_index_coupling(train_mw, train_pw)
+    validation_coupling = maximal_same_index_coupling(validation_mw, validation_pw)
+    rng = np.random.default_rng(int(protocol["fixed_validation_interpolant_seed"]))
+    validation_times = _stratified_times(rng, int(protocol["fixed_validation_interpolant_count"]))
+    validation_states, validation_targets, _ = sample_frozen_bridge(
+        rng, validation_minus, validation_plus, validation_coupling, validation_times,
+        float(config["frozen_phase3a"]["schedule_amplitude"]),
+    )
+    validation_zero = float(np.mean(validation_targets * validation_targets))
+    thresholds = audit["reference_split_thresholds"]
+    variants = []
+    checkpoints = {"A_v7_saved_baseline": v7_checkpoint}
+    for variant in protocol["variants"]:
+        variant_id = variant["id"]
+        if variant_id == "A_v7_saved_baseline":
+            checkpoint = v7_checkpoint
+            training_trace, training_seconds = [], None
+        elif variant_id == "B_baseline_longer":
+            best, training_trace, training_seconds = _train_reference_variant(
+                variant=variant, initial_trainable=v7_checkpoint["trainable"],
+                model_kind="v7_sequential", architecture=v7_checkpoint["architecture"],
+                train_minus=train_minus, train_plus=train_plus, train_coupling=train_coupling,
+                validation_times=validation_times, validation_states=validation_states,
+                validation_targets=validation_targets,
+                amplitude=float(config["frozen_phase3a"]["schedule_amplitude"]),
+                protocol=protocol, output=output,
+            )
+            checkpoint = {**v7_checkpoint, "trainable": best, "model_kind": "v7_sequential",
+                          "variant_id": variant_id, "training_protocol": variant}
+        else:
+            initial, architecture = init_residual_reference_cnn(
+                jax.random.PRNGKey(int(protocol["moderate_model_initialization_seed"])),
+                channels=28, dilations=(1, 2, 4, 8, 4),
+                time_frequencies=3, dtype=jnp.float32,
+            )
+            best, training_trace, training_seconds = _train_reference_variant(
+                variant=variant, initial_trainable=initial,
+                model_kind="residual_periodic", architecture=architecture,
+                train_minus=train_minus, train_plus=train_plus, train_coupling=train_coupling,
+                validation_times=validation_times, validation_states=validation_states,
+                validation_targets=validation_targets,
+                amplitude=float(config["frozen_phase3a"]["schedule_amplitude"]),
+                protocol=protocol, output=output,
+            )
+            checkpoint = {
+                "trainable": best, "architecture": architecture, "model_kind": "residual_periodic",
+                "variant_id": variant_id, "training_protocol": variant,
+                "candidate": v7_checkpoint["candidate"], "selected_path": v7_checkpoint["selected_path"],
+                "center": v7_checkpoint["center"], "scale": v7_checkpoint["scale"], "target": v7_checkpoint["target"],
+            }
+        checkpoints[variant_id] = checkpoint
+        validation_mse = _evaluate_fixed_fm(
+            checkpoint.get("model_kind", "v7_sequential"), checkpoint["trainable"],
+            checkpoint["architecture"], validation_times, validation_states, validation_targets,
+        )
+        local_ratio = validation_mse / validation_zero
+        rollout = evaluate_rollout_against_direct_si(
+            checkpoint, validation_minus, validation_plus, validation_mw, validation_pw,
+            config, steps=int(config["rollout_diagnostics"]["primary_ode_steps"]),
+            thresholds=thresholds,
+        )
+        local_pass = bool(local_ratio <= float(config["reference_quality_gates"]["heldout_fm_mse_fraction_of_zero_predictor"]))
+        pathology_pass = bool(rollout["serious_field_range_fraction"] <= float(config["reference_quality_gates"]["maximum_serious_range_fraction"]))
+        pass_all = bool(local_pass and rollout["rollout_fidelity_gate_pass"] and pathology_pass)
+        row = {
+            "variant_id": variant_id, "validation_mse_per_pixel": validation_mse,
+            "validation_zero_predictor_mse_per_pixel": validation_zero,
+            "validation_normalized_fm_mse": local_ratio,
+            "local_fm_gate_pass": local_pass,
+            "rollout_fidelity_gate_pass": rollout["rollout_fidelity_gate_pass"],
+            "field_pathology_gate_pass": pathology_pass,
+            "phase3b_candidate_pass": pass_all,
+            "integrated_raw_field_mmd2": rollout["integrated_raw_field_mmd2"],
+            "integrated_downsampled_field_mmd2": rollout["integrated_downsampled_field_mmd2"],
+            "maximum_rollout_standardized_phi_error": rollout["maximum_learned_minus_direct_standardized_phi"],
+            "endpoint_rollout_standardized_phi_error": rollout["endpoint_maximum_standardized_phi_error"],
+            "training_seconds": training_seconds,
+            "parameter_count": int(sum(np.asarray(value).size for value in jax.tree_util.tree_leaves(checkpoint["trainable"]))),
+            "training_trace": training_trace, "rollout": rollout,
+        }
+        variants.append(row)
+        with (output / f"checkpoint_{variant_id}.pkl").open("wb") as handle:
+            pickle.dump(checkpoint, handle)
+        _write_csv(output / f"training_trace_{variant_id}.csv", training_trace)
+        _write_json(output / f"variant_{variant_id}_summary.json", row)
+    passing = [row for row in variants if row["phase3b_candidate_pass"]]
+    passing.sort(key=lambda row: (
+        row["validation_normalized_fm_mse"], row["integrated_downsampled_field_mmd2"],
+        row["integrated_raw_field_mmd2"], row["parameter_count"],
+    ))
+    local_candidates = [row for row in variants if row["local_fm_gate_pass"]]
+    local_candidates.sort(key=lambda row: row["validation_normalized_fm_mse"])
+    diagnostic_variant = passing[0] if passing else (local_candidates[0] if local_candidates else min(
+        variants, key=lambda row: row["validation_normalized_fm_mse"]
+    ))
+    selected_id = passing[0]["variant_id"] if passing else None
+    result = {
+        "status": "phase3b_sweep_has_passer" if selected_id else "phase3b_sweep_no_passer",
+        "variants": variants, "selected_variant_id": selected_id,
+        "ode_diagnostic_variant_id": diagnostic_variant["variant_id"],
+        "selection_uses_reference_quality_only": True,
+        "deep_ritz_training_performed": False, "phase4_performed": False,
+    }
+    _write_csv(output / "controlled_sweep_summary.csv", [
+        {key: value for key, value in row.items() if key not in ("training_trace", "rollout")}
+        for row in variants
+    ])
+    _write_json(output / "controlled_sweep_summary.json", result)
+    return result
+
+
+def run_ode_resolution_and_finalize(
+    config_path: Path = DEFAULT_CONFIG,
+    sweep_path: Path = DEFAULT_SWEEP_CONFIG,
+) -> dict:
+    config = _read_json(config_path.resolve()); protocol = _read_json(sweep_path.resolve())
+    output = ROOT / config["output_directory"]
+    sweep = _read_json(output / "controlled_sweep_summary.json")
+    variant_id = sweep["selected_variant_id"] or sweep["ode_diagnostic_variant_id"]
+    with (output / f"checkpoint_{variant_id}.pkl").open("rb") as handle:
+        checkpoint = pickle.load(handle)
+    validation = np.load(output / "healthy_validation_endpoint_bank.npz")
+    minus, plus = np.asarray(validation["minus"]), np.asarray(validation["plus"])
+    mw, pw = np.asarray(validation["minus_weights"]), np.asarray(validation["plus_weights"])
+    common_times = protocol["ode_common_time_grid"]
+    resolutions = {}
+    for steps in map(int, config["rollout_diagnostics"]["ode_steps"]):
+        resolutions[str(steps)] = evaluate_rollout_against_direct_si(
+            checkpoint, minus, plus, mw, pw, config, steps=steps,
+            thresholds=None, seed_offset=17000, time_grid=common_times,
+        )
+    m128 = resolutions["128"]["integrated_downsampled_field_mmd2"]
+    m256 = resolutions["256"]["integrated_downsampled_field_mmd2"]
+    relative_improvement = (m128 - m256) / max(m128, 1e-30)
+    ode_sensitive = bool(relative_improvement > 0.20)
+    variant_row = next(row for row in sweep["variants"] if row["variant_id"] == variant_id)
+    target_ok = _read_json(output / "v7_checkpoint_audit.json")["fm_target_verification"]["relative_finite_difference_error"] < 1e-3
+    bank_ok = _read_json(output / "validation_bank_summary.json")["minimum_ess_fraction"] >= 0.20
+    phase3b_pass = bool(
+        sweep["selected_variant_id"] is not None and target_ok and bank_ok
+        and not ode_sensitive and variant_row["phase3b_candidate_pass"]
+    )
+    remaining = []
+    if not variant_row["local_fm_gate_pass"]: remaining.append("local conditional-velocity regression quality")
+    if not variant_row["rollout_fidelity_gate_pass"]: remaining.append("rollout accumulation / conditional-velocity approximation")
+    if ode_sensitive: remaining.append("ODE under-resolution")
+    if not variant_row["field_pathology_gate_pass"]: remaining.append("field-range pathology")
+    result = {
+        "status": "phase3b_pass" if phase3b_pass else "phase3b_failed_after_controlled_sweep",
+        "diagnostic_variant_id": variant_id, "selected_variant_id": sweep["selected_variant_id"],
+        "ode_resolution": resolutions,
+        "downsampled_mmd_relative_improvement_128_to_256": relative_improvement,
+        "ode_under_resolution": ode_sensitive,
+        "fm_target_verification_pass": target_ok, "validation_bank_health_pass": bank_ok,
+        "phase3b_pass": phase3b_pass, "remaining_obstacles": remaining,
+        "phase4_authorized": phase3b_pass,
+        "deep_ritz_training_performed": False, "learned_method_comparison_performed": False,
+    }
+    _write_json(output / "phase3b_final_decision.json", result)
+    return result
+
+
+def materialize_final_audit(
+    config_path: Path = DEFAULT_CONFIG,
+    sweep_path: Path = DEFAULT_SWEEP_CONFIG,
+) -> dict:
+    """Write compact, human-auditable tables and reproducibility metadata."""
+    config_path = config_path.resolve(); sweep_path = sweep_path.resolve()
+    config = _read_json(config_path); protocol = _read_json(sweep_path)
+    output = ROOT / config["output_directory"]
+    sweep = _read_json(output / "controlled_sweep_summary.json")
+    decision = _read_json(output / "phase3b_final_decision.json")
+
+    rollout_files = []
+    for variant in sweep["variants"]:
+        rows = []
+        for row in variant["rollout"]["rows"]:
+            thresholds = row.get("thresholds", {})
+            rows.append({
+                "variant_id": variant["variant_id"], "time": row["t"],
+                "maximum_standardized_phi_error": row["maximum_learned_minus_direct_standardized_phi"],
+                "phi_threshold": thresholds.get("maximum_standardized_phi_error"),
+                "raw_field_mmd2": row["raw_field_mmd2"],
+                "raw_mmd2_threshold": thresholds.get("raw_field_mmd2"),
+                "downsampled_field_mmd2": row["downsampled_field_mmd2"],
+                "downsampled_mmd2_threshold": thresholds.get("downsampled_field_mmd2"),
+                "phi_gate_pass": row.get("phi_fidelity_gate_pass"),
+                "raw_mmd_gate_pass": row.get("raw_mmd_gate_pass"),
+                "downsampled_mmd_gate_pass": row.get("downsampled_mmd_gate_pass"),
+                "projected_phi_residual_max": float(np.max(np.abs(row["projected_phi_minus_c"]))),
+                "projected_ess_fraction": row["projected_ess_fraction"],
+                "learned_field_minimum": row["learned"]["field_minimum"],
+                "learned_field_maximum": row["learned"]["field_maximum"],
+            })
+        path = output / f"rollout_{variant['variant_id']}_by_time.csv"
+        _write_csv(path, rows); rollout_files.append(str(path.relative_to(ROOT)))
+
+    resolution_rows = []
+    for steps, result in sorted(decision["ode_resolution"].items(), key=lambda item: int(item[0])):
+        resolution_rows.append({
+            "ode_steps": int(steps),
+            "integrated_raw_field_mmd2": result["integrated_raw_field_mmd2"],
+            "integrated_downsampled_field_mmd2": result["integrated_downsampled_field_mmd2"],
+            "maximum_standardized_phi_error": result["maximum_learned_minus_direct_standardized_phi"],
+            "endpoint_standardized_phi_error": result["endpoint_maximum_standardized_phi_error"],
+            "endpoint_raw_field_mmd2": result["endpoint_raw_field_mmd2"],
+        })
+    _write_csv(output / "ode_resolution_summary.csv", resolution_rows)
+
+    git_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    git_status = subprocess.run(
+        ["git", "status", "--short"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout.splitlines()
+    source_directories = {
+        "phase2_v6": ROOT / config["source_phase2_directory"],
+        "phase3_v7": ROOT / config["source_phase3_v7_directory"],
+    }
+    source_manifests = {
+        name: directory_manifest(path) for name, path in source_directories.items()
+    }
+    experiment_b_paths = [
+        ROOT / "example_b.py", ROOT / "sweep_example_b.py",
+        ROOT / "scripts" / "run_example_b.sh", ROOT / "checkpoints" / "example_b.npz",
+        ROOT / "results" / "example_b", ROOT / "results" / "reference" / "example_b",
+    ]
+    experiment_b_manifest = {}
+    for path in experiment_b_paths:
+        if path.is_file():
+            experiment_b_manifest[str(path.relative_to(ROOT))] = _hash_file(path)
+        elif path.is_dir():
+            experiment_b_manifest.update(directory_manifest(path))
+    _write_json(output / "preserved_source_manifests.json", {
+        **source_manifests, "experiment_b": experiment_b_manifest,
+    })
+
+    checkpoints = {}
+    for path in sorted(output.glob("checkpoint_*.pkl")):
+        with path.open("rb") as handle:
+            checkpoint = pickle.load(handle)
+        checkpoints[str(path.relative_to(ROOT))] = {
+            "sha256": _hash_file(path),
+            "parameter_count": int(sum(
+                np.asarray(value).size for value in jax.tree_util.tree_leaves(checkpoint["trainable"])
+            )),
+            "model_kind": checkpoint.get("model_kind", "v7_sequential"),
+        }
+    metadata = {
+        "experiment": "C", "version": config["version"],
+        "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "git_commit": git_commit, "git_status_at_materialization": git_status,
+        "python": sys.version, "platform": platform.platform(),
+        "jax_version": jax.__version__, "numpy_version": np.__version__,
+        "jax_enable_x64": bool(jax.config.jax_enable_x64),
+        "jax_devices": [str(device) for device in jax.devices()],
+        "config": str(config_path.relative_to(ROOT)), "config_sha256": _hash_file(config_path),
+        "sweep_protocol": str(sweep_path.relative_to(ROOT)),
+        "sweep_protocol_sha256": _hash_file(sweep_path),
+        "frozen_phase3a": config["frozen_phase3a"],
+        "validation_bank": {
+            "seeds": [61001, 62024], "size_per_endpoint": 1024,
+            "minimum_ess_fraction": _read_json(output / "validation_bank_summary.json")["minimum_ess_fraction"],
+        },
+        "training_and_evaluation_seeds": {
+            key: value for key, value in protocol.items() if key.endswith("seed")
+        },
+        "optimizer": protocol["optimizer"], "batch_size": protocol["batch_size"],
+        "time_sampling": protocol["time_sampling"],
+        "ode_steps": config["rollout_diagnostics"]["ode_steps"],
+        "checkpoints": checkpoints,
+        "phase3b_status": decision["status"],
+        "phase4_performed": False, "deep_ritz_training_performed": False,
+        "learned_method_comparison_performed": False,
+    }
+    _write_json(output / "run_metadata.json", metadata)
+    artifact_hashes = {
+        str(path.relative_to(ROOT)): _hash_file(path)
+        for path in sorted(output.iterdir())
+        if path.is_file() and path.name != "v8_artifact_sha256.json"
+    }
+    _write_json(output / "v8_artifact_sha256.json", artifact_hashes)
+    return {
+        "status": "v8_audit_materialized", "rollout_tables": rollout_files,
+        "resolution_table": str((output / "ode_resolution_summary.csv").relative_to(ROOT)),
+        "metadata": str((output / "run_metadata.json").relative_to(ROOT)),
+        "artifact_count": len(artifact_hashes),
+    }
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("validation-bank", "audit-v7"), nargs="?", default="validation-bank")
+    parser.add_argument(
+        "command",
+        choices=("validation-bank", "audit-v7", "sweep", "ode-finalize", "materialize"),
+        nargs="?", default="validation-bank",
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--sweep-config", type=Path, default=DEFAULT_SWEEP_CONFIG)
     args = parser.parse_args()
-    result = build_healthy_validation_bank(args.config) if args.command == "validation-bank" else audit_v7_checkpoint(args.config)
+    if args.command == "validation-bank":
+        result = build_healthy_validation_bank(args.config)
+    elif args.command == "audit-v7":
+        result = audit_v7_checkpoint(args.config)
+    elif args.command == "sweep":
+        result = run_controlled_sweep(args.config, args.sweep_config)
+    elif args.command == "ode-finalize":
+        result = run_ode_resolution_and_finalize(args.config, args.sweep_config)
+    else:
+        result = materialize_final_audit(args.config, args.sweep_config)
     print(json.dumps(result, indent=2, default=lambda value: np.asarray(value).tolist()))
 
 

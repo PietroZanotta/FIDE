@@ -22,10 +22,13 @@ from experiments.grayscott.field_transport import (
     geometric_l2_transport_coupling,
     independent_coupling,
     init_periodic_reference_cnn,
+    init_spectral_reference_model,
     linear_field_interpolant,
     maximal_same_index_coupling,
     noisy_field_interpolant,
     periodic_reference_cnn,
+    spectral_conv2d,
+    spectral_reference_model,
     smooth_hidden_observables,
     standardized_noise_bank,
     weighted_field_tangent_velocity,
@@ -370,11 +373,82 @@ class FieldInfrastructureTests(unittest.TestCase):
         params, architecture = init_residual_reference_cnn(
             jax.random.PRNGKey(95), channels=6, dilations=(1, 2), dtype=jnp.float32
         )
-        fields = jax.random.normal(jax.random.PRNGKey(96), (3, 1, 9, 9))
+        fields = jax.random.normal(jax.random.PRNGKey(96), (3, 1, 9, 9), dtype=jnp.float32)
         shifted = jnp.roll(fields, (2, -1), axis=(-2, -1))
         expected = jnp.roll(residual_reference_cnn(params, architecture, 0.4, fields), (2, -1), axis=(-2, -1))
         actual = residual_reference_cnn(params, architecture, 0.4, shifted)
         np.testing.assert_allclose(actual, expected, rtol=2e-6, atol=2e-6)
+
+    def test_spectral_reference_is_periodic_translation_equivariant(self):
+        # CPU FFT plans make the algebraic comparison independent of cuFFT's
+        # batch/plan-specific float32 reduction order.
+        with jax.default_device(jax.devices("cpu")[0]):
+            params, architecture = init_spectral_reference_model(
+                jax.random.PRNGKey(101), width=4, blocks=2, modes=3, dtype=jnp.float32
+            )
+            fields = jax.random.normal(jax.random.PRNGKey(102), (2, 1, 16, 16), dtype=jnp.float32)
+            shifted = jnp.roll(fields, (3, -5), axis=(-2, -1))
+            expected = jnp.roll(
+                spectral_reference_model(params, architecture, 0.37, fields),
+                (3, -5), axis=(-2, -1),
+            )
+            actual = spectral_reference_model(params, architecture, 0.37, shifted)
+        np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
+
+    def test_spectral_reference_fft_roundtrip_is_real(self):
+        params, architecture = init_spectral_reference_model(
+            jax.random.PRNGKey(103), width=3, blocks=1, modes=3, dtype=jnp.float32
+        )
+        fields = jax.random.normal(jax.random.PRNGKey(104), (2, 1, 16, 16), dtype=jnp.float32)
+        output = spectral_reference_model(params, architecture, 0.2, fields)
+        roundtrip = jnp.fft.irfft2(jnp.fft.rfft2(output), s=output.shape[-2:])
+        self.assertFalse(jnp.issubdtype(output.dtype, jnp.complexfloating))
+        np.testing.assert_allclose(roundtrip, output, rtol=2e-6, atol=2e-6)
+
+    def test_spectral_reference_gradients_are_finite(self):
+        params, architecture = init_spectral_reference_model(
+            jax.random.PRNGKey(105), width=3, blocks=1, modes=2, dtype=jnp.float32
+        )
+        fields = jax.random.normal(jax.random.PRNGKey(106), (2, 1, 8, 8), dtype=jnp.float32)
+        gradient = jax.grad(
+            lambda x: jnp.mean(spectral_reference_model(params, architecture, 0.4, x) ** 2)
+        )(fields)
+        self.assertTrue(bool(jnp.all(jnp.isfinite(gradient))))
+
+    def test_spectral_reference_batching_is_invariant(self):
+        with jax.default_device(jax.devices("cpu")[0]):
+            params, architecture = init_spectral_reference_model(
+                jax.random.PRNGKey(107), width=4, blocks=1, modes=3, dtype=jnp.float32
+            )
+            fields = jax.random.normal(jax.random.PRNGKey(108), (3, 1, 16, 16), dtype=jnp.float32)
+            batched = spectral_reference_model(params, architecture, jnp.array([0.1, 0.3, 0.7]), fields)
+            separate = jnp.concatenate([
+                spectral_reference_model(params, architecture, time, fields[index:index + 1])
+                for index, time in enumerate((0.1, 0.3, 0.7))
+            ])
+        np.testing.assert_allclose(batched, separate, rtol=2e-6, atol=2e-6)
+
+    def test_spectral_reference_respects_float32(self):
+        params, architecture = init_spectral_reference_model(
+            jax.random.PRNGKey(109), width=3, blocks=1, modes=2, dtype=jnp.float32
+        )
+        self.assertTrue(all(
+            np.asarray(value).dtype == np.float32 for value in jax.tree_util.tree_leaves(params)
+        ))
+        fields = jnp.zeros((2, 1, 8, 8), dtype=jnp.float32)
+        self.assertEqual(spectral_reference_model(params, architecture, 0.5, fields).dtype, jnp.float32)
+
+    def test_spectral_layer_has_full_domain_dependence(self):
+        params, architecture = init_spectral_reference_model(
+            jax.random.PRNGKey(110), width=1, blocks=1, modes=3, dtype=jnp.float32
+        )
+        baseline = jnp.zeros((1, 1, 16, 16), dtype=jnp.float32)
+        perturbed = baseline.at[0, 0, 0, 0].set(1.0)
+        block = params["blocks"][0]
+        response = spectral_conv2d(perturbed, block, architecture["modes"]) - spectral_conv2d(
+            baseline, block, architecture["modes"]
+        )
+        self.assertGreater(float(jnp.abs(response[0, 0, 8, 8])), 1e-7)
 
     def test_oracle_bridge_velocity_heun_tracks_known_stochastic_path(self):
         rng = np.random.default_rng(97)
