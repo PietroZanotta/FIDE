@@ -1,0 +1,78 @@
+{
+  "headline_R": 3,
+  "R_ablations": [
+    2,
+    3,
+    4
+  ],
+  "base_seed": 20260810,
+  "reference_checkpoint": "results/example_b/learned_mfsi_example_b.npz",
+  "evaluation_times": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "robustness_rotations": [
+    0.39269908169872414,
+    0.7853981633974483
+  ],
+  "seed_offsets": {
+    "design": 10000,
+    "observable_initialization": 20000,
+    "downstream": 30000,
+    "evaluation": 40000,
+    "bootstrap": 50000
+  },
+  "phases": {
+    "smoke": {
+      "model_seeds": 3,
+      "evaluation_seeds": 3,
+      "design_samples_per_endpoint": 12000,
+      "observable_steps": 30,
+      "objective_train_samples": 2048,
+      "objective_validation_samples": 1024,
+      "fiber_times": 3,
+      "fiber_particles": 96,
+      "local_dt": 0.05,
+      "diagnostic_particles": 768,
+      "classifier_train_samples": 1024,
+      "classifier_evaluation_samples": 1024,
+      "classifier_steps": 30,
+      "closure_diagnostic_steps": 30,
+      "ritz_steps": 16,
+      "ritz_times": 3,
+      "ritz_particles": 64,
+      "rollout_particles": 128,
+      "target_particles": 192,
+      "flow_steps": 8,
+      "robustness_downstream": false,
+      "bootstrap_replicates": 2000
+    },
+    "confirmatory": {
+      "model_seeds": 10,
+      "evaluation_seeds": 10,
+      "design_samples_per_endpoint": 500000,
+      "observable_steps": 1600,
+      "objective_train_samples": 32768,
+      "objective_validation_samples": 16384,
+      "fiber_times": 10,
+      "fiber_particles": 512,
+      "local_dt": 0.025,
+      "diagnostic_particles": 8192,
+      "classifier_train_samples": 16384,
+      "classifier_evaluation_samples": 16384,
+      "classifier_steps": 1200,
+      "closure_diagnostic_steps": 1200,
+      "ritz_steps": 1600,
+      "ritz_times": 10,
+      "ritz_particles": 384,
+      "rollout_particles": 3072,
+      "target_particles": 4096,
+      "flow_steps": 160,
+      "robustness_downstream": true,
+      "bootstrap_replicates": 20000
+    }
+  }
+}

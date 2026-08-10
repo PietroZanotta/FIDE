@@ -130,3 +130,29 @@ def test_design_whitening_is_invertible_and_endpoint_means_are_centered():
     z1 = od.standardized_dictionary(x1, standardization).mean(axis=0)
     np.testing.assert_allclose(np.asarray(0.5 * (z0 + z1)), np.zeros(5), atol=2e-12, rtol=0)
 
+
+def test_rotated_condition_reuses_bridge_and_reference_equivariantly():
+    angle = np.pi / 8
+    key = jax.random.PRNGKey(22)
+    x, dx = exb.sample_bridge(key, jnp.asarray(0.41), 128)
+    xr, dxr = od.sample_bridge_conditioned(key, jnp.asarray(0.41), 128, angle)
+    rot = od.rotation_matrix(angle)
+    np.testing.assert_allclose(np.asarray(xr), np.asarray(x @ rot.T), atol=2e-12, rtol=2e-12)
+    np.testing.assert_allclose(np.asarray(dxr), np.asarray(dx @ rot.T), atol=2e-12, rtol=2e-12)
+
+    input_dim = exb.STATE_DIM + 1 + 2 * exb.TIME_FREQ
+    reference = exb.core.init_mlp(jax.random.PRNGKey(23), input_dim, (8,), exb.STATE_DIM)
+    ur = od.reference_velocity_conditioned(reference, jnp.asarray(0.41), xr, angle)
+    expected = exb.reference_velocity(reference, jnp.asarray(0.41), x, ) @ rot.T
+    np.testing.assert_allclose(np.asarray(ur), np.asarray(expected), atol=3e-12, rtol=3e-12)
+
+
+def test_nonzero_rotated_target_calibrates_with_frozen_observable():
+    standardization = _standardization(24, 4096)
+    _, A = od.initialize_stiefel(jax.random.PRNGKey(25), 3)
+    x, _ = od.sample_bridge_conditioned(jax.random.PRNGKey(26), jnp.asarray(0.5), 1024, np.pi / 4)
+    u = jnp.zeros_like(x)
+    ph = od.observable_values(A, standardization, x)
+    target = 0.15 * jnp.mean(ph, axis=0)
+    state = od.project_bank(A, standardization, x, u, target)
+    np.testing.assert_allclose(np.asarray(state.moments), np.asarray(target), atol=2e-9, rtol=0)

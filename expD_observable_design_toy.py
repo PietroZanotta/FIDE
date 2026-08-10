@@ -91,6 +91,16 @@ def _summary_row(label: str, model: od.ObservableModel, result: dict[str, Any]) 
     downstream = result["downstream"]
     training = result["training"]
     robust = result["robustness"]
+    robust_downstream = result.get("robustness_downstream", [])
+    if robust_downstream:
+        nominal = downstream["summary"]["mfsi_learned_safe"]["mean_interior_mmd"]
+        robustness_degradation = max(
+            row["downstream"]["summary"]["mfsi_learned_safe"]["mean_interior_mmd"] - nominal
+            for row in robust_downstream
+        )
+    else:
+        # Feasibility-only fallback, explicitly based on ESS rather than rollout.
+        robustness_degradation = min(r["ess_fraction"] for r in projection) - min(r["min_endpoint_ess"] for r in robust)
     return {
         "objective": label,
         "R": model.R,
@@ -110,7 +120,7 @@ def _summary_row(label: str, model: od.ObservableModel, result: dict[str, Any]) 
         "mfsi_safe_interior_rollout_mmd": downstream["summary"]["mfsi_learned_safe"]["mean_interior_mmd"],
         "max_moment_error": downstream["summary"]["mfsi_learned_safe"]["max_moment_error"],
         "hidden_angular_reconstruction_error": downstream["summary"]["mfsi_learned_safe"]["mean_interior_angular_error"],
-        "robustness_degradation": min(r["min_endpoint_ess"] for r in robust) - min(r["ess_fraction"] for r in projection),
+        "robustness_degradation": robustness_degradation,
     }
 
 
@@ -150,6 +160,70 @@ def _crossed_bootstrap(records: list[dict[str, Any]], replicates: int, seed: int
 def _write_report(path: Path, run: dict[str, Any], phase: str) -> None:
     names = list(run["objectives"])
     pairwise = run["subspace_comparison"]
+    learned = [name for name in ("info", "cv", "fiber") if name in run["objectives"]]
+    entries = run["objectives"]
+    question_lines: list[str] = []
+    if len(learned) >= 2:
+        offdiag = [pairwise["distances"][a][b] for i, a in enumerate(learned) for b in learned[i + 1:]]
+        question_lines += [
+            "### Question 1: do the objectives select different subspaces?",
+            "",
+            f"In this run the learned-subspace distances range from `{min(offdiag):.4g}` to `{max(offdiag):.4g}`. "
+            "For a smoke run this is only a collapse/separation diagnostic, not a stable scientific conclusion.",
+            "",
+        ]
+    if "info" in entries:
+        info = entries["info"]
+        other_aurocs = [entries[n]["endpoint_classifier"]["auroc"] for n in learned if n != "info"]
+        other_ess = [min(r["ess_fraction"] for r in entries[n]["projection"]) for n in learned if n != "info"]
+        question_lines += [
+            "### Question 2: information versus fiber conditioning",
+            "",
+            f"INFO endpoint AUROC is `{info['endpoint_classifier']['auroc']:.4g}`"
+            + (f" versus `{np.mean(other_aurocs):.4g}` averaged over the other learned maps" if other_aurocs else "")
+            + f"; its minimum path ESS is `{min(r['ess_fraction'] for r in info['projection']):.4g}`"
+            + (f" versus `{np.mean(other_ess):.4g}` for the others" if other_ess else "") + ".",
+            "",
+        ]
+    if learned:
+        closure = {n: entries[n]["reduced_flow_closure"]["closure_R2"] for n in learned}
+        question_lines += [
+            "### Question 3: reduced-flow closure",
+            "",
+            f"Fresh frozen-observable closure R2 values are `{json.dumps(closure)}`. These are reported separately from law-level MMD.",
+            "",
+        ]
+    if "fiber" in entries and "info" in entries:
+        fiber_local = entries["fiber"]["downstream"]["local_summary"]["mean_tangent_next_mmd"]
+        info_local = entries["info"]["downstream"]["local_summary"]["mean_tangent_next_mmd"]
+        question_lines += [
+            "### Question 4: tangent-to-next-law closure",
+            "",
+            f"Mean local tangent MMD is `{fiber_local:.4g}` for FIBER and `{info_local:.4g}` for INFO (FIBER minus INFO `{fiber_local-info_local:+.4g}`).",
+            "",
+            "### Question 5: local-to-global translation",
+            "",
+            f"FIBER's mean tangent-versus-MFSI velocity-gap MSE is `{entries['fiber']['downstream']['local_summary']['mean_velocity_gap_mse']:.4g}`; "
+            f"its tangent and safe-MFSI interior rollout MMDs are `{entries['fiber']['downstream']['summary']['moment_tangent']['mean_interior_mmd']:.4g}` and "
+            f"`{entries['fiber']['downstream']['summary']['mfsi_learned_safe']['mean_interior_mmd']:.4g}`. No direction is declared beneficial from this smoke cell.",
+            "",
+        ]
+    if learned:
+        robust_ess = {n: min(r["min_endpoint_ess"] for r in entries[n]["robustness"]) for n in learned}
+        robust_law = {
+            n: [r["downstream"]["summary"]["mfsi_learned_safe"]["mean_interior_mmd"]
+                for r in entries[n].get("robustness_downstream", [])]
+            for n in learned
+        }
+        has_robust_law = all(robust_law[n] for n in learned)
+        question_lines += [
+            "### Question 6: held-out rotations",
+            "",
+            f"Frozen-A minimum endpoint ESS across the two rotations is `{json.dumps(robust_ess)}`."
+            + (f" Matched-retraining safe-MFSI interior MMDs by rotation are `{json.dumps(robust_law)}`."
+               if has_robust_law else " This panel establishes feasibility only; it is not a frozen-network rollout claim."),
+            "",
+        ]
     lines = [
         "# Observable-design toy report",
         "",
@@ -177,6 +251,9 @@ def _write_report(path: Path, run: dict[str, Any], phase: str) -> None:
         "",
         "See `summary.csv` for endpoint ambiguity, fiber conditioning, local closure, velocity-gap, rollout, hidden-law, and robustness diagnostics. The seven prespecified figure families are emitted as PNGs.",
         "",
+        "## Prespecified scientific questions",
+        "",
+        *question_lines,
         "## Gradient validation",
         "",
         "Gradient-validation results are produced by `tests/test_observable_design_toy.py`; they are intentionally not fabricated into this run artifact. Run `python3 -m pytest tests/test_observable_design_toy.py -q` in the validated environment.",
@@ -187,7 +264,9 @@ def _write_report(path: Path, run: dict[str, Any], phase: str) -> None:
         "",
         "## Current scope note",
         "",
-        "The rotation panel reports frozen-A endpoint feasibility with the common rotated target recomputed. It is not labeled as a zero-shot downstream-network result. Full matched-compute downstream retraining per rotation is reserved for confirmatory execution.",
+        ("The rotation panel includes condition-specific matched-compute downstream retraining with A frozen; it is distinct from a strict zero-shot frozen-network test."
+         if all(entries[n].get("robustness_downstream") for n in learned) else
+         "The rotation panel reports frozen-A endpoint feasibility with the common rotated target recomputed. It is not labeled as a zero-shot downstream-network result. Full matched-compute downstream retraining per rotation remains required before a confirmatory robustness claim."),
     ]
     path.write_text("\n".join(lines) + "\n")
 
@@ -209,6 +288,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                       for i in range(int(phase_cfg["evaluation_seeds"]))]
     out = (args.out / args.phase / f"R{R}").resolve()
     out.mkdir(parents=True, exist_ok=True)
+    print(f"[expD] phase={args.phase} R={R} objectives={selected} models={len(model_seeds)} evaluations={len(eval_seeds)}", flush=True)
 
     reference_path = Path(config["reference_checkpoint"])
     if not reference_path.is_absolute():
@@ -246,12 +326,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         labels += ["random", "full_phi5"]
     objective_results: dict[str, Any] = {}
     seed_records: list[dict[str, Any]] = []
+    robustness_seed_records: list[dict[str, Any]] = []
     learned_for_comparison: dict[str, jax.Array] = {}
+    cells_dir = out / "cells"
+    cells_dir.mkdir(parents=True, exist_ok=True)
 
     for model_index, model_seed in enumerate(model_seeds):
+        print(f"[expD] model seed {model_seed} ({model_index + 1}/{len(model_seeds)})", flush=True)
         init_key = _key(model_seed, int(config["seed_offsets"]["observable_initialization"]))
         B0, A0 = od.initialize_stiefel(init_key, R)
         for label_index, label in enumerate(labels):
+            print(f"[expD]   {label}: observable/diagnostics", flush=True)
             label_R = 5 if label == "full_phi5" else R
             if label == "full_phi5":
                 A = jnp.eye(5, dtype=jnp.float64)
@@ -268,6 +353,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     train_meta = json.loads(str(cached["metadata_json"]))
                     train_meta["loaded"] = True
                 else:
+                    print(f"[expD]   {label}: training observable", flush=True)
                     A, train_meta = _train_objective(
                         label, _key(model_seed, 100 + label_index), standardization, B0,
                         reference_params, phase_cfg,
@@ -305,6 +391,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 potential = _load_ritz(ritz_path)
                 ritz_meta = {"loaded": True}
             else:
+                print(f"[expD]   {label}: training nominal Deep-Ritz", flush=True)
                 potential, ritz_meta = od.train_downstream_ritz(
                     _key(model_seed, 500), model, reference_params,
                     steps=int(phase_cfg["ritz_steps"]), n_times=int(phase_cfg["ritz_times"]),
@@ -314,12 +401,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
             first_downstream = None
             for eval_seed in eval_seeds:
-                downstream = od.evaluate_downstream(
-                    _key(eval_seed, 700), model, reference_params, potential,
-                    times=times, n_particles=int(phase_cfg["rollout_particles"]),
-                    target_particles=int(phase_cfg["target_particles"]),
-                    flow_steps=int(phase_cfg["flow_steps"]), local_dt=float(phase_cfg["local_dt"]),
-                )
+                cell_path = cells_dir / f"nominal_{label}_model_{model_seed}_eval_{eval_seed}.json"
+                if cell_path.exists() and not args.force:
+                    downstream = json.loads(cell_path.read_text())["downstream"]
+                else:
+                    print(f"[expD]   {label}: nominal evaluation bank {eval_seed}", flush=True)
+                    downstream = od.evaluate_downstream(
+                        _key(eval_seed, 700), model, reference_params, potential,
+                        times=times, n_particles=int(phase_cfg["rollout_particles"]),
+                        target_particles=int(phase_cfg["target_particles"]),
+                        flow_steps=int(phase_cfg["flow_steps"]), local_dt=float(phase_cfg["local_dt"]),
+                    )
+                    cell_path.write_text(json.dumps({"downstream": od.json_ready(downstream)}, indent=2))
                 first_downstream = first_downstream or downstream
                 seed_records.append({
                     "objective": label, "model_seed": model_seed, "evaluation_seed": eval_seed,
@@ -331,6 +424,62 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "max_moment_error": downstream["summary"]["mfsi_learned_safe"]["max_moment_error"],
                     "angular_error": downstream["summary"]["mfsi_learned_safe"]["mean_interior_angular_error"],
                 })
+
+            first_robustness_downstream = []
+            if bool(phase_cfg.get("robustness_downstream", False)) and label in selected:
+                for rotation_index, robust_row in enumerate(robustness):
+                    angle = float(robust_row["angle"])
+                    rotated_target = jnp.asarray(robust_row["target"], dtype=jnp.float64)
+                    robust_ritz_path = out / "checkpoints" / (
+                        f"ritz_{label}_modelseed_{model_seed}_rotation_{rotation_index}.npz"
+                    )
+                    if robust_ritz_path.exists() and not args.force:
+                        robust_potential = _load_ritz(robust_ritz_path)
+                        robust_ritz_meta = {"loaded": True}
+                    else:
+                        print(f"[expD]   {label}: training rotation {rotation_index} Deep-Ritz", flush=True)
+                        robust_potential, robust_ritz_meta = od.train_downstream_ritz(
+                            _key(model_seed, 500), model, reference_params,
+                            steps=int(phase_cfg["ritz_steps"]), n_times=int(phase_cfg["ritz_times"]),
+                            n_particles=int(phase_cfg["ritz_particles"]),
+                            target=rotated_target, angle=angle,
+                        )
+                        _save_ritz(robust_ritz_path, robust_potential)
+                    first_condition = None
+                    for eval_seed in eval_seeds:
+                        cell_path = cells_dir / (
+                            f"rotation_{rotation_index}_{label}_model_{model_seed}_eval_{eval_seed}.json"
+                        )
+                        if cell_path.exists() and not args.force:
+                            condition_downstream = json.loads(cell_path.read_text())["downstream"]
+                        else:
+                            print(f"[expD]   {label}: rotation {rotation_index} evaluation bank {eval_seed}", flush=True)
+                            condition_downstream = od.evaluate_downstream(
+                                _key(eval_seed, 700), model, reference_params, robust_potential,
+                                times=times, n_particles=int(phase_cfg["rollout_particles"]),
+                                target_particles=int(phase_cfg["target_particles"]),
+                                flow_steps=int(phase_cfg["flow_steps"]), local_dt=float(phase_cfg["local_dt"]),
+                                target=rotated_target, angle=angle,
+                            )
+                            cell_path.write_text(json.dumps({"downstream": od.json_ready(condition_downstream)}, indent=2))
+                        first_condition = first_condition or condition_downstream
+                        robustness_seed_records.append({
+                            "objective": label, "rotation_index": rotation_index, "angle": angle,
+                            "model_seed": model_seed, "evaluation_seed": eval_seed,
+                            "tangent_local_mmd": condition_downstream["local_summary"]["mean_tangent_next_mmd"],
+                            "tangent_rollout_mmd": condition_downstream["summary"]["moment_tangent"]["mean_interior_mmd"],
+                            "mfsi_rollout_mmd": condition_downstream["summary"]["mfsi_learned_safe"]["mean_interior_mmd"],
+                            "velocity_gap": condition_downstream["local_summary"]["mean_velocity_gap_mse"],
+                            "min_ess": min(r["ess_fraction"] for r in condition_downstream["target"]),
+                            "max_moment_error": condition_downstream["summary"]["mfsi_learned_safe"]["max_moment_error"],
+                            "angular_error": condition_downstream["summary"]["mfsi_learned_safe"]["mean_interior_angular_error"],
+                        })
+                    first_robustness_downstream.append({
+                        "rotation_index": rotation_index, "angle": angle,
+                        "target": np.asarray(rotated_target).tolist(),
+                        "ritz_training": robust_ritz_meta,
+                        "downstream": first_condition,
+                    })
             if model_index == 0:
                 objective_results[label] = {
                     "A": np.asarray(A).tolist(), "raw_coefficients": np.asarray(model.raw_coefficients).tolist(),
@@ -340,8 +489,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "endpoint": endpoint, "endpoint_classifier": endpoint_classifier,
                     "projection": projection, "reduced_flow_closure": reduced_flow,
                     "robustness": robustness,
+                    "robustness_downstream": first_robustness_downstream,
                     "downstream": first_downstream, "checkpoint": str(checkpoint),
                 }
+        # Release per-seed training closures while retaining compiled rollout
+        # kernels across all equal-R objectives within the crossed seed block.
+        jax.clear_caches()
 
     compare_names = [n for n in selected if n in learned_for_comparison]
     distances, angles = {}, {}
@@ -351,6 +504,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             distances[left][right] = float(od.subspace_distance(learned_for_comparison[left], learned_for_comparison[right]))
             angles[left][right] = np.asarray(od.principal_angles(learned_for_comparison[left], learned_for_comparison[right])).tolist()
 
+    robust_bootstrap = {}
+    for rotation_index in sorted({r["rotation_index"] for r in robustness_seed_records}):
+        subset = [r for r in robustness_seed_records if r["rotation_index"] == rotation_index]
+        robust_bootstrap[str(rotation_index)] = _crossed_bootstrap(
+            subset, int(phase_cfg["bootstrap_replicates"]),
+            base_seed + int(config["seed_offsets"]["bootstrap"]) + rotation_index + 1,
+        )
     result = {
         "protocol": {"phase": args.phase, "R": R, "config": str(args.config.resolve()),
                      "reference_checkpoint": str(reference_path),
@@ -361,8 +521,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "design": design, "objectives": objective_results,
         "subspace_comparison": {"distances": distances, "principal_angles": angles},
         "seed_level_records": seed_records,
+        "robustness_seed_level_records": robustness_seed_records,
         "crossed_bootstrap": _crossed_bootstrap(seed_records, int(phase_cfg["bootstrap_replicates"]),
                                                  base_seed + int(config["seed_offsets"]["bootstrap"])),
+        "robustness_crossed_bootstrap": robust_bootstrap,
     }
     result = od.json_ready(result)
     (out / "results.json").write_text(json.dumps(result, indent=2, allow_nan=True))
@@ -381,6 +543,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if seed_records:
             writer = csv.DictWriter(f, fieldnames=list(seed_records[0]))
             writer.writeheader(); writer.writerows(seed_records)
+    with (out / "robustness_seed_level_results.csv").open("w", newline="") as f:
+        if robustness_seed_records:
+            writer = csv.DictWriter(f, fieldnames=list(robustness_seed_records[0]))
+            writer.writeheader(); writer.writerows(robustness_seed_records)
     if not args.no_plots:
         od.make_figures(out, result)
     _write_report(out / "OBSERVABLE_DESIGN_TOY_REPORT.md", result, args.phase)

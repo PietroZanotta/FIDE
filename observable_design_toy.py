@@ -13,6 +13,7 @@ of the command-line experiment driver.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 import json
 from pathlib import Path
 from typing import Any, Iterable
@@ -123,10 +124,45 @@ def observable_rate(A: Array, standardization: Standardization, x: Array, veloci
     return jnp.einsum("...rd,...d->...r", observable_jacobian(A, standardization, x), velocity)
 
 
-def project_bank(A: Array, standardization: Standardization, x: Array, velocity: Array):
+def project_bank(
+    A: Array,
+    standardization: Standardization,
+    x: Array,
+    velocity: Array,
+    target: Array | None = None,
+):
     ph = observable_values(A, standardization, x)
     rate = observable_rate(A, standardization, x, velocity)
-    return exb.core.empirical_fiber_state(x, velocity, jnp.zeros(A.shape[0], dtype=x.dtype), ph=ph, jphi_u=rate)
+    if target is None:
+        target = jnp.zeros(A.shape[0], dtype=x.dtype)
+    return exb.core.empirical_fiber_state(x, velocity, target, ph=ph, jphi_u=rate)
+
+
+def rotation_matrix(angle: float | Array, dtype=jnp.float64) -> Array:
+    angle = jnp.asarray(angle, dtype=dtype)
+    return jnp.asarray([[jnp.cos(angle), -jnp.sin(angle)],
+                        [jnp.sin(angle), jnp.cos(angle)]], dtype=dtype)
+
+
+def sample_ring_conditioned(key: Array, n: int, angle: float = 0.0) -> Array:
+    return exb.sample_ring(key, n) @ rotation_matrix(angle).T
+
+
+def sample_four_lobes_conditioned(key: Array, n: int, angle: float = 0.0) -> Array:
+    return exb.sample_four_lobes(key, n) @ rotation_matrix(angle).T
+
+
+def sample_bridge_conditioned(key: Array, t: Array, n: int, angle: float = 0.0) -> tuple[Array, Array]:
+    x, dx = exb.sample_bridge(key, t, n)
+    rot = rotation_matrix(angle, x.dtype)
+    return x @ rot.T, dx @ rot.T
+
+
+def reference_velocity_conditioned(reference_params, t: Array, x: Array, angle: float = 0.0) -> Array:
+    """Rotate the frozen reference field equivariantly with both endpoint laws."""
+    rot = rotation_matrix(angle, x.dtype)
+    base_x = x @ rot
+    return exb.reference_velocity(reference_params, t, base_x) @ rot.T
 
 
 def tangent_velocity(
@@ -149,6 +185,44 @@ def tangent_velocity(
 
 def safety_velocity(model: ObservableModel, x: Array, velocity: Array) -> Array:
     return tangent_velocity(model.A, model.standardization, x, velocity)
+
+
+def _reference_velocity_arrays(reference_params, t: Array, x: Array, angle: Array) -> Array:
+    rot = rotation_matrix(angle, x.dtype)
+    return exb.reference_velocity(reference_params, t, x @ rot) @ rot.T
+
+
+def _safety_velocity_arrays(A: Array, whitening: Array, x: Array, velocity: Array) -> Array:
+    raw_jp = raw_dictionary_jacobian(x)
+    standardized_jp = jnp.einsum("ab,...bd->...ad", whitening, raw_jp)
+    jp = jnp.einsum("ra,...ad->...rd", A, standardized_jp)
+    rate = jnp.mean(jnp.einsum("nrd,nd->nr", jp, velocity), axis=0)
+    G = jnp.einsum("nrd,nsd->rs", jp, jp) / x.shape[0]
+    coeff, _, _ = exb.core._stable_cov_solve(G, rate, damping=1e-10)
+    return velocity - jnp.einsum("nrd,r->nd", jp, coeff)
+
+
+@partial(jax.jit, static_argnames=("n_steps",))
+def _compiled_rollouts(
+    x0: Array,
+    reference_params,
+    potential_params,
+    A: Array,
+    whitening: Array,
+    angle: Array,
+    *,
+    n_steps: int,
+):
+    """Shape-reusable rollout kernel; avoids recompiling each evaluation cell."""
+    reference = lambda t, x: _reference_velocity_arrays(reference_params, t, x, angle)
+    learned = lambda t, x: reference(t, x) - exb.potential_grad(potential_params, t, x)
+    tangent = lambda t, x: _safety_velocity_arrays(A, whitening, x, reference(t, x))
+    learned_safe = lambda t, x: _safety_velocity_arrays(A, whitening, x, learned(t, x))
+    times, raw = exb.integrate_field(x0, reference, n_steps)
+    _, tan = exb.integrate_field(x0, tangent, n_steps)
+    _, mfsi = exb.integrate_field(x0, learned, n_steps)
+    _, safe = exb.integrate_field(x0, learned_safe, n_steps)
+    return times, raw, tan, mfsi, safe
 
 
 def weighted_mmd2(x: Array, wx: Array, y: Array, wy: Array | None = None) -> Array:
@@ -448,12 +522,18 @@ def fiber_objective_from_A(
         mmd2 = weighted_mmd2(pushed, f0.projected_weights, x1, f1.projected_weights)
         ess_penalty = jax.nn.softplus(20.0 * (ess_floor - f0.ess_fraction)) / 20.0
         ess_penalty += jax.nn.softplus(20.0 * (ess_floor - f1.ess_fraction)) / 20.0
-        residual = f0.calibration_residual + f1.calibration_residual
-        loss = mmd2 / (delta_t * delta_t) + penalty_scale * ess_penalty + 100.0 * residual
+        # The derivative of ||m-c|| is undefined at the desired exact-zero
+        # calibration point.  Use the smooth squared residual for training and
+        # retain the ordinary norm for the hard validation gate/report.
+        residual_sq = jnp.sum((f0.moments - target) ** 2) + jnp.sum((f1.moments - target) ** 2)
+        loss = mmd2 / (delta_t * delta_t) + penalty_scale * ess_penalty + 100.0 * residual_sq
         return loss, (mmd2, f0.ess_fraction, f1.ess_fraction,
-                      f0.calibration_residual, f1.calibration_residual,
-                      f0.covariance_rank, f1.covariance_rank,
-                      f0.covariance_condition, f1.covariance_condition)
+                      jax.lax.stop_gradient(f0.calibration_residual),
+                      jax.lax.stop_gradient(f1.calibration_residual),
+                      jax.lax.stop_gradient(f0.covariance_rank),
+                      jax.lax.stop_gradient(f1.covariance_rank),
+                      jax.lax.stop_gradient(f0.covariance_condition),
+                      jax.lax.stop_gradient(f1.covariance_condition))
 
     losses, aux = jax.vmap(one)(banks["times"], banks["x0"], banks["x1"], banks["u0"], banks["u1"])
     return jnp.mean(losses), {
@@ -622,15 +702,24 @@ def projection_diagnostics(
     return rows
 
 
-def _generic_ritz_bank(key, model: ObservableModel, reference_params, n_times: int, n_particles: int):
+def _generic_ritz_bank(
+    key,
+    model: ObservableModel,
+    reference_params,
+    n_times: int,
+    n_particles: int,
+    *,
+    target: Array | None = None,
+    angle: float = 0.0,
+):
     kt, kb = jax.random.split(key)
     times = exb.stratified_times(kt, n_times, lo=0.04, hi=0.96)
     keys = jax.random.split(kb, n_times)
     xs, ws, hs = [], [], []
     for k, t in zip(keys, times):
-        x, _ = exb.sample_bridge(k, t, n_particles)
-        u = exb.reference_velocity(reference_params, t, x)
-        f = project_bank(model.A, model.standardization, x, u)
+        x, _ = sample_bridge_conditioned(k, t, n_particles, angle)
+        u = reference_velocity_conditioned(reference_params, t, x, angle)
+        f = project_bank(model.A, model.standardization, x, u, target)
         xs.append(x); ws.append(f.projected_weights); hs.append(f.forcing)
     return {"times": times, "x": jnp.stack(xs), "weights": jnp.stack(ws), "h": jnp.stack(hs)}
 
@@ -650,13 +739,17 @@ def train_downstream_ritz(
     steps: int,
     n_times: int,
     n_particles: int,
+    target: Array | None = None,
+    angle: float = 0.0,
 ) -> tuple[Any, dict[str, Any]]:
     """Experiment-B Deep-Ritz architecture/optimizer with generic Phi_A banks."""
     ki, kt, kv = jax.random.split(key, 3)
     input_dim = exb.STATE_DIM + 1 + 2 * exb.TIME_FREQ
     params = exb.core.init_mlp(ki, input_dim, exb.RITZ_HIDDEN, 1)
-    train_bank = _generic_ritz_bank(kt, model, reference_params, n_times, n_particles)
-    val_bank = _generic_ritz_bank(kv, model, reference_params, max(n_times, 3), n_particles)
+    train_bank = _generic_ritz_bank(kt, model, reference_params, n_times, n_particles,
+                                    target=target, angle=angle)
+    val_bank = _generic_ritz_bank(kv, model, reference_params, max(n_times, 3), n_particles,
+                                  target=target, angle=angle)
     state = _adam_init(params)
     vg = jax.jit(jax.value_and_grad(lambda p: _generic_bank_ritz_loss(p, train_bank)))
     vfun = jax.jit(lambda p: _generic_bank_ritz_loss(p, val_bank))
@@ -682,21 +775,20 @@ def rollout_methods(
     *,
     n_particles: int,
     flow_steps: int,
+    angle: float = 0.0,
 ) -> dict[str, dict[str, Array]]:
-    x0 = exb.whiten_empirical(exb.sample_ring(key, n_particles))
-    learned = lambda t, x: exb.reference_velocity(reference_params, t, x) - exb.potential_grad(potential_params, t, x)
-    fields = {
-        "raw_si": lambda t, x: exb.reference_velocity(reference_params, t, x),
-        "moment_tangent": lambda t, x: safety_velocity(model, x, exb.reference_velocity(reference_params, t, x)),
-        "mfsi_learned": learned,
-        "mfsi_learned_safe": lambda t, x: safety_velocity(model, x, learned(t, x)),
+    x0 = exb.whiten_empirical(sample_ring_conditioned(key, n_particles, angle))
+    times, raw, tangent, mfsi, safe = _compiled_rollouts(
+        x0, reference_params, potential_params, model.A, model.standardization.whitening,
+        jnp.asarray(angle, dtype=x0.dtype), n_steps=flow_steps,
+    )
+    safe.block_until_ready()
+    return {
+        "raw_si": {"times": times, "trajectory": raw},
+        "moment_tangent": {"times": times, "trajectory": tangent},
+        "mfsi_learned": {"times": times, "trajectory": mfsi},
+        "mfsi_learned_safe": {"times": times, "trajectory": safe},
     }
-    runs = {}
-    for name, field in fields.items():
-        times, trajectory = jax.jit(lambda z: exb.integrate_field(z, field, flow_steps))(x0)
-        trajectory.block_until_ready()
-        runs[name] = {"times": times, "trajectory": trajectory}
-    return runs
 
 
 def _trajectory_at(run: dict[str, Array], t: float) -> Array:
@@ -715,18 +807,24 @@ def evaluate_downstream(
     target_particles: int,
     flow_steps: int,
     local_dt: float,
+    target: Array | None = None,
+    angle: float = 0.0,
 ) -> dict[str, Any]:
+    if target is None:
+        target = jnp.zeros(model.R, dtype=jnp.float64)
+    else:
+        target = jnp.asarray(target, dtype=jnp.float64)
     kr, kb = jax.random.split(key)
     runs = rollout_methods(kr, model, reference_params, potential_params,
-                           n_particles=n_particles, flow_steps=flow_steps)
+                           n_particles=n_particles, flow_steps=flow_steps, angle=angle)
     times = list(times)
     keys = jax.random.split(kb, 2 * len(times))
     per_method = {name: [] for name in runs}
     target_rows, local_rows = [], []
     for i, t in enumerate(times):
-        x, _ = exb.sample_bridge(keys[2 * i], jnp.asarray(t), target_particles)
-        u = exb.reference_velocity(reference_params, jnp.asarray(t), x)
-        f = project_bank(model.A, model.standardization, x, u)
+        x, _ = sample_bridge_conditioned(keys[2 * i], jnp.asarray(t), target_particles, angle)
+        u = reference_velocity_conditioned(reference_params, jnp.asarray(t), x, angle)
+        f = project_bank(model.A, model.standardization, x, u, target)
         m = min(384, target_particles, n_particles)
         xt, wt = x[:m], f.projected_weights[:m]
         wt = wt / jnp.sum(wt)
@@ -736,7 +834,7 @@ def evaluate_downstream(
                             "calibration_residual": float(f.calibration_residual)})
         for name, run in runs.items():
             y = _trajectory_at(run, t)
-            ph_mean = jnp.mean(observable_values(model.A, model.standardization, y), axis=0)
+            ph_mean = jnp.mean(observable_values(model.A, model.standardization, y), axis=0) - target
             mmd = jnp.sqrt(weighted_mmd2(xt, wt, y[:m]))
             angular_error = jnp.linalg.norm(jnp.mean(exb.angular_features(y), axis=0) - target_ang)
             per_method[name].append({"t": t, "mmd": float(mmd),
@@ -745,9 +843,9 @@ def evaluate_downstream(
                                      "angular_error": float(angular_error)})
         if t + local_dt <= 1.0:
             tn = t + local_dt
-            xn, _ = exb.sample_bridge(keys[2 * i + 1], jnp.asarray(tn), target_particles)
-            un = exb.reference_velocity(reference_params, jnp.asarray(tn), xn)
-            fn = project_bank(model.A, model.standardization, xn, un)
+            xn, _ = sample_bridge_conditioned(keys[2 * i + 1], jnp.asarray(tn), target_particles, angle)
+            un = reference_velocity_conditioned(reference_params, jnp.asarray(tn), xn, angle)
+            fn = project_bank(model.A, model.standardization, xn, un, target)
             vtan = tangent_velocity(model.A, model.standardization, x, u, f.projected_weights)
             vmfsi = u - exb.potential_grad(potential_params, jnp.asarray(t), x)
             tan_push = x + local_dt * vtan
@@ -902,9 +1000,22 @@ def make_figures(out: Path, results: dict[str, Any]) -> None:
     axes[2].set_title("Held-out angular error")
     fig.tight_layout(); fig.savefig(out / "figure6_full_law_metrics.png", dpi=180); plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(6.6, 3.8))
+    has_robust_downstream = all(results["objectives"][name].get("robustness_downstream") for name in names)
+    fig, axes = plt.subplots(1, 2 if has_robust_downstream else 1,
+                             figsize=(11.0 if has_robust_downstream else 6.6, 3.8), squeeze=False)
+    ax = axes[0, 0]
     for name in names:
         rows = results["objectives"][name]["robustness"]
         ax.plot([r["angle"] for r in rows], [r["min_endpoint_ess"] for r in rows], marker="o", label=name.upper())
     ax.set_xlabel("shared endpoint rotation (radians)"); ax.set_ylabel("minimum endpoint ESS"); ax.legend()
+    if has_robust_downstream:
+        ax = axes[0, 1]
+        for name in names:
+            rows = results["objectives"][name]["robustness_downstream"]
+            ax.plot([r["angle"] for r in rows],
+                    [r["downstream"]["summary"]["mfsi_learned_safe"]["mean_interior_mmd"] for r in rows],
+                    marker="o", label=name.upper())
+        ax.set_xlabel("shared endpoint rotation (radians)")
+        ax.set_ylabel("safe-MFSI interior MMD")
+        ax.legend()
     fig.tight_layout(); fig.savefig(out / "figure7_robustness.png", dpi=180); plt.close(fig)

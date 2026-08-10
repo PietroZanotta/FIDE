@@ -28,6 +28,10 @@ The FIBER checkpoint gate rejects calibration residual above `1e-6`, covariance
 rank below `R`, non-finite conditioning, or minimum interior ESS below `0.20`.
 An infeasible optimizer cannot replace the initialization.
 
+The smooth training penalty uses the **squared** calibration residual. The
+ordinary residual norm is reserved for the hard gate/report because its
+derivative is undefined at the desired exact-zero calibration solution.
+
 Run:
 
 ```bash
