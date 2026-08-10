@@ -1,0 +1,77 @@
+{
+  "experiment": "C",
+  "version": "design-v5",
+  "design_change": "After v4 also failed endpoint convex overlap, added a finer method-blind grid across the empirical spot/labyrinth transition near k=0.060. All v3/v4 regimes remain in this superset and failed pair diagnostics remain in the regenerated table; no learned method had been trained or evaluated.",
+  "grid": {"height": 32, "width": 32, "spacing": 1.0},
+  "simulator": {
+    "diffusion_u": 0.16,
+    "diffusion_v": 0.08,
+    "dt": 1.0,
+    "physical_time": 2200.0,
+    "convergence_dt": 0.5,
+    "convergence_samples": 4
+  },
+  "initial_conditions": {
+    "blob_count": [2, 5],
+    "radius_range": [1.8, 3.2],
+    "u_depletion_range": [0.40, 0.52],
+    "v_amplitude_range": [0.24, 0.34],
+    "noise_std": 0.002
+  },
+  "observables": {
+    "components": ["mean", "second_moment", "shell_1", "shell_2"],
+    "shell_centers_cycles_per_pixel": [0.0625, 0.125, 0.1875],
+    "shell_widths_cycles_per_pixel": [0.045, 0.050, 0.055]
+  },
+  "seeds": {
+    "design_initial_condition_start": 31000,
+    "design_initial_condition_count": 64,
+    "training_model": [41001, 41002, 41003, 41004, 41005, 41006, 41007, 41008, 41009, 41010],
+    "final_evaluation_bank": [51001, 51002, 51003, 51004, 51005, 51006, 51007, 51008, 51009, 51010]
+  },
+  "candidate_regimes": [
+    {"id": "gs_01", "feed": 0.018, "kill": 0.051},
+    {"id": "gs_02", "feed": 0.022, "kill": 0.051},
+    {"id": "gs_03", "feed": 0.026, "kill": 0.055},
+    {"id": "gs_04", "feed": 0.030, "kill": 0.055},
+    {"id": "gs_05", "feed": 0.034, "kill": 0.058},
+    {"id": "gs_06", "feed": 0.038, "kill": 0.061},
+    {"id": "gs_07", "feed": 0.042, "kill": 0.059},
+    {"id": "gs_08", "feed": 0.046, "kill": 0.063},
+    {"id": "gs_09", "feed": 0.054, "kill": 0.062},
+    {"id": "gs_10", "feed": 0.062, "kill": 0.061},
+    {"id": "gs_11", "feed": 0.070, "kill": 0.060},
+    {"id": "gs_12", "feed": 0.078, "kill": 0.061},
+    {"id": "gs_13", "feed": 0.022, "kill": 0.061},
+    {"id": "gs_14", "feed": 0.026, "kill": 0.061},
+    {"id": "gs_15", "feed": 0.030, "kill": 0.062},
+    {"id": "gs_16", "feed": 0.034, "kill": 0.063},
+    {"id": "gs_17", "feed": 0.038, "kill": 0.064},
+    {"id": "gs_18", "feed": 0.042, "kill": 0.064},
+    {"id": "gs_19", "feed": 0.046, "kill": 0.065},
+    {"id": "gs_20", "feed": 0.050, "kill": 0.065}
+  ],
+  "candidate_grid": {
+    "feed_values": [0.022, 0.026, 0.030, 0.034, 0.038, 0.042, 0.046],
+    "kill_values": [0.055, 0.057, 0.059, 0.061, 0.063, 0.064, 0.065]
+  },
+  "candidate_local_grid": {
+    "feed_values": [0.026, 0.028, 0.030, 0.032, 0.034, 0.036],
+    "kill_values": [0.0580, 0.0585, 0.0590, 0.0595, 0.0600, 0.0605, 0.0610, 0.0615, 0.0620, 0.0625, 0.0630]
+  },
+  "classification": {
+    "spot_quantile": 0.67,
+    "labyrinth_quantile": 0.33,
+    "score": "z(minority_component_count)+z(abs(euler))-0.35*z(interface)-0.15*z(anisotropy)",
+    "minimum_pattern_presence_fraction": 0.90,
+    "maximum_mean_timestep_relative_rmse": 0.05,
+    "maximum_worst_timestep_relative_rmse": 0.10
+  },
+  "endpoint_gates": {
+    "max_standardized_calibration_residual": 1e-5,
+    "minimum_ess_fraction": 0.20,
+    "preferred_ess_fraction": 0.35,
+    "minimum_morphology_effect_size": 1.0
+  },
+  "output_directory": "results/grayscott"
+}
