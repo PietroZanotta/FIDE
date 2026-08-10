@@ -1,0 +1,48 @@
+{
+  "version": "phase3-reference-quality-v8-controlled-sweep",
+  "frozen_after_audit": true,
+  "frozen_reference_path": "exactly the v7 Phi-2 pair, target, maximal-same-IC coupling, and 0.07*sin(pi*t) noise schedule",
+  "training_endpoint_bank": "v7 seeds 41001-41512 with frozen endpoint weights",
+  "model_selection_endpoint_bank": "v8 healthy seeds 61001-62024 with frozen target calibration",
+  "fixed_validation_interpolant_seed": 73001,
+  "fixed_validation_interpolant_count": 4096,
+  "batch_size": 64,
+  "time_sampling": "stratified uniform continuous time on [0,1]",
+  "optimizer": "AdamW with global gradient clipping and cosine learning-rate decay",
+  "gradient_clip": 5.0,
+  "weight_decay": 1e-6,
+  "evaluation_interval": 250,
+  "ode_common_time_grid": [0.0, 0.0625, 0.125, 0.1875, 0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625, 0.6875, 0.75, 0.8125, 0.875, 0.9375, 1.0],
+  "variants": [
+    {
+      "id": "A_v7_saved_baseline",
+      "action": "no retraining; use exact saved v7 checkpoint",
+      "architecture": "four 24-channel periodic dilated layers, dilations 1,2,4,1, raw time plus 3 Fourier frequencies",
+      "total_training_steps": 4000
+    },
+    {
+      "id": "B_baseline_longer",
+      "action": "continue the exact v7 checkpoint for 8000 additional steps; reset optimizer state",
+      "architecture": "identical to A",
+      "additional_training_steps": 8000,
+      "reported_total_training_steps": 12000,
+      "learning_rate_start": 5e-4,
+      "learning_rate_end": 1e-5
+    },
+    {
+      "id": "C_moderate_residual_receptive",
+      "action": "train from scratch",
+      "architecture": "28-channel periodic input layer plus five residual blocks with dilations 1,2,4,8,4; raw time plus 3 Fourier frequencies; periodic output layer",
+      "training_steps": 12000,
+      "learning_rate_start": 1e-3,
+      "learning_rate_end": 2e-5,
+      "rationale": "v7 audit localizes remaining regression error in low-frequency morphology-scale modes and shows the existing model already has Fourier time conditioning"
+    }
+  ],
+  "model_selection": {
+    "primary": "minimum healthy-validation FM MSE divided by zero-predictor MSE, required <= 0.35",
+    "secondary": "128-step learned rollout versus direct raw SI must pass the thresholds frozen in v7_checkpoint_audit.json",
+    "tie_break": "lower integrated downsampled-field MMD2, then lower integrated raw-field MMD2, then smaller model",
+    "forbidden_inputs": "no hidden morphology, projected-target, tangent, MFSI, or future evaluation performance"
+  }
+}

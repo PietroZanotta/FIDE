@@ -714,3 +714,235 @@ no candidate passed the predeclared endpoint gates.
 The pair is not a frozen Experiment C benchmark. Per protocol, reference-flow quality, interior I-projection ESS, projected morphology shift, and tangent blind-spot diagnostics must pass before `benchmark_selection.yaml` is created or final MFSI training begins.
 
 Timestep convergence diagnostics are recorded in `metrics/timestep_convergence.csv`; all raw sample metrics and failed pairs are retained.
+
+## Phase-2 feasibility continuation v6
+
+The original `phase_2_failed` files above were not overwritten. Their SHA-256
+hashes are recorded in
+`results/grayscott/phase2_feasibility_v6/preserved_phase2_failed_sha256.json`,
+and the post-run verification reports that every source artifact is unchanged.
+Version 6 uses new design IC seeds 32000–32255, disjoint from the old design,
+training, and final-evaluation roles.
+
+### Exact diagnosis of the 64-sample near misses
+
+The common-hull problem was solved directly with SciPy/HiGHS in the standardized
+coordinates used by calibration. Constraints were nonnegative endpoint weights,
+two unit-sum equalities, and exact equality of the endpoint weighted Phi means.
+The two required pairs
+`grid_F0340_k0620__grid_F0340_k0605` and
+`grid_F0320_k0615__grid_F0320_k0600` are infeasible under Phi-4. Four additional
+pairs selected by the declared method-blind rule are also infeasible. Thus no
+target was declared feasible and no exponential tilt was applied to a compromise
+target. Complete solver statuses are in `existing_bank_phi4_diagnostics.json`.
+
+For feasible problems, the centrality procedure first maximizes the minimum
+endpoint probability with a second HiGHS LP. It then maximizes total endpoint
+entropy, `H(a)+H(b)`, through the convex log-sum-exp dual. A target is accepted
+only from weights satisfying the equality constraints; an average of unmatched
+endpoint means is never used.
+
+### Calibration solver diagnosis
+
+The v6 wrapper keeps the same exponential-tilt objective,
+`log(mean(exp(Phi lambda))) - lambda^T c`, but replaces the fixed 20-iteration
+policy with residual-based stopping, covariance-whitened damped Newton steps,
+Armijo line search, and a 500-iteration safety limit. Final weights and moments
+are independently recomputed by
+`mfsi_components.empirical_tilt_from_lambda`.
+
+On the ranked passing endpoint target, a separate zero-start check converged in
+4 Newton steps for the spot bank and 5 for the labyrinth bank. Initial/final
+dual objectives were `0 -> -0.0059935204` and `0 -> -0.4332116033`. Final maximum
+standardized residuals were `1.64e-11` and `6.95e-11`; ESS fractions were
+`0.98935` and `0.20922`. The direct expression
+`weights @ Phi - c` agrees with the reported repository residual to at most
+`1.11e-15`. Full iteration traces, covariance eigenvalues, ranks, condition
+numbers, multipliers, and maximum weights are serialized in
+`selected_candidate_zero_start_calibration.json`.
+
+A synthetic full-rank regression test constructs an interior target from known
+strictly positive empirical weights. It passes at residual below `1e-8`, ruling
+out the old 20-iteration limit as the cause of the original six infeasible
+near misses. Target selection and calibration use the identical stored affine
+center/scale; observed round-trip error is at most `3.47e-18`.
+
+### Larger bank and nested observation families
+
+The required follow-up used 256 IC seeds per regime (4x the original bank) and
+43 regimes on a local transition scan with kill-rate spacing `0.00025`. The
+original simulator, IC generator, physical horizon, timestep gates, threshold,
+and Fourier shells were unchanged. Thirty-eight regimes passed simulator gates;
+the empirical classifier produced 13 spot-like and 13 labyrinth-like regimes,
+giving 169 stable candidate pairs and 507 pair/dimension cells.
+
+| observation family | exact LP-feasible pairs | endpoint-gate passers | best conclusion |
+|---|---:|---:|---|
+| Phi-2 `(mean, m2)` | 47 | 8 | Phase-2 feasible |
+| Phi-3 `(mean, m2, S1)` | 35 | 6 | Phase-2 feasible |
+| Phi-4 `(mean, m2, S1, S2)` | 28 | 0 | inadequate nondegenerate overlap |
+
+The unchanged endpoint gates were residual `<=1e-5`, ESS `>=0.20`, hidden
+morphology effect `>=1.0`, and stable simulator morphology. Every rejection and
+all applicable gate reasons are retained in
+`large_bank_nested_phi_results.csv`; simulator rejection reasons are in
+`large_bank_regimes.csv`.
+
+The predeclared design score ranks the Phi-2 pair
+`v6_F0280_k06025__v6_F0280_k05800` first. Its maximum-entropy common target is
+`(0.1182386970, 0.02567595335)` in physical `(mean,m2)` units, endpoint residual
+is `2.31e-14`, minimum ESS is `0.20922`, hidden-morphology effect is `1.83305`,
+and the maximum-minimum-weight LP retains 82.6% of the uniform per-particle
+weight. This is a provisional Phase-2 candidate only. Phi-3 also has six valid
+alternatives, including candidates above the preferred ESS `0.35` threshold.
+The move from the originally recommended Phi-4 to a provisional Phi-2 design is
+recorded as version 6 and was based only on feasibility, ESS, and retained hidden
+morphology—not learned MFSI or tangent performance.
+
+### Phase-3 path overlap check and current go/no-go
+
+Phase 2 now passes, but Phase 3 does not. For the ranked Phi-2 candidate, the
+maximum-same-IC coupling preserves exact calibrated endpoint marginals and puts
+79.1% mass on identical IC indices. Under the unchanged linear Experiment-B
+bridge, explicit time-local target-hull LPs show the fixed target is feasible at
+only 4 of 9 design times in a 2048-particle screen. A separate 4096-particle run
+has minimum interior ESS `0.000244` and infeasible middle-time targets.
+
+All 14 Phase-2 passers were screened on `t=0.1,...,0.9`. Only one candidate had
+LP-feasible targets at all nine times, and its minimum ESS was `0.00409`; zero
+candidates passed the `0.15` interior ESS gate. Detailed time/pair decisions are
+in `phase3_all_candidate_time_rows.csv` and
+`phase3_all_candidate_summary.csv`.
+
+**Go/no-go decision:** Phase 2 is passed provisionally under Phi-2/Phi-3, but
+the current linear reference path fails Phase-3 overlap. No benchmark-selection
+file is created. No reference velocity, tangent model, Deep-Ritz potential, or
+final method comparison was trained or run. Phase 4 remains unevaluated until a
+method-blind schedule/coupling design passes the Phase-3 overlap and reference-FM
+quality gates.
+
+## Phase-3 reference design and quality v7
+
+Version 7 writes only below
+`results/grayscott/phase3_reference_design_v7/`. A SHA-256 manifest was taken
+of the complete v6 directory before this continuation and verifies unchanged
+after every v7 design stage. All fourteen Phase-2 passers and their original
+targets were retained; the provisional rank-1 Phi-2 pair was not frozen in
+advance. Experiment B also remains unchanged.
+
+### Why a linear field bridge loses the second moment
+
+For every candidate/coupling, the empirical identity was evaluated directly:
+
+`E[m2((1-s)X- + sX+)] = c2 - s(1-s) E[||X+ - X-||^2/N]`.
+
+The maximum absolute numerical LHS/RHS discrepancy over all candidates,
+couplings, times, and both the identity and smoothstep time maps was
+`1.56e-10`. Smoothstep changes `s(t)` but leaves the strictly positive
+`s(1-s)` deficit at every interior time. The complete table is
+`linear_second_moment_identity.csv`.
+
+Three exact-marginal couplings were compared on 4096-particle design banks:
+
+| coupling | mean endpoint displacement RMS | range over 14 candidates |
+|---|---:|---:|
+| maximal same-IC mass | 0.1311 | 0.1195–0.1417 |
+| geometric field-L2 OT | 0.1087 | 0.1001–0.1168 |
+| independent diagnostic | 0.1528 | 0.1480–0.1571 |
+
+Geometric OT is a sparse SciPy/HiGHS transportation LP with exact calibrated
+marginals; its worst marginal residual was `6.38e-17`. Nevertheless, none of
+the 42 linear candidate/coupling paths passed. The best linear all-time-feasible
+path had minimum ESS `0.01267`, versus the gate `0.15`. This confirms that
+geometrically shorter coupling alone does not provide adequate common interior.
+
+### Minimal noisy schedule screen
+
+Because no linear path passed, the prespecified repository-style schedule
+
+`X_t = (1-t)X- + tX+ + A sin(pi t) Z`
+
+was screened without clamping. `Z` is Gaussian, spatially centered, and
+unit-RMS per field. The 462 paths comprise all fourteen candidates, all three
+couplings, and eleven amplitudes from `0.02` through `0.14`, each at nine fixed
+times. Targets and standardization were unchanged. The gate implementation
+uses the declared residual threshold `1e-5`; the solver's stricter `1e-10`
+target is retained as a separate convergence diagnostic and is not an
+additional selection gate.
+
+Nine schedule paths pass across two Phase-2 candidates. Candidate ordering
+remains the predeclared Phase-2 order. The selected reference design is rank 7,
+Phi-2 `v6_F0280_k05950__v6_F0280_k05800`, maximal-same-IC coupling, and
+amplitude `0.07`. On the 4096-particle screen it has:
+
+- all nine fixed targets LP-feasible and calibrated;
+- minimum ESS `0.30440`;
+- maximum standardized residual `6.27e-11`;
+- mean projection KL `0.20002` and maximum lambda norm `4.30664`;
+- nontrivial standardized hidden projection shifts at seven of nine times;
+- field range `[-0.3335, 0.6371]`, with at most `8.82e-6` of pixels outside
+  the declared hard range `[-0.25, 0.75]`.
+
+An independent 8192-particle confirmation retains feasibility at all times,
+minimum ESS `0.30735`, maximum residual `1.78e-8`, seven nontrivial hidden-shift
+times, and maximum hard-range violation fraction `8.58e-6`. Three calibrations
+stopped above the optional `1e-10` solver target (`1.66e-9`, `1.78e-8`, and
+`4.66e-10`) but remain more than two orders of magnitude inside the frozen
+`1e-5` gate. Phase 3A is therefore confirmed.
+
+The other passing candidate is Phase-2 rank 11, Phi-2
+`v6_F0280_k05950__v6_F0280_k05825`, geometric OT, amplitude `0.05`, with
+minimum ESS `0.40208` and maximum residual `2.11e-9`. It is retained but does
+not supersede rank 7 because cross-candidate ordering was frozen in Phase 2.
+
+For the twelve rejected candidates, the strongest all-time screen outcome and
+exact rejection are:
+
+| Phase-2 rank | family | best coupling/amplitude | feasible times | min ESS | rejection |
+|---:|---|---|---:|---:|---|
+| 1 | Phi-2 | geometric / 0.06 | 9 | 0.12748 | ESS below 0.15 |
+| 2 | Phi-2 | geometric / 0.07 | 9 | 0.02010 | ESS below 0.15 |
+| 3 | Phi-2 | maximal / 0.08 | 9 | 0.02329 | ESS below 0.15 |
+| 4 | Phi-3 | geometric / 0.03 | 8 | 0.00171 | one infeasible time; ESS; residual gate |
+| 5 | Phi-2 | maximal / 0.08 | 9 | 0.06636 | ESS below 0.15 |
+| 6 | Phi-3 | geometric / 0.02 | 9 | 0.02161 | ESS below 0.15 |
+| 8 | Phi-3 | geometric / 0.02 | 9 | 0.01928 | ESS below 0.15 |
+| 9 | Phi-3 | geometric / 0.03 | 9 | 0.00813 | ESS below 0.15 |
+| 10 | Phi-3 | maximal / 0.03 | 9 | 0.00268 | ESS below 0.15 |
+| 12 | Phi-2 | geometric / 0.06 | 9 | 0.12903 | ESS below 0.15 |
+| 13 | Phi-2 | maximal / 0.08 | 9 | 0.08714 | ESS below 0.15 |
+| 14 | Phi-3 | geometric / 0.03 | 9 | 0.01137 | ESS below 0.15 |
+
+This table gives each rejected candidate's strongest near miss; every tested
+path and every applicable reason (hull, residual, ESS, hidden shift, or field
+range) remains in `schedule_path_summary.csv` and
+`schedule_time_diagnostics.csv`.
+
+### Phase-3B reference CNN result
+
+The periodic translation-equivariant CNN was trained once for 4000 steps on
+IC seeds 41001–41512. Model-selection IC seeds 47001–47128 are disjoint from
+training and Phase-2 design seeds. The endpoint tilts on the training banks
+have ESS `0.9675/0.2428`; on the smaller model-selection banks they have ESS
+`0.9680/0.02984`, the latter correctly retained as a generalization warning.
+
+Reference quality fails both predeclared gates:
+
+| diagnostic | observed | gate | pass |
+|---|---:|---:|---|
+| held-out FM MSE / zero-predictor MSE | 0.42698 | <= 0.35 | no |
+| 64-step rollout max standardized target residual | 1.78665 | <= 0.10 | no |
+
+The held-out per-pixel MSE is `0.018894` versus baseline `0.044251`. Rollout
+residual is `[-1.06679, -1.78665]` in standardized Phi-2 coordinates; hidden
+endpoint error is `0.86227` standardized RMS and the rollout field range is
+`[-0.1531, 0.3771]`. The failed quality result is not suppressed despite the
+successful Phase-3A overlap design.
+
+**Current go/no-go decision:** Phase 3A passes, but Phase 3B and therefore
+Phase 3 fail. Phase 4 is not authorized and `B_tan` was not evaluated. No
+`benchmark_selection.yaml` was created, no Deep-Ritz MFSI model was trained,
+and no learned-method comparison was run. The next scientifically valid action
+is to improve the reference model/training protocol under a new versioned,
+predeclared Phase-3B design and re-evaluate it on disjoint seeds; the Phase-3A
+path and all failures remain frozen as v7 evidence.

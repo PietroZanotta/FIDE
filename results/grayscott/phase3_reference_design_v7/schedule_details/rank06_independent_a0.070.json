@@ -1,0 +1,1323 @@
+{
+  "candidate": {
+    "central_lp_success": true,
+    "central_maximum_minimum_weight": 0.0032583043025184812,
+    "central_minimum_weight_uniform_fraction": 0.8341259014447312,
+    "endpoint_gate_pass": true,
+    "entropy_central_converged": true,
+    "entropy_equality_residual": 8.606448886894214e-13,
+    "hidden_morphology_effect": 1.4645600703957953,
+    "labyrinth_feed": 0.028,
+    "labyrinth_kill": 0.058,
+    "labyrinth_regime": "v6_F0280_k05800",
+    "lp_feasible": true,
+    "lp_maximum_equality_residual": 1.1102230246251565e-16,
+    "lp_status": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+    "maximum_lambda_norm": 2.7756138629299443,
+    "maximum_standardized_calibration_residual": 4.303224443447107e-13,
+    "method_blind_passing_score": 1.5547914961098501,
+    "minimum_ess_fraction": 0.45802423772110407,
+    "minus_calibration_converged": true,
+    "observation_dimension": 3,
+    "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+    "plus_calibration_converged": true,
+    "rejection_reasons": "",
+    "spot_feed": 0.028,
+    "spot_kill": 0.0595,
+    "spot_regime": "v6_F0280_k05950",
+    "standardization_affine_roundtrip_error": 3.469446951953614e-18,
+    "target_physical": [
+      0.13045396947241297,
+      0.02804917400596601,
+      0.015311250879293277
+    ],
+    "target_source": "maximum_total_entropy",
+    "target_standardized": [
+      -0.580236633579453,
+      -0.8575109192272554,
+      -1.088380511203973
+    ]
+  },
+  "coupling_diagnostics": {
+    "construction": "outer product of calibrated endpoint marginals",
+    "maximum_marginal_residual": 1.734723475976807e-17,
+    "positive_edge_count": 65536,
+    "same_initial_condition_mass": 0.004644317413254503,
+    "transport_cost_mean_squared_per_pixel": 0.022028017395104262,
+    "transport_displacement_rms": 0.1484183863108081
+  },
+  "schedule": {
+    "amplitude": 0.07,
+    "envelope": "sin(pi*t)",
+    "noise": "iid Gaussian per field, spatially centered and normalized to unit RMS per sample; no clamping"
+  },
+  "time_details": [
+    {
+      "calibration": {
+        "converged": true,
+        "convergence_reason": "residual_tolerance",
+        "covariance_condition": 506.6072422913722,
+        "covariance_eigenvalues": [
+          0.008213849139491459,
+          0.21835532859116627,
+          4.1611954611551285
+        ],
+        "covariance_rank": 3,
+        "direct_weighted_mean_residual": [
+          -1.5543122344752192e-15,
+          2.220446049250313e-16,
+          -3.552713678800501e-15
+        ],
+        "entropy_fraction": 0.8493464549444448,
+        "ess_fraction": 0.06254616385400881,
+        "final_dual_objective": -1.253100959959427,
+        "initial_dual_objective": 0.0,
+        "iterations": 8,
+        "lambda": [
+          -0.12777214693993988,
+          -3.3381380968485383,
+          3.3910499834183625
+        ],
+        "lambda_norm": 4.760116770123071,
+        "maximum_absolute_standardized_residual": 1.9984014443252818e-15,
+        "maximum_weight": 0.017276541120131526,
+        "minimum_weight": 1.9876151374877415e-06,
+        "reported_residual": [
+          -1.9984014443252818e-15,
+          -9.992007221626409e-16,
+          -1.5543122344752192e-15
+        ],
+        "residual_identity_maximum_difference": 1.9984014443252818e-15,
+        "trace": [
+          {
+            "accepted_step": 0.5,
+            "covariance_maximum_eigenvalue": 1.1596795704284095,
+            "covariance_minimum_eigenvalue": 0.0036953230960603154,
+            "damping": 1e-12,
+            "dual_objective": 0.0,
+            "gradient_l2_norm": 1.1635225676673056,
+            "iteration": 0,
+            "lambda_norm": 0.0,
+            "line_search_backtracks": 1,
+            "maximum_absolute_residual": 1.0681551580524042
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 4.4454530863428205,
+            "covariance_minimum_eigenvalue": 0.004010152916213082,
+            "damping": 1e-12,
+            "dual_objective": -1.0905028814251168,
+            "gradient_l2_norm": 1.025257180848298,
+            "iteration": 1,
+            "lambda_norm": 5.9363276702443635,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.7558504470752948
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 7.099280724870622,
+            "covariance_minimum_eigenvalue": 0.011400335803220831,
+            "damping": 1e-12,
+            "dual_objective": -1.1483568366002501,
+            "gradient_l2_norm": 0.7879303455314992,
+            "iteration": 2,
+            "lambda_norm": 3.7829187499633417,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.4970906839286914
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 5.059104709968546,
+            "covariance_minimum_eigenvalue": 0.010147512789224806,
+            "damping": 1e-12,
+            "dual_objective": -1.2308838113073644,
+            "gradient_l2_norm": 0.2471417231202271,
+            "iteration": 3,
+            "lambda_norm": 4.0496079670312675,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.1582775580181448
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 4.359825571417813,
+            "covariance_minimum_eigenvalue": 0.00895701430811004,
+            "damping": 1e-12,
+            "dual_objective": -1.2508469972834053,
+            "gradient_l2_norm": 0.06601578981407918,
+            "iteration": 4,
+            "lambda_norm": 4.495804301637431,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.04164300994699188
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 4.182449403702604,
+            "covariance_minimum_eigenvalue": 0.008310239715777892,
+            "damping": 1e-12,
+            "dual_objective": -1.2530650665309864,
+            "gradient_l2_norm": 0.007855007484085803,
+            "iteration": 5,
+            "lambda_norm": 4.724368961709158,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.004895696125682192
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 4.161545616267845,
+            "covariance_minimum_eigenvalue": 0.008215495490532486,
+            "damping": 1e-12,
+            "dual_objective": -1.2531009495375955,
+            "gradient_l2_norm": 0.00013444443386768812,
+            "iteration": 6,
+            "lambda_norm": 4.759502098505457,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 8.306821952874799e-05
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 4.161195563492629,
+            "covariance_minimum_eigenvalue": 0.008213849621392164,
+            "damping": 1e-12,
+            "dual_objective": -1.253100959959426,
+            "gradient_l2_norm": 3.939775386475899e-08,
+            "iteration": 7,
+            "lambda_norm": 4.760116590144411,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 2.4323046243779345e-08
+          },
+          {
+            "covariance_maximum_eigenvalue": 4.1611954611551285,
+            "covariance_minimum_eigenvalue": 0.008213849139491459,
+            "dual_objective": -1.253100959959427,
+            "gradient_l2_norm": 3.884194229483362e-15,
+            "iteration": 8,
+            "lambda_norm": 4.760116770123071,
+            "maximum_absolute_residual": 3.552713678800501e-15
+          }
+        ]
+      },
+      "hull": {
+        "iterations": 4,
+        "maximum_equality_residual": 1.1102230246251565e-16,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 0,
+        "success": true,
+        "weight_diagnostics": {
+          "entropy_fraction": 0.14547495882440392,
+          "ess_fraction": 0.00073452364060259,
+          "maximum_weight": 0.43648610982029634,
+          "minimum_weight": 0.0,
+          "positive_weight_count": 4
+        }
+      },
+      "projected_hidden_mean": [
+        0.04994744128724788,
+        0.17888152164617724,
+        0.3676117943655613,
+        0.19102624247459937,
+        0.00025465999899353434
+      ],
+      "raw_phi_physical": {
+        "maximum": [
+          0.15955887734889984,
+          0.03484161198139191,
+          0.01964973844587803
+        ],
+        "mean": [
+          0.13047673703476903,
+          0.026532163227329875,
+          0.013741838220312275
+        ],
+        "minimum": [
+          0.06991522014141083,
+          0.013696787878870964,
+          0.00795687735080719
+        ],
+        "quantile_01": [
+          0.11254293359816074,
+          0.02135901600122452,
+          0.010858629131689668
+        ],
+        "quantile_50": [
+          0.13031739741563797,
+          0.02654889691621065,
+          0.013786827679723501
+        ],
+        "quantile_99": [
+          0.15809826850891112,
+          0.03345210868865252,
+          0.016102434415370227
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7407854264897256,
+          1.2081041060434152,
+          1.864429793896165
+        ],
+        "mean": [
+          -0.5784209942822374,
+          -1.3188416327626837,
+          -2.156535669256371
+        ],
+        "minimum": [
+          -5.40800565736565,
+          -5.22214472815872,
+          -6.093827595973246
+        ],
+        "quantile_01": [
+          -2.008583686222584,
+          -2.8920220838525585,
+          -4.118871478217808
+        ],
+        "quantile_50": [
+          -0.5911278124111814,
+          -1.3137528326432868,
+          -2.125915473316772
+        ],
+        "quantile_99": [
+          1.6243066060401812,
+          0.7855490691730812,
+          -0.5498944921250597
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": true,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": 506.6072422913722,
+        "covariance_rank": 3,
+        "ess_fraction": 0.06254616385400881,
+        "field_maximum": 0.434953898191452,
+        "field_minimum": -0.09196680039167404,
+        "hard_range_violation_fraction": 0.0,
+        "hidden_shift_nontrivial": true,
+        "hidden_shift_standardized_rms": 0.5464935769807816,
+        "lambda_norm": 4.760116770123071,
+        "maximum_standardized_residual": 1.9984014443252818e-15,
+        "maximum_weight": 0.017276541120131526,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": 1.253100959959426,
+        "schedule_amplitude": 0.07,
+        "t": 0.1,
+        "target_hull_feasible": true,
+        "target_hull_lp_residual": 1.1102230246251565e-16
+      },
+      "uniform_hidden_mean": [
+        0.049473684281110764,
+        0.14948779344558716,
+        0.3633669912815094,
+        0.20259158313274384,
+        0.0002258052845718339
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 9,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.15964481234550476,
+          0.03450458496809006,
+          0.01820738986134529
+        ],
+        "mean": [
+          0.13048923315909633,
+          0.026214339520493013,
+          0.012561682313958045
+        ],
+        "minimum": [
+          0.06926693022251129,
+          0.013692164793610573,
+          0.0062950956635177135
+        ],
+        "quantile_01": [
+          0.10215828455984592,
+          0.01905078049749136,
+          0.009501398773863912
+        ],
+        "quantile_50": [
+          0.1318262219429016,
+          0.026497947983443737,
+          0.012640137691050768
+        ],
+        "quantile_99": [
+          0.15672356486320496,
+          0.03314771745353939,
+          0.015419072192162282
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7476384639120883,
+          1.1056124726833407,
+          0.8827554895238865
+        ],
+        "mean": [
+          -0.5774244688731162,
+          -1.4154934427025851,
+          -2.9597594813395274
+        ],
+        "minimum": [
+          -5.459704676976768,
+          -5.223550631961085,
+          -7.224849874070445
+        ],
+        "quantile_01": [
+          -2.8367257853589667,
+          -3.5939682710130634,
+          -5.042613617725068
+        ],
+        "quantile_50": [
+          -0.47080394719181917,
+          -1.3292466629035835,
+          -2.9063621066981433
+        ],
+        "quantile_99": [
+          1.5146784463743928,
+          0.6929821423810906,
+          -1.0149964392519937
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.5134224891662598,
+        "field_minimum": -0.17908932268619537,
+        "hard_range_violation_fraction": 0.0,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.2,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.05563810467720032,
+        0.10935842245817184,
+        0.3758409917354584,
+        0.2812436819076538,
+        0.0004906568210572004
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 10,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.1597307324409485,
+          0.03547275811433792,
+          0.017114397138357162
+        ],
+        "mean": [
+          0.13050172263683635,
+          0.026627155870983188,
+          0.011747745306365687
+        ],
+        "minimum": [
+          0.06248608976602554,
+          0.012394010089337826,
+          0.004864593967795372
+        ],
+        "quantile_01": [
+          0.0899163767695427,
+          0.0165695377625525,
+          0.007474773074500262
+        ],
+        "quantile_50": [
+          0.13339116424322128,
+          0.02719051856547594,
+          0.011897471267729998
+        ],
+        "quantile_99": [
+          0.15534887611865997,
+          0.03346276208758355,
+          0.015000926144421103
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.754490313015148,
+          1.4000388635003684,
+          0.13885565661981075
+        ],
+        "mean": [
+          -0.5764284735077856,
+          -1.2899538854280235,
+          -3.5137317001911375
+        ],
+        "minimum": [
+          -6.000454723398585,
+          -5.6183260972612965,
+          -8.198461088523521
+        ],
+        "quantile_01": [
+          -3.812978249692698,
+          -4.348526839405738,
+          -6.421951729871033
+        ],
+        "quantile_50": [
+          -0.3460048714760778,
+          -1.1186324172554334,
+          -3.411826979969572
+        ],
+        "quantile_99": [
+          1.405051475027908,
+          0.7887888221132993,
+          -1.2995900769788402
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.5756720304489136,
+        "field_minimum": -0.24793735146522522,
+        "hard_range_violation_fraction": 0.0,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.3,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.06326355785131454,
+        0.08318912237882614,
+        0.39200109243392944,
+        0.38630518317222595,
+        0.0008278682362288237
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 9,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.1598166525363922,
+          0.03639378398656845,
+          0.016437692567706108
+        ],
+        "mean": [
+          0.1305142176179288,
+          0.02719222381460895,
+          0.011274058963010702
+        ],
+        "minimum": [
+          0.05355950817465782,
+          0.011035536415874958,
+          0.0036412382032722235
+        ],
+        "quantile_01": [
+          0.07728483416140079,
+          0.0143911883700639,
+          0.005619060690514743
+        ],
+        "quantile_50": [
+          0.13500390201807022,
+          0.028043590486049652,
+          0.011514917481690645
+        ],
+        "quantile_99": [
+          0.153974187374115,
+          0.0338060149922967,
+          0.014766774559393533
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7613421621182075,
+          1.6801275278687935,
+          -0.32171503744345725
+        ],
+        "mean": [
+          -0.5754320392679403,
+          -1.118113842298445,
+          -3.8361265197168777
+        ],
+        "minimum": [
+          -6.712320669942608,
+          -6.0314448686790945,
+          -9.031087079228213
+        ],
+        "quantile_01": [
+          -4.820302827754204,
+          -5.010973997803465,
+          -7.684964834469576
+        ],
+        "quantile_50": [
+          -0.2173942615948727,
+          -0.8592088961060806,
+          -3.6721962317734445
+        ],
+        "quantile_99": [
+          1.295424503681423,
+          0.893173780799481,
+          -1.4589555707398865
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.6150031685829163,
+        "field_minimum": -0.2916325032711029,
+        "hard_range_violation_fraction": 2.86102294921875e-06,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.4,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.06900975853204727,
+        0.07259845733642578,
+        0.40266892313957214,
+        0.4571593403816223,
+        0.0011020986130461097
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 15,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.15990257263183594,
+          0.036818064749240875,
+          0.016663771122694016
+        ],
+        "mean": [
+          0.13052670483830298,
+          0.027441597203505808,
+          0.011119397673155618
+        ],
+        "minimum": [
+          0.0446329191327095,
+          0.009352285414934158,
+          0.0025805351324379444
+        ],
+        "quantile_01": [
+          0.06450540944933891,
+          0.011802526889368892,
+          0.003992728376761079
+        ],
+        "quantile_50": [
+          0.1365993395447731,
+          0.02861632127314806,
+          0.011486709583550692
+        ],
+        "quantile_99": [
+          0.15259949862957,
+          0.03391845505684615,
+          0.014780874317511917
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7681940112212668,
+          1.8091534713489041,
+          -0.16784411429685744
+        ],
+        "mean": [
+          -0.5744362239202178,
+          -1.0422781230954674,
+          -3.941390265083258
+        ],
+        "minimum": [
+          -7.4241872106462825,
+          -6.543330081532614,
+          -9.753010309418858
+        ],
+        "quantile_01": [
+          -5.8394205242459165,
+          -5.79819915454518,
+          -8.791859977504293
+        ],
+        "quantile_50": [
+          -0.09016329042484561,
+          -0.6850385432010341,
+          -3.6913947591483742
+        ],
+        "quantile_99": [
+          1.1857975323349381,
+          0.9273673777989717,
+          -1.4493591594485298
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.6273921728134155,
+        "field_minimum": -0.3098164200782776,
+        "hard_range_violation_fraction": 6.67572021484375e-06,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.5,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.0708414763212204,
+        0.0728687271475792,
+        0.4073340892791748,
+        0.47987139225006104,
+        0.0012038411805406213
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 17,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.15998849272727966,
+          0.03678891062736511,
+          0.01702764444053173
+        ],
+        "mean": [
+          0.13053919561571092,
+          0.027196512912496473,
+          0.011275737649839357
+        ],
+        "minimum": [
+          0.03570633381605148,
+          0.007203822024166584,
+          0.0016560243675485253
+        ],
+        "quantile_01": [
+          0.051649033837020394,
+          0.008854464162141085,
+          0.0026164087816141547
+        ],
+        "quantile_50": [
+          0.13815896958112717,
+          0.028721480630338192,
+          0.01181966857984662
+        ],
+        "quantile_99": [
+          0.151224809885025,
+          0.033601111546158795,
+          0.01500980369746686
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7750458603243264,
+          1.800287554219735,
+          0.07981105727436988
+        ],
+        "mean": [
+          -0.5734401249105844,
+          -1.1168095057592844,
+          -3.8349839916605903
+        ],
+        "minimum": [
+          -8.136053454270131,
+          -7.1966887544081235,
+          -10.382239936528396
+        ],
+        "quantile_01": [
+          -6.8646748055980185,
+          -6.694720063066301,
+          -9.728594408867496
+        ],
+        "quantile_50": [
+          0.03421214945925502,
+          -0.6530590464363069,
+          -3.46478012896923
+        ],
+        "quantile_99": [
+          1.076170560988453,
+          0.8308615979568168,
+          -1.2935479413923539
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.6114524602890015,
+        "field_minimum": -0.2981240749359131,
+        "hard_range_violation_fraction": 3.0994415283203125e-06,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.6,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.06805343925952911,
+        0.08440720289945602,
+        0.40720146894454956,
+        0.4546692371368408,
+        0.0010912385769188404
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 11,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.1600744128227234,
+          0.036301225423812866,
+          0.01798972859978676
+        ],
+        "mean": [
+          0.13055168716709886,
+          0.02663565634782117,
+          0.011751219032404947
+        ],
+        "minimum": [
+          0.02677975594997406,
+          0.004729247651994228,
+          0.0009382883436046541
+        ],
+        "quantile_01": [
+          0.03873677644878626,
+          0.005695474985986948,
+          0.0015054211777169257
+        ],
+        "quantile_50": [
+          0.13969914615154266,
+          0.028523901477456093,
+          0.012516258750110865
+        ],
+        "quantile_99": [
+          0.15023509487509729,
+          0.03281030096113682,
+          0.015403418801724912
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.781897709427386,
+          1.6519799969473343,
+          0.7346134454850064
+        ],
+        "mean": [
+          -0.5724439641785546,
+          -1.2873688470747784,
+          -3.511367453690852
+        ],
+        "minimum": [
+          -8.847919103734329,
+          -7.949219439679261,
+          -10.870736975027782
+        ],
+        "quantile_01": [
+          -7.894385477439533,
+          -7.655384780291379,
+          -10.48474170565661
+        ],
+        "quantile_50": [
+          0.15703623849284504,
+          -0.7131438743508268,
+          -2.9906751323270693
+        ],
+        "quantile_99": [
+          0.9972439970916576,
+          0.5903720664404013,
+          -1.02565026547227
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.568570613861084,
+        "field_minimum": -0.2554468810558319,
+        "hard_range_violation_fraction": 2.384185791015625e-07,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.7,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.0611487478017807,
+        0.11506997793912888,
+        0.40350615978240967,
+        0.37961632013320923,
+        0.0008060579420998693
+      ]
+    },
+    {
+      "calibration": null,
+      "hull": {
+        "iterations": 9,
+        "maximum_equality_residual": null,
+        "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is Infeasible)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 2,
+        "success": false
+      },
+      "projected_hidden_mean": null,
+      "raw_phi_physical": {
+        "maximum": [
+          0.16016033291816711,
+          0.037219367921352386,
+          0.019259043037891388
+        ],
+        "mean": [
+          0.13056417834695822,
+          0.026226901700852068,
+          0.012566850336519053
+        ],
+        "minimum": [
+          0.01785316690802574,
+          0.002356958109885454,
+          0.0004203258431516588
+        ],
+        "quantile_01": [
+          0.025824516918510197,
+          0.0027993339579552414,
+          0.0006784886674722657
+        ],
+        "quantile_50": [
+          0.14123063534498215,
+          0.02850311901420355,
+          0.013585459440946579
+        ],
+        "quantile_99": [
+          0.15009452477097512,
+          0.03248564172536135,
+          0.015907786879688503
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          1.7887495585304454,
+          1.9311918123689182,
+          1.598519287261613
+        ],
+        "mean": [
+          -0.5714478330747257,
+          -1.4116732195965807,
+          -2.9562420826975067
+        ],
+        "minimum": [
+          -9.559785644438003,
+          -8.670644786543045,
+          -11.223266511074607
+        ],
+        "quantile_01": [
+          -8.924096320101947,
+          -8.536116035320623,
+          -11.047558770451133
+        ],
+        "quantile_50": [
+          0.2791675373725877,
+          -0.7194639274027503,
+          -2.2629683521033837
+        ],
+        "quantile_99": [
+          0.9860339869435985,
+          0.49164153729359,
+          -0.6823732051332861
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": false,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": null,
+        "covariance_rank": null,
+        "ess_fraction": null,
+        "field_maximum": 0.5061857104301453,
+        "field_minimum": -0.18641236424446106,
+        "hard_range_violation_fraction": 0.0,
+        "hidden_shift_nontrivial": false,
+        "hidden_shift_standardized_rms": null,
+        "lambda_norm": null,
+        "maximum_standardized_residual": null,
+        "maximum_weight": null,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": null,
+        "schedule_amplitude": 0.07,
+        "t": 0.8,
+        "target_hull_feasible": false,
+        "target_hull_lp_residual": null
+      },
+      "uniform_hidden_mean": [
+        0.05196571722626686,
+        0.18156062066555023,
+        0.3987867832183838,
+        0.2671962380409241,
+        0.00045772644807584584
+      ]
+    },
+    {
+      "calibration": {
+        "converged": true,
+        "convergence_reason": "residual_tolerance",
+        "covariance_condition": 1657.792143559201,
+        "covariance_eigenvalues": [
+          0.005485097021411549,
+          1.0591853045455033,
+          9.09315074875604
+        ],
+        "covariance_rank": 3,
+        "direct_weighted_mean_residual": [
+          1.5543122344752192e-15,
+          1.1102230246251565e-16,
+          -3.552713678800501e-15
+        ],
+        "entropy_fraction": 0.8955186933012778,
+        "ess_fraction": 0.15044594876916556,
+        "final_dual_objective": -0.8690510779132614,
+        "initial_dual_objective": 0.0,
+        "iterations": 6,
+        "lambda": [
+          1.7391205035542465,
+          -6.739518425273544,
+          4.715330095296525
+        ],
+        "lambda_norm": 8.407139028117324,
+        "maximum_absolute_standardized_residual": 2.6645352591003757e-15,
+        "maximum_weight": 0.01145967782242543,
+        "minimum_weight": 4.932068058952167e-08,
+        "reported_residual": [
+          1.4432899320127035e-15,
+          -8.881784197001252e-16,
+          -2.6645352591003757e-15
+        ],
+        "residual_identity_maximum_difference": 9.992007221626409e-16,
+        "trace": [
+          {
+            "accepted_step": 0.5,
+            "covariance_maximum_eigenvalue": 17.220891338492343,
+            "covariance_minimum_eigenvalue": 0.020253329049389493,
+            "damping": 1e-12,
+            "dual_objective": 0.0,
+            "gradient_l2_norm": 1.15723882515504,
+            "iteration": 0,
+            "lambda_norm": 0.0,
+            "line_search_backtracks": 1,
+            "maximum_absolute_residual": 1.0634220900681564
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 16.772177167367577,
+            "covariance_minimum_eigenvalue": 0.013462773345901447,
+            "damping": 1e-12,
+            "dual_objective": -0.671238080232492,
+            "gradient_l2_norm": 0.991497539714341,
+            "iteration": 1,
+            "lambda_norm": 1.6858025971833976,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.6522544750918767
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 11.173501188040214,
+            "covariance_minimum_eigenvalue": 0.006647818864950677,
+            "damping": 1e-12,
+            "dual_objective": -0.8215143098047921,
+            "gradient_l2_norm": 0.4251025047898843,
+            "iteration": 2,
+            "lambda_norm": 4.814395140033007,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.284431298394376
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 9.185975674724226,
+            "covariance_minimum_eigenvalue": 0.005562175661553011,
+            "damping": 1e-12,
+            "dual_objective": -0.8684455401308204,
+            "gradient_l2_norm": 0.027358347683192504,
+            "iteration": 3,
+            "lambda_norm": 7.973436583718817,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.02262030836305473
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 9.090162318337107,
+            "covariance_minimum_eigenvalue": 0.005486372658934112,
+            "damping": 1e-12,
+            "dual_objective": -0.8690510021420739,
+            "gradient_l2_norm": 0.0004212677437348706,
+            "iteration": 4,
+            "lambda_norm": 8.403229269036942,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 0.0003759084980040628
+          },
+          {
+            "accepted_step": 1.0,
+            "covariance_maximum_eigenvalue": 9.093150807137551,
+            "covariance_minimum_eigenvalue": 0.005485097167210188,
+            "damping": 1e-12,
+            "dual_objective": -0.8690510779132596,
+            "gradient_l2_norm": 2.692768910012545e-08,
+            "iteration": 5,
+            "lambda_norm": 8.407138176292792,
+            "line_search_backtracks": 0,
+            "maximum_absolute_residual": 2.5423398497537164e-08
+          },
+          {
+            "covariance_maximum_eigenvalue": 9.09315074875604,
+            "covariance_minimum_eigenvalue": 0.005485097021411549,
+            "dual_objective": -0.8690510779132614,
+            "gradient_l2_norm": 3.879431267263233e-15,
+            "iteration": 6,
+            "lambda_norm": 8.407139028117324,
+            "maximum_absolute_residual": 3.552713678800501e-15
+          }
+        ]
+      },
+      "hull": {
+        "iterations": 4,
+        "maximum_equality_residual": 2.220446049250313e-16,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "solver": "scipy.optimize.linprog fixed-target hull membership (HiGHS)",
+        "status": 0,
+        "success": true,
+        "weight_diagnostics": {
+          "entropy_fraction": 0.11748282575641289,
+          "ess_fraction": 0.0005351199010296437,
+          "maximum_weight": 0.614621598097658,
+          "minimum_weight": 0.0,
+          "positive_weight_count": 4
+        }
+      },
+      "projected_hidden_mean": [
+        0.044632561246861886,
+        0.31292048414472756,
+        0.3967830561972528,
+        0.17115638359767177,
+        0.00019788331594336017
+      ],
+      "raw_phi_physical": {
+        "maximum": [
+          0.16464397311210632,
+          0.038988981395959854,
+          0.020849334076046944
+        ],
+        "mean": [
+          0.13057666931968015,
+          0.02654859881477023,
+          0.013748792394295606
+        ],
+        "minimum": [
+          0.008926586247980595,
+          0.0006319753592833877,
+          0.00010573456529527903
+        ],
+        "quantile_01": [
+          0.012912261299788952,
+          0.0007443644717568532,
+          0.00017195068721775897
+        ],
+        "quantile_50": [
+          0.14276237040758133,
+          0.029230778105556965,
+          0.015038118232041597
+        ],
+        "quantile_99": [
+          0.15185684561729432,
+          0.03326596766710282,
+          0.016891036648303274
+        ]
+      },
+      "raw_phi_standardized": {
+        "maximum": [
+          2.146305330351081,
+          2.4693402938559985,
+          2.6808844418241433
+        ],
+        "mean": [
+          -0.5704517184894344,
+          -1.3138434868114381,
+          -2.1518026012721285
+        ],
+        "minimum": [
+          -10.271651516712069,
+          -9.195220837272894,
+          -11.43737992108034
+        ],
+        "quantile_01": [
+          -9.953806850830544,
+          -9.161042735059532,
+          -11.392312684128367
+        ],
+        "quantile_50": [
+          0.40131844352083557,
+          -0.4981790871418164,
+          -1.274276836383239
+        ],
+        "quantile_99": [
+          1.1265733619034881,
+          0.7289426353236521,
+          -0.01316532918712373
+        ]
+      },
+      "row": {
+        "bank_count": 4096,
+        "bank_seed": 36520,
+        "calibration_converged": true,
+        "candidate_rank": 6,
+        "coupling": "independent",
+        "covariance_condition": 1657.792143559201,
+        "covariance_rank": 3,
+        "ess_fraction": 0.15044594876916556,
+        "field_maximum": 0.48155587911605835,
+        "field_minimum": -0.09822817146778107,
+        "hard_range_violation_fraction": 0.0,
+        "hidden_shift_nontrivial": true,
+        "hidden_shift_standardized_rms": 0.4365351290276975,
+        "lambda_norm": 8.407139028117324,
+        "maximum_standardized_residual": 2.6645352591003757e-15,
+        "maximum_weight": 0.01145967782242543,
+        "observation_dimension": 3,
+        "pair_id": "v6_F0280_k05950__v6_F0280_k05800",
+        "physical_range_gate_pass": true,
+        "projection_kl_distortion": 0.8690510779132576,
+        "schedule_amplitude": 0.07,
+        "t": 0.9,
+        "target_hull_feasible": true,
+        "target_hull_lp_residual": 2.220446049250313e-16
+      },
+      "uniform_hidden_mean": [
+        0.04387069121003151,
+        0.29162564873695374,
+        0.39747288823127747,
+        0.18165697157382965,
+        0.0001815299183363095
+      ]
+    }
+  ]
+}
