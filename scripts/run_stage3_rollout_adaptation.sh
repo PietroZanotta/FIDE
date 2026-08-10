@@ -3,8 +3,11 @@ set -euo pipefail
 source "$(dirname "$0")/_common.sh"
 
 ARGS=()
+BACKEND="${MFSI_BACKEND:-tesseract}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --backend) BACKEND="$2"; shift 2;;
+    --legacy-output) ARGS+=("$1"); shift;;
     --aggregate-existing|--no-plots) ARGS+=("$1"); shift;;
     --seeds) ARGS+=("$1" "$2"); shift 2;;
     -h|--help)
@@ -15,4 +18,4 @@ while [[ $# -gt 0 ]]; do
 done
 
 banner "MFSI Stage 3: rollout-aware frozen-correction adaptation"
-run_py "$ROOT/stage3_rollout_adaptation.py" "${ARGS[@]}"
+"$ROOT/scripts/_run_backend_experiment.sh" stage3 "$BACKEND" "${ARGS[@]}"

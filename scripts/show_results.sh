@@ -12,4 +12,4 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1" >&2; exit 2;;
   esac
 done
-run_py scripts/report_results.py --results-root "$ROOT/results" --backend "$BACKEND" "${ARGS[@]}"
+run_py "$ROOT/report_results.py" --results-root "$ROOT/results" --backend "$BACKEND" "${ARGS[@]}"

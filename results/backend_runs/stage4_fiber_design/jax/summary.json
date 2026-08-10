@@ -1,0 +1,487 @@
+{
+  "experiment": "stage4-differentiable-moment-fiber-design",
+  "stage": 4,
+  "scientific_replication_n": 1,
+  "seeds": [
+    401
+  ],
+  "source": "results/level2_paper_study/jax/summary.json",
+  "protocol": {
+    "experiment": "MFSI Stage 4 \u2014 differentiable moment-fiber design",
+    "status": "implemented-controlled-protocol",
+    "scientific_question": "Can differentiation through the MFSI construction design a better rank-three measured-observable equivalence class than the hand fiber?",
+    "primary_estimand": "paired designed-minus-hand held-out construction objective",
+    "primary_metric": "integral of Ritz correction energy plus 0.02 times forcing power plus the ESS-floor penalty",
+    "observable_family": {
+      "count": 3,
+      "dictionary": "the three original radial RBFs followed by the fixed eight-function radial Ritz dictionary",
+      "q4_or_angular_features_allowed": false,
+      "rank_constraint": "Euclidean row-orthonormal rank-three coefficients in a common bounded radial-RBF dictionary",
+      "endpoint_constraint": "each coefficient vector is in the nullspace of the fixed weighted endpoint dictionary-mean difference",
+      "hand_control": "optimizer step zero is an invertible reparameterization of the original three-observable fiber"
+    },
+    "bank_roles": {
+      "adaptation_seed_offset": 101000,
+      "selection_seed_offset": 102000,
+      "evaluation_seed_offset": 103000,
+      "gradient_validation_seed_offset": 104000
+    },
+    "selection_rule": "minimum independent selection-bank objective among steps 0,5,...,40",
+    "frozen": [
+      "N=32 64-dimensional physical endpoint configurations",
+      "endpoint probability weights",
+      "hidden endpoint q4 difference",
+      "deterministic angular-sort endpoint coupling",
+      "per-seed selected optimized_multi reference schedule",
+      "six construction times from 0.12 through 0.88",
+      "converged 640-step exponential calibration and numerical ridges",
+      "eight radial Ritz realization functions",
+      "adaptation, selection, and evaluation bank realizations shared by both methods"
+    ],
+    "excluded_interventions": [
+      "rollout adaptation",
+      "schedule optimization",
+      "coupling optimization",
+      "neural training",
+      "q4-informed adaptation or selection"
+    ]
+  },
+  "sole_scientific_intervention": "rank-three measured-observable subspace",
+  "configuration": {
+    "particle_count": 32,
+    "state_dimension": 64,
+    "observable_count": 3,
+    "candidate_dictionary_size": 11,
+    "candidate_dictionary": "radial pair-distance RBFs only",
+    "dictionary_centers": [
+      0.72,
+      1.22,
+      1.82,
+      0.45,
+      0.7642857142857142,
+      1.0785714285714285,
+      1.3928571428571428,
+      1.707142857142857,
+      2.0214285714285714,
+      2.335714285714286,
+      2.65
+    ],
+    "construction_times": [
+      0.12,
+      0.272,
+      0.424,
+      0.576,
+      0.728,
+      0.88
+    ],
+    "adaptation_count_per_time": 96,
+    "selection_count_per_time": 128,
+    "evaluation_count_per_time": 256,
+    "optimizer": "Adam",
+    "optimizer_steps": 5,
+    "learning_rate": 0.03,
+    "candidate_interval": 5,
+    "ess_floor": 0.18,
+    "forcing_weight": 0.02,
+    "calibration_steps": 640,
+    "bank_seed_offsets": {
+      "adaptation": 101000,
+      "selection": 102000,
+      "evaluation": 103000
+    },
+    "primary_metric": "held-out construction objective"
+  },
+  "frozen": {
+    "endpoint_configurations": true,
+    "endpoint_weights": true,
+    "hidden_endpoint_q4_difference": true,
+    "endpoint_coupling": true,
+    "reference_schedule": true,
+    "construction_times": true,
+    "calibration_equations_steps_and_ridge": true,
+    "ritz_dictionary_and_ridges": true,
+    "optimizer_protocol_across_methods": true
+  },
+  "validation": {
+    "gradient": {
+      "autodiff_directional_derivative": 191.5469673089463,
+      "finite_difference_directional_derivative": 191.54697230749915,
+      "finite_difference_step": 2e-05,
+      "relative_error": 2.6095702683166087e-08,
+      "passed": true
+    },
+    "endpoint_laws_unchanged": true,
+    "endpoint_equivalence_enforced": true,
+    "hidden_q4_gap_preserved": true,
+    "bank_roles_distinct": true,
+    "hand_candidate_nested": true,
+    "hand_observable_subspace_matches_original": true,
+    "q4_used_for_adaptation_or_selection": false,
+    "rollout_used": false,
+    "schedule_optimized": false,
+    "coupling_changed": false,
+    "neural_model_trained": false
+  },
+  "elapsed_seconds": 45.331487252988154,
+  "seed_reports": [
+    {
+      "seed": 401,
+      "frozen_schedule_raw": [
+        -1.0548834781014884,
+        0.0,
+        0.0
+      ],
+      "endpoint_law_hash_before": "5637f99e41bef5e8a2b25892098bd63228480fe7f0c322b3006ec1f82e736cb3",
+      "endpoint_law_hash_after": "5637f99e41bef5e8a2b25892098bd63228480fe7f0c322b3006ec1f82e736cb3",
+      "endpoint_q4": {
+        "minus": 0.07605674400265382,
+        "plus": 0.7814316325156652,
+        "gap": 0.7053748885130113
+      },
+      "dictionary_endpoint_gap_norm": 0.01900992754831484,
+      "bank_fingerprints": {
+        "adaptation": "7e92a8d9ce75e4582dcb4dcf5ed98563cc06440747ae4afadd8a753a5638358f",
+        "selection": "314a195ba76dc821033973b4a5032591a7b0e812b92fb8f89a6a92ab89d39c35",
+        "evaluation": "6dc6ec034924a2a35fefb1eb153d64cf27077ec5a91ffc62b5142496668a6e22"
+      },
+      "hand_observable_subspace_max_abs_error": 1.3213222196880773e-14,
+      "optimization": {
+        "trace": [
+          {
+            "step": 1,
+            "adaptation_objective": 15.025086282366766,
+            "gradient_norm": 968.3177525525118
+          },
+          {
+            "step": 2,
+            "adaptation_objective": 15.59469041683033,
+            "gradient_norm": 692.2906988211025
+          },
+          {
+            "step": 3,
+            "adaptation_objective": 11.96479478776414,
+            "gradient_norm": 843.8175848371515
+          },
+          {
+            "step": 4,
+            "adaptation_objective": 2.8047334271024105,
+            "gradient_norm": 19.515876606059624
+          },
+          {
+            "step": 5,
+            "adaptation_objective": 2.4243721578840494,
+            "gradient_norm": 22.428324313557823
+          }
+        ],
+        "candidate_steps": [
+          0,
+          5,
+          10,
+          15,
+          20,
+          25,
+          30,
+          35,
+          40
+        ],
+        "selection_objectives": [
+          1.7390615438924448,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414,
+          1.7972899873083414
+        ],
+        "selected_candidate_index": 0,
+        "selected_step": 0,
+        "initial_adaptation_objective": 15.025086282366809,
+        "selected_adaptation_objective": 15.025086282366809,
+        "initial_selection_objective": 1.7390615438924448,
+        "selected_selection_objective": 1.7390615438924448,
+        "wall_seconds": 17.873535123013426,
+        "selected_coefficients": [
+          [
+            0.9999999999995002,
+            2.490561106260616e-28,
+            -4.272579255749326e-29,
+            5.8925264052097275e-15,
+            -1.1006067401339268e-15,
+            -1.1759510642370785e-15,
+            -9.535661159364254e-16,
+            -2.262298051518243e-15,
+            6.6918624909056385e-15,
+            1.0931988112118278e-14,
+            3.690897998586979e-16
+          ],
+          [
+            -2.4273081586630657e-31,
+            0.9999999999995,
+            5.116238663506529e-29,
+            -7.234245088480187e-15,
+            1.3156890204019178e-15,
+            1.4220565775588276e-15,
+            1.15817956979897e-15,
+            2.7142875977436703e-15,
+            -8.209044913207495e-15,
+            -1.3213222196874166e-14,
+            -4.475924615800121e-16
+          ],
+          [
+            1.6932938602448137e-31,
+            1.1786765295002536e-44,
+            0.9999999999995,
+            1.205707514746698e-15,
+            -2.1928150340031957e-16,
+            -2.3700942959313777e-16,
+            -1.9302992829982828e-16,
+            -4.523812662906116e-16,
+            1.3681741522012494e-15,
+            2.202203699479028e-15,
+            7.459874359666869e-17
+          ]
+        ]
+      },
+      "methods": {
+        "hand": {
+          "construction_objective": 1.0363891056046473,
+          "integrated_correction_energy": 0.33474980121896253,
+          "integrated_forcing_power": 34.07433243845736,
+          "minimum_ess": 0.09631606674553606,
+          "maximum_calibration_residual": 1.3597399555105182e-16,
+          "endpoint_equivalence_residual": 3.551104848287949e-18,
+          "q4_path": [
+            0.10884641638053874,
+            0.18657592279183427,
+            0.22226954635742543,
+            0.2698554084578436,
+            0.43365009778156965,
+            0.657302821972878
+          ],
+          "coefficients": [
+            [
+              0.9999999999995002,
+              2.490561106260616e-28,
+              -4.272579255749326e-29,
+              5.8925264052097275e-15,
+              -1.1006067401339268e-15,
+              -1.1759510642370785e-15,
+              -9.535661159364254e-16,
+              -2.262298051518243e-15,
+              6.6918624909056385e-15,
+              1.0931988112118278e-14,
+              3.690897998586979e-16
+            ],
+            [
+              -2.4273081586630657e-31,
+              0.9999999999995,
+              5.116238663506529e-29,
+              -7.234245088480187e-15,
+              1.3156890204019178e-15,
+              1.4220565775588276e-15,
+              1.15817956979897e-15,
+              2.7142875977436703e-15,
+              -8.209044913207495e-15,
+              -1.3213222196874166e-14,
+              -4.475924615800121e-16
+            ],
+            [
+              1.6932938602448137e-31,
+              1.1786765295002536e-44,
+              0.9999999999995,
+              1.205707514746698e-15,
+              -2.1928150340031957e-16,
+              -2.3700942959313777e-16,
+              -1.9302992829982828e-16,
+              -4.523812662906116e-16,
+              1.3681741522012494e-15,
+              2.202203699479028e-15,
+              7.459874359666869e-17
+            ]
+          ]
+        },
+        "designed": {
+          "construction_objective": 1.0363891056046473,
+          "integrated_correction_energy": 0.33474980121896253,
+          "integrated_forcing_power": 34.07433243845736,
+          "minimum_ess": 0.09631606674553606,
+          "maximum_calibration_residual": 1.3597399555105182e-16,
+          "endpoint_equivalence_residual": 3.551104848287949e-18,
+          "q4_path": [
+            0.10884641638053874,
+            0.18657592279183427,
+            0.22226954635742543,
+            0.2698554084578436,
+            0.43365009778156965,
+            0.657302821972878
+          ],
+          "coefficients": [
+            [
+              0.9999999999995002,
+              2.490561106260616e-28,
+              -4.272579255749326e-29,
+              5.8925264052097275e-15,
+              -1.1006067401339268e-15,
+              -1.1759510642370785e-15,
+              -9.535661159364254e-16,
+              -2.262298051518243e-15,
+              6.6918624909056385e-15,
+              1.0931988112118278e-14,
+              3.690897998586979e-16
+            ],
+            [
+              -2.4273081586630657e-31,
+              0.9999999999995,
+              5.116238663506529e-29,
+              -7.234245088480187e-15,
+              1.3156890204019178e-15,
+              1.4220565775588276e-15,
+              1.15817956979897e-15,
+              2.7142875977436703e-15,
+              -8.209044913207495e-15,
+              -1.3213222196874166e-14,
+              -4.475924615800121e-16
+            ],
+            [
+              1.6932938602448137e-31,
+              1.1786765295002536e-44,
+              0.9999999999995,
+              1.205707514746698e-15,
+              -2.1928150340031957e-16,
+              -2.3700942959313777e-16,
+              -1.9302992829982828e-16,
+              -4.523812662906116e-16,
+              1.3681741522012494e-15,
+              2.202203699479028e-15,
+              7.459874359666869e-17
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "methods": {
+      "hand": {
+        "construction_objective": {
+          "mean": 1.0363891056046473,
+          "ci95_low": 1.0363891056046473,
+          "ci95_high": 1.0363891056046473,
+          "n": 1
+        },
+        "integrated_correction_energy": {
+          "mean": 0.33474980121896253,
+          "ci95_low": 0.33474980121896253,
+          "ci95_high": 0.33474980121896253,
+          "n": 1
+        },
+        "integrated_forcing_power": {
+          "mean": 34.07433243845736,
+          "ci95_low": 34.07433243845736,
+          "ci95_high": 34.07433243845736,
+          "n": 1
+        },
+        "minimum_ess": {
+          "mean": 0.09631606674553606,
+          "ci95_low": 0.09631606674553606,
+          "ci95_high": 0.09631606674553606,
+          "n": 1
+        },
+        "maximum_calibration_residual": {
+          "mean": 1.3597399555105182e-16,
+          "ci95_low": 1.3597399555105182e-16,
+          "ci95_high": 1.3597399555105182e-16,
+          "n": 1
+        },
+        "endpoint_equivalence_residual": {
+          "mean": 3.551104848287949e-18,
+          "ci95_low": 3.551104848287949e-18,
+          "ci95_high": 3.551104848287949e-18,
+          "n": 1
+        }
+      },
+      "designed": {
+        "construction_objective": {
+          "mean": 1.0363891056046473,
+          "ci95_low": 1.0363891056046473,
+          "ci95_high": 1.0363891056046473,
+          "n": 1
+        },
+        "integrated_correction_energy": {
+          "mean": 0.33474980121896253,
+          "ci95_low": 0.33474980121896253,
+          "ci95_high": 0.33474980121896253,
+          "n": 1
+        },
+        "integrated_forcing_power": {
+          "mean": 34.07433243845736,
+          "ci95_low": 34.07433243845736,
+          "ci95_high": 34.07433243845736,
+          "n": 1
+        },
+        "minimum_ess": {
+          "mean": 0.09631606674553606,
+          "ci95_low": 0.09631606674553606,
+          "ci95_high": 0.09631606674553606,
+          "n": 1
+        },
+        "maximum_calibration_residual": {
+          "mean": 1.3597399555105182e-16,
+          "ci95_low": 1.3597399555105182e-16,
+          "ci95_high": 1.3597399555105182e-16,
+          "n": 1
+        },
+        "endpoint_equivalence_residual": {
+          "mean": 3.551104848287949e-18,
+          "ci95_low": 3.551104848287949e-18,
+          "ci95_high": 3.551104848287949e-18,
+          "n": 1
+        }
+      }
+    },
+    "designed_minus_hand": {
+      "construction_objective": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      },
+      "integrated_correction_energy": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      },
+      "integrated_forcing_power": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      },
+      "minimum_ess": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      },
+      "maximum_calibration_residual": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      },
+      "endpoint_equivalence_residual": {
+        "mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "n": 1
+      }
+    },
+    "interpretation": {
+      "designed_mean_improves_hand": false,
+      "designed_ci_supports_improvement": false
+    }
+  }
+}

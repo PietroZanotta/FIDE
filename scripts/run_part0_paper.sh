@@ -38,4 +38,4 @@ if [[ "$MULTISEED" -eq 1 ]]; then
   "$ROOT/scripts/run_multiseed_b.sh" "${SW[@]}"
 fi
 banner "Part-0 consolidated tables"
-run_py scripts/report_results.py --results-root "$ROOT/results" --backend "$BACKEND"
+run_py "$ROOT/report_results.py" --results-root "$ROOT/results" --backend "$BACKEND"

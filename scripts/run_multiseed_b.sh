@@ -98,7 +98,7 @@ echo "Output directory: $OUT_DIR"
 "$ROOT/scripts/_run_with_backend.sh" \
   "$BACKEND" \
   "$PY" \
-  scripts/sweep_example_b.py \
+  sweep_example_b.py \
   "${ARGS[@]}"
 
 echo

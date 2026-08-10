@@ -80,4 +80,4 @@ fi
 banner "Combined Experiment A + B results"
 REPORT_ARGS=(--results-root "$ROOT/results" --backend "$BACKEND")
 [[ "$NO_MULTISEED" -eq 1 ]] && REPORT_ARGS+=(--no-multiseed)
-run_py scripts/report_results.py "${REPORT_ARGS[@]}"
+run_py "$ROOT/report_results.py" "${REPORT_ARGS[@]}"

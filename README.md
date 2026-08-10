@@ -11,6 +11,13 @@ There is no Tesseract Python-SDK orchestration in the experiment path.
 
 > **Training vs backend execution.** Neural-network optimization (flow matching and Deep-Ritz AdamW/L-BFGS) remains native JAX. The backend flag controls execution of the two scientific maps used in generation/evaluation: `ReferenceTransport` and `MomentFiberRealizer`. This keeps the Tesseracts context-free scientific components rather than turning them into training jobs.
 
+For Stage 3/4 gradient-bearing objectives, the repository also provides
+end-to-end rollout and fiber gradient Tesseracts. These components own the
+complete objective, reverse pass, optimizer, and selection step; Tesseract is
+the default and direct JAX is the parity/reference backend. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the boundary policy and
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) for paper entry points.
+
 The learned deterministic pipeline is
 
 ```text
@@ -591,7 +598,7 @@ To print the current result files without rerunning the experiments:
 ./scripts/show_results.sh --backend jax
 ```
 
-The reporting code is `scripts/report_results.py` and uses only the Python standard library. It reads the CSV/JSON files already produced by the experiments, so the displayed numbers are exactly the persisted experiment outputs rather than a second computation. If a multi-seed Example-B aggregate exists under `results/multiseed/example_b/<backend>/`, it is printed automatically. The packaged provenance aggregate under `results/reference/example_b/` is used as a fallback when no active sweep exists. Use `--no-multiseed` to omit that table.
+The reporting code is `report_results.py` and uses only the Python standard library. It reads the CSV/JSON files already produced by the experiments, so the displayed numbers are exactly the persisted experiment outputs rather than a second computation. If a multi-seed Example-B aggregate exists under `results/multiseed/example_b/<backend>/`, it is printed automatically. The packaged provenance aggregate under `results/reference/example_b/` is used as a fallback when no active sweep exists. Use `--no-multiseed` to omit that table.
 
 ## Other commands
 

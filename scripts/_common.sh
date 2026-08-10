@@ -2,6 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+if [[ -d "$ROOT/.venv/bin" ]]; then
+  export PATH="$ROOT/.venv/bin:$PATH"
+fi
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export MPLBACKEND="${MPLBACKEND:-Agg}"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"

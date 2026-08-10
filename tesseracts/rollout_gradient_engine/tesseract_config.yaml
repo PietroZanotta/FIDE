@@ -1,0 +1,12 @@
+name: "mfsi-rollout-gradient-engine"
+version: "0.1.0"
+description: "End-to-end differentiable Stage-3 rollout optimizer with full, stopped-state, and scalar controls."
+env:
+  XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+build_config:
+  python_version: "3.12"
+  package_data:
+    - ["../../backend_runtime.py", "/tesseract/backend_runtime.py"]
+    - ["../../level2_paper_study.py", "/tesseract/level2_paper_study.py"]
+    - ["../../stage3_rollout_adaptation.py", "/tesseract/stage3_rollout_adaptation.py"]
+    - ["../../stage3b_confirmatory.py", "/tesseract/stage3b_confirmatory.py"]

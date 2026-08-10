@@ -1,0 +1,12 @@
+name: "mfsi-fiber-gradient-engine"
+version: "0.1.0"
+description: "End-to-end differentiable Stage-4 fiber optimizer with implicit I-projection gradients."
+env:
+  XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+build_config:
+  python_version: "3.12"
+  package_data:
+    - ["../../backend_runtime.py", "/tesseract/backend_runtime.py"]
+    - ["../../level2_paper_study.py", "/tesseract/level2_paper_study.py"]
+    - ["../../stage4_fiber_design.py", "/tesseract/stage4_fiber_design.py"]
+    - ["../../stage4b_fiber_design_confirmatory.py", "/tesseract/stage4b_fiber_design_confirmatory.py"]

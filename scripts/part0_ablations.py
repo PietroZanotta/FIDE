@@ -21,7 +21,7 @@ import example_b as exb
 import ablate_and_benchmark as grad_ab
 
 jax.config.update("jax_enable_x64", True)
-ROOT=Path(__file__).resolve().parent
+ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"results"/"part0_ablations"; OUT.mkdir(parents=True, exist_ok=True)
 A=0.8
 MODEL=ROOT/"results"/"learned_mfsi_example_a.npz"

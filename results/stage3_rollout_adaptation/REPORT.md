@@ -12,18 +12,18 @@ Adaptation used interior MMD² on the three measured Phi observables, with the e
 |---|---:|---:|---:|---:|
 | raw SI | 0.019149051 | 0.026830976 | 0.033508285 | 0.60280942 |
 | tangent | 0.0098037629 | 0.0016737901 | 0.0098740167 | 0.56233342 |
-| frozen neural | 0.019680657 | 0.024931225 | 0.03155668 | 0.6058774 |
-| rollout-adapted | 0.016027606 | 0.023246404 | 0.024769247 | 0.60567336 |
+| frozen neural | 0.019680654 | 0.024931223 | 0.031556674 | 0.6058774 |
+| rollout-adapted | 0.016027603 | 0.023246404 | 0.024769244 | 0.60567336 |
 
 ## Primary paired effects
 
-Adapted minus frozen interior law MMD²: `-0.0036530507` (95% interval `-0.0073473137` to `4.1212258e-05`).
+Adapted minus frozen interior law MMD²: `-0.0036530517` (95% interval `-0.0073473009` to `4.1197458e-05`).
 
-Adapted minus tangent interior law MMD²: `0.0062238436` (95% interval `-0.001275662` to `0.013723349`).
+Adapted minus tangent interior law MMD²: `0.0062238398` (95% interval `-0.001275666` to `0.013723346`).
 
 ## Validation
 
-Directional gradient relative error: `1.782e-09`. Functional-Heun maximum parity error: `8.882e-16`. MMD static-shape parity error: `0.000e+00`. Neural parameter hashes were unchanged and all bank-role fingerprints were distinct.
+Directional gradient relative error: `1.933e-09`. Functional-Heun maximum parity error: `6.661e-16`. MMD static-shape parity error: `0.000e+00`. Neural parameter hashes were unchanged and all bank-role fingerprints were distinct.
 
 ## Interpretation
 

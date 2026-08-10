@@ -18,12 +18,12 @@ fi
 
 if [[ "$QUICK" -eq 1 ]]; then
   banner "Part-0 prescribed ablations (quick/debug)"
-  run_py part0_ablations.py --quick
+  run_py "$ROOT/scripts/part0_ablations.py" --quick
 else
   # Separate processes keep JAX compilation/memory bounded and make long paper
   # ablations easier to resume/debug. Each section merges into the same JSON.
   for SECTION in capacity batch geometry safety differentiation; do
     banner "Part-0 prescribed ablation: $SECTION"
-    run_py part0_ablations.py --section "$SECTION"
+    run_py "$ROOT/scripts/part0_ablations.py" --section "$SECTION"
   done
 fi

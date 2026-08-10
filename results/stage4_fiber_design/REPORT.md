@@ -11,11 +11,11 @@ The candidate dictionary contains eleven radial RBF measurements and nests the t
 | fiber | construction objective | correction energy | forcing power | minimum ESS |
 |---|---:|---:|---:|---:|
 | hand | 0.64081952 | 0.22280602 | 20.630112 | 0.16401613 |
-| designed | 0.31942728 | 0.12299525 | 9.8216012 | 0.36945566 |
+| designed | 0.3235857 | 0.12097731 | 10.13042 | 0.36284271 |
 
 ## Primary paired effect
 
-Designed minus hand construction objective: `-0.32139225` (95% interval `-0.65719785` to `0.014413357`).
+Designed minus hand construction objective: `-0.31723383` (95% interval `-0.65258195` to `0.018114296`).
 
 The construction objective is the established integrated correction energy plus 0.02 times forcing power and the unchanged ESS-floor penalty.
 
