@@ -1,0 +1,66 @@
+W0813 07:50:21.347903  271453 cuda_executor.cc:1802] GPU interconnect information not available: INTERNAL: NVML doesn't support extracting fabric info or NVLink is not used by the device.
+W0813 07:50:21.350048  271334 cuda_executor.cc:1802] GPU interconnect information not available: INTERNAL: NVML doesn't support extracting fabric info or NVLink is not used by the device.
+Generating learned FM reference bank: mode=gauss-hermite, N=2592, time_n=21, RK4 substeps/interval=16
+========================================================================================================
+Stage D.3 — learned FM particle reference + finite/noisy measurements (NO CNF)
+========================================================================================================
+Backend       : /home/zanot/projects/tesseract2026/stage_b/stage_b2_transport_conditioned_design.py
+D0 checkpoint : /home/zanot/projects/tesseract2026/stage_d/stage_d0_flow_matching_reference.npz
+Grid/time     : 51x51 / 21
+FM bank       : gauss-hermite, GH order=36, Nbank=2592
+Condition     : N=100000, K=11, noise std=0.01
+Trials        : 24 (full action: 24)
+Held-out idx  : [1, 4, 6, 9, 11, 13, 14, 16, 18, 19]
+
+Building common physical/particle moment-feasibility intersections...
+  lift    : beta inequalities=1289, physical facets=20
+  tangent : beta inequalities=1427, physical facets=26
+  full    : beta inequalities=1397, physical facets=26
+Building common-random-number finite-measurement trial bank...
+  trial  1/24 alpha=0.54884 action=True
+  trial  2/24 alpha=0.68866 action=True
+  trial  3/24 alpha=0.88204 action=True
+  trial  4/24 alpha=1.00383 action=True
+  trial  5/24 alpha=0.79611 action=True
+  trial  6/24 alpha=0.93719 action=True
+  trial  7/24 alpha=1.04451 action=True
+  trial  8/24 alpha=0.90812 action=True
+  trial  9/24 alpha=0.62079 action=True
+  trial 10/24 alpha=0.54794 action=True
+  trial 11/24 alpha=0.64447 action=True
+  trial 12/24 alpha=0.76837 action=True
+  trial 13/24 alpha=0.78788 action=True
+  trial 14/24 alpha=0.88803 action=True
+  trial 15/24 alpha=0.54060 action=True
+  trial 16/24 alpha=0.59463 action=True
+  trial 17/24 alpha=0.80289 action=True
+  trial 18/24 alpha=0.74896 action=True
+  trial 19/24 alpha=0.62176 action=True
+  trial 20/24 alpha=0.68501 action=True
+  trial 21/24 alpha=0.89456 action=True
+  trial 22/24 alpha=0.74721 action=True
+  trial 23/24 alpha=0.73564 action=True
+  trial 24/24 alpha=0.91419 action=True
+
+========================================================================================================
+Stage D.3 — learned FM particle reference + finite/noisy measurements (NO CNF)
+========================================================================================================
+N=100000, K=11, detector noise std=0.0100, trials=24 (action=24)
+--------------------------------------------------------------------------------------------------------
+Lift       learned finite law=0.08527362 ± 1.24e-03 | meas Δ=-5.707e-05 | FM-vs-exact-particle law=-8.120e-05
+           learned finite A=1291.643 ± 110.21 | A meas infl.=+2.09% | ESSmin(mean)=0.909 | calmax(mean)=7.98e-10
+Tangent-TC learned finite law=0.08945527 ± 1.02e-03 | meas Δ=-4.344e-05 | FM-vs-exact-particle law=-8.512e-05
+           learned finite A=1029.973 ± 20.73 | A meas infl.=+0.87% | ESSmin(mean)=0.962 | calmax(mean)=6.48e-10
+Full-TC    learned finite law=0.08573180 ± 1.12e-03 | meas Δ=-5.746e-05 | FM-vs-exact-particle law=-8.795e-05
+           learned finite A=836.680 ± 19.78 | A meas infl.=+1.22% | ESSmin(mean)=0.918 | calmax(mean)=8.08e-10
+--------------------------------------------------------------------------------------------------------
+Full-Lift [analytic particles]: finite law Δ=+4.649e-04 ± 1.46e-04 | differential measurement degradation=-2.544e-07 ± 7.79e-06
+                             exact-action reduction=+33.02% | finite-action reduction=+33.96%
+Full-Lift [learned FM particles]: finite law Δ=+4.582e-04 ± 1.45e-04 | differential measurement degradation=-3.945e-07 ± 7.81e-06
+                             exact-action reduction=+34.30% | finite-action reduction=+35.22%
+Common feasibility projection active in 0.0% of design-trials; max projection norm=0.000e+00.
+Largest learned finite action [lift]: trial=10 alpha=0.54794 A=2690.073 infl=+19.86% projected=False
+Largest learned finite action [tangent]: trial=10 alpha=0.54794 A=1275.291 infl=+6.39% projected=False
+Largest learned finite action [full]: trial=10 alpha=0.54794 A=1089.365 infl=+10.19% projected=False
+========================================================================================================
+Saved diagnostics: /home/zanot/projects/tesseract2026/stage_d/d3_attribution_runs/stage_d3_detector_floor.json

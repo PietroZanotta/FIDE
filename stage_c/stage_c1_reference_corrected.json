@@ -1,0 +1,3909 @@
+{
+  "stage": "C.1 finite/noisy measurements with analytic stochastic interpolant",
+  "created_unix_time": 1786546618.636591,
+  "python": "3.12.3",
+  "jax": "0.8.1",
+  "backend_path": "/home/zanot/projects/tesseract2026/stage_b/stage_b2_transport_conditioned_design.py",
+  "stage_c_config": {
+    "preset": "reference",
+    "trials": 40,
+    "action_trials": 8,
+    "n_list": [
+      25,
+      100,
+      400
+    ],
+    "k_list": [
+      7,
+      11
+    ],
+    "noise_list": [
+      0.0,
+      0.01
+    ],
+    "seed": 20260812,
+    "smooth_lengthscale": 0.18,
+    "smooth_ridge": 0.015,
+    "variance_smooth_ridge": 0.06,
+    "variance_floor": 1e-08,
+    "lambda_clip": 80.0,
+    "newton_step_cap": 5.0,
+    "grid_n": 39,
+    "time_n": 21,
+    "alpha_eval_mode": "random",
+    "lift_design_deg": [
+      1.63,
+      161.63
+    ],
+    "tangent_design_deg": [
+      0.0,
+      154.7
+    ],
+    "full_design_deg": [
+      0.0,
+      160.0
+    ]
+  },
+  "stage_b_config": {
+    "r": 1.5,
+    "sigma": 0.3,
+    "sensor_radius": 1.5,
+    "sensor_width": 0.45,
+    "alpha_min": 0.5235987755982988,
+    "alpha_max": 1.0471975511965976,
+    "kappa": 0.3,
+    "L": 3.2,
+    "grid_n": 39,
+    "time_n": 21,
+    "alpha_n": 5,
+    "dense_angle_n": 37,
+    "mmd_bandwidth": 0.55,
+    "newton_steps": 18,
+    "newton_ridge": 1e-07,
+    "newton_damping": 1.0,
+    "operator_floor_rel": 2e-05,
+    "cg_tol": 1e-08,
+    "cg_maxiter": 520,
+    "gauge_strength": 1.0,
+    "lift_tau": 0.05,
+    "min_sep_deg": 20.0,
+    "tc_penalty": 2000.0,
+    "sep_penalty": 20000.0,
+    "optimizer_steps": 90,
+    "optimizer_lr": 0.035,
+    "optimizer_starts": 4,
+    "fd_eps": 0.00015,
+    "run_optimizer": false
+  },
+  "designs_rad": {
+    "lift": [
+      0.02844886680750757,
+      2.8209756699984347
+    ],
+    "tangent": [
+      0.0,
+      2.7000243528352277
+    ],
+    "full": [
+      0.0,
+      2.792526803190927
+    ]
+  },
+  "designs_deg": {
+    "lift": [
+      1.63,
+      161.63
+    ],
+    "tangent": [
+      0.0,
+      154.7
+    ],
+    "full": [
+      0.0,
+      160.0
+    ]
+  },
+  "population_design_check": {
+    "lift": {
+      "theta_deg": [
+        1.63,
+        161.63
+      ],
+      "lift_mmd2": 0.08718791748750318,
+      "full_action": 1757.131820673447,
+      "tangent_action": 4.150809494752053,
+      "hidden_action": 1752.9810111786949,
+      "max_poisson_rel_resid": 1.0023218595795676e-08,
+      "max_calibration_resid": 9.047095808467263e-11
+    },
+    "tangent": {
+      "theta_deg": [
+        0.0,
+        154.7
+      ],
+      "lift_mmd2": 0.09154259023768929,
+      "full_action": 1545.4369245617104,
+      "tangent_action": 3.586643683243024,
+      "hidden_action": 1541.8502808784674,
+      "max_poisson_rel_resid": 1.0016042301161572e-08,
+      "max_calibration_resid": 1.7662000617465763e-10
+    },
+    "full": {
+      "theta_deg": [
+        0.0,
+        160.0
+      ],
+      "lift_mmd2": 0.08732543016619305,
+      "full_action": 1241.431927119784,
+      "tangent_action": 3.6205278193085517,
+      "hidden_action": 1237.8113993004754,
+      "max_poisson_rel_resid": 9.959667559792767e-09,
+      "max_calibration_resid": 2.4850132484278774e-10
+    }
+  },
+  "conditions": [
+    {
+      "N": 25,
+      "K": 7,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.09342660096593236,
+            "se": 0.0015774679022252638,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09696680584549422,
+            "se": 0.0016563528250604534,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09071131298502377,
+            "se": 0.0015152690228057582,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0027152879809085838,
+            "se": 0.0008464867011549303,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.031059738212999177,
+            "se": 0.0015566574982448034,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.03653751628802318,
+            "se": 0.001363312066360121,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04528513655206384,
+            "se": 0.0021550442520589176,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.011425573948299947,
+            "se": 0.004652390033715229,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.020416160359662802,
+            "se": 0.0011823444376470088,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.195846375069276e-06,
+            "se": 2.4480989411504763e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 39.00785214342076,
+            "se": 2.825820209341946,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.4374599560950115e-15,
+            "se": 1.5115844026439687e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 2054.3046704127146,
+            "se": 545.6217985549538,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1204.9280254360501,
+            "se": 3.3147330187125665,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.7083331336007874,
+            "se": 0.4552189335522147,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.932287261426096e-09,
+            "se": 2.7746698044268217e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09961019504106784,
+            "se": 0.0014413794310022044,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10343265588107779,
+            "se": 0.0015128550810089008,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09460579022725994,
+            "se": 0.0012843209515394876,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.005004404813807898,
+            "se": 0.0008212380260162275,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03017858335514645,
+            "se": 0.0015454386849972396,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.033610599129095614,
+            "se": 0.001287835359954203,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.043708133472823485,
+            "se": 0.0020759792242924205,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.013537214408771698,
+            "se": 0.005102842381824865,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.01776437176420525,
+            "se": 0.001192013505892138,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 3.8737408754640495e-06,
+            "se": 2.214940749656818e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 41.62916206653935,
+            "se": 3.011358189683496,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.5630539357557325e-15,
+            "se": 1.7126178051116034e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1733.201699758933,
+            "se": 192.5551068867301,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1391.0425288074603,
+            "se": 14.667030952054374,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.2492608114525754,
+            "se": 0.1435532970421653,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.936518694581264e-09,
+            "se": 2.3993507456033403e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.09390631454156573,
+            "se": 0.0015350651130463682,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09745902401248763,
+            "se": 0.001607074850996567,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09067242015578228,
+            "se": 0.0014076079898860518,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0032338943857834557,
+            "se": 0.0008332803197846321,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.030594491415458842,
+            "se": 0.0015152301857706914,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.03561788416605101,
+            "se": 0.001314398862378721,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04528601923416835,
+            "se": 0.0021401892686152045,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.011404943402405672,
+            "se": 0.004771391286268983,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.020416153837301877,
+            "se": 0.0012217734308323123,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 3.940117872477982e-06,
+            "se": 2.1230702038199957e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 39.564725595292074,
+            "se": 2.800943949495784,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.453939829116791e-15,
+            "se": 1.4161071396984286e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1694.9824011616863,
+            "se": 383.5937356932561,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1104.8452293607818,
+            "se": 5.998458299582196,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.5388524068099043,
+            "se": 0.351679008147151,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.773559006173418e-09,
+            "se": 4.312844369192538e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.0004797135756333802,
+          "se_difference": 0.00011503247761684417,
+          "n": 40,
+          "a_better_fraction": 0.275
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.005703880499502105,
+          "se_difference": 0.0004148548638201641,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.0005186064048748723,
+          "se_difference": 0.00012179506194820057,
+          "n": 40,
+          "a_better_fraction": 0.275
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.001770510428024443,
+          "se_difference": 0.00037791210172643153,
+          "n": 40,
+          "a_better_fraction": 0.775
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": -0.169480726790883,
+          "se_difference": 0.1491702755368171,
+          "n": 8,
+          "a_better_fraction": 0.375
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.2895915953573289,
+          "se_difference": 0.21400495939454692,
+          "n": 8,
+          "a_better_fraction": 0.125
+        }
+      }
+    },
+    {
+      "N": 100,
+      "K": 7,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.08556911743917697,
+            "se": 0.0016459827857958108,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.08880939919810868,
+            "se": 0.0017581562756661606,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08865528633502437,
+            "se": 0.001532958750768872,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.003086168895847391,
+            "se": 0.00030862642144007576,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03667958494635457,
+            "se": 0.001977167582073797,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.017628683475158356,
+            "se": 0.0007702924709982907,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04469959849441304,
+            "se": 0.002110961963974683,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.3773175957064374e-10,
+            "se": 2.8068335700067663e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0052533166675639755,
+            "se": 0.00010381916791737925,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.316866778383103e-06,
+            "se": 9.271245362357409e-09,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 32.62759671150336,
+            "se": 0.10495113938061369,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.7856623258104563e-15,
+            "se": 2.12050270341107e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1185.1167795320885,
+            "se": 41.48063081950545,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1206.35899333329,
+            "se": 2.880806327872775,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9822286745741655,
+            "se": 0.033761828992491666,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.885031895512657e-09,
+            "se": 3.480178967227947e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09283122355681203,
+            "se": 0.001421814016220017,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09649530117778402,
+            "se": 0.0015229456267243629,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09311298261893193,
+            "se": 0.0012651194528143289,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.0002817590621198931,
+            "se": 0.0002647432434193686,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03579462994005776,
+            "se": 0.0018918284114040021,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.01600543724344854,
+            "se": 0.0007248003092344071,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04328849499784393,
+            "se": 0.002023214132081122,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.159133351062691e-10,
+            "se": 2.383527915879962e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.004580054110706883,
+            "se": 0.00010041228827658538,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.0864419252135776e-06,
+            "se": 1.0564174148232386e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.609486180267,
+            "se": 0.07001763494983017,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.970280271741288e-15,
+            "se": 2.442337555576049e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1532.7807959422794,
+            "se": 27.07370421693765,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1404.6132961320118,
+            "se": 15.629386715032716,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0921650692334164,
+            "se": 0.02281999838407553,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.815928599952027e-09,
+            "se": 4.561729796071359e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.08641367287067367,
+            "se": 0.0015460939338793602,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.08968767772564674,
+            "se": 0.001653617514451122,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0888426078390092,
+            "se": 0.0014125445682651738,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.0024289349683355222,
+            "se": 0.0002979585436236006,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.0372521775517652,
+            "se": 0.0018400941905978884,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.01709866656032042,
+            "se": 0.0007498102384199416,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04533567959862648,
+            "se": 0.001961434330084612,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.2584660702749186e-10,
+            "se": 2.4095446650616808e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.005200562323445883,
+            "se": 9.842009346160293e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.087688417588561e-06,
+            "se": 1.0563885271541423e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.349985683249066,
+            "se": 0.10137498561907715,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 3.4139358007223564e-15,
+            "se": 2.2427299559403588e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1149.0096812034944,
+            "se": 35.66987767839873,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1109.9143095294144,
+            "se": 6.540993723168021,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0353249206549249,
+            "se": 0.03235177186661758,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.87289269721788e-09,
+            "se": 5.238244665831529e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.0008445554314966987,
+          "se_difference": 0.00012181712321095564,
+          "n": 40,
+          "a_better_fraction": 0.125
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.006417550686138361,
+          "se_difference": 0.00025656154687243757,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.000657233927511869,
+          "se_difference": 7.316838307745108e-05,
+          "n": 40,
+          "a_better_fraction": 0.125
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.002147175906215629,
+          "se_difference": 0.00018907294331722762,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.05309624608075943,
+          "se_difference": 0.005740919154508089,
+          "n": 8,
+          "a_better_fraction": 0.0
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": -0.056840148578491345,
+          "se_difference": 0.019157486886971845,
+          "n": 8,
+          "a_better_fraction": 0.875
+        }
+      }
+    },
+    {
+      "N": 400,
+      "K": 7,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.08634098399599212,
+            "se": 0.0016498633491351107,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.0896180595707631,
+            "se": 0.0017666121755200957,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09016735333839157,
+            "se": 0.001520240197588717,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.003826369342399443,
+            "se": 0.0002214418106037988,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.04105990117420163,
+            "se": 0.0015815692962887916,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.008782566570818221,
+            "se": 0.0003966920651549512,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04591421072794822,
+            "se": 0.0017226306637544864,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.3445649988118172e-10,
+            "se": 3.25263825151709e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0013217482639752303,
+            "se": 2.0099667597319777e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.2964412835795586e-06,
+            "se": 9.56618205379048e-09,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 32.75461479281083,
+            "se": 0.07029474835880789,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 3.166390760700466e-15,
+            "se": 1.837963058890209e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1180.9208622768488,
+            "se": 33.12340780121727,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1212.214345508728,
+            "se": 3.2701199823600833,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9742803943807221,
+            "se": 0.0277065478338126,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.843684595650058e-09,
+            "se": 2.8164971087237055e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09286204054411604,
+            "se": 0.001464599902647062,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09653198094689033,
+            "se": 0.0015732446839465954,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09402928489517315,
+            "se": 0.0013096291241185385,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.001167244351057119,
+            "se": 0.0001926170752191476,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.040016744900052234,
+            "se": 0.001516169099024466,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.008191309904205721,
+            "se": 0.00039344373585587915,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.0448401713747378,
+            "se": 0.0016544017292270613,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.3489916998048941e-10,
+            "se": 2.1125618144017983e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0011641280448527207,
+            "se": 2.0482205435567803e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.067485706013529e-06,
+            "se": 1.0073798964918425e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.81172946514219,
+            "se": 0.03796225112485448,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 3.243585955381434e-15,
+            "se": 2.4438559503272517e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1488.3039593360488,
+            "se": 35.302151998133986,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1404.53920254087,
+            "se": 12.43890462822337,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0605941112238755,
+            "se": 0.028218370131539595,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.817203561842466e-09,
+            "se": 4.391330948306698e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.08704363340488089,
+            "se": 0.0015587466966142658,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09035059459067421,
+            "se": 0.0016717567608410188,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0901392583832119,
+            "se": 0.0014182118204452933,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.0030956249783310095,
+            "se": 0.00021225821064111642,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.04160544749675284,
+            "se": 0.0014973105296450624,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.008647393440337419,
+            "se": 0.0003947177878111928,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.046556144712534574,
+            "se": 0.0016297865171245693,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 9.292275804914105e-11,
+            "se": 1.3828677649637082e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0013172082032965981,
+            "se": 1.953660215402711e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.0687344521319564e-06,
+            "se": 1.0073832051674923e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.48068676487617,
+            "se": 0.06496256093439497,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 3.0760116676020744e-15,
+            "se": 1.9943864808595406e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1122.2013387851657,
+            "se": 30.80599078616525,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1112.1282532787545,
+            "se": 5.219863562793391,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0094629676589344,
+            "se": 0.02911696676780072,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.916904668214188e-09,
+            "se": 2.7995097844936643e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.0007026494088887766,
+          "se_difference": 0.0001004746061070167,
+          "n": 40,
+          "a_better_fraction": 0.175
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.005818407139235157,
+          "se_difference": 0.00015511963445596745,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.0007307443640684334,
+          "se_difference": 4.2098839925679087e-05,
+          "n": 40,
+          "a_better_fraction": 0.0
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.0019283806272738905,
+          "se_difference": 0.00010376693957718268,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.03518257327821228,
+          "se_difference": 0.00967344296965639,
+          "n": 8,
+          "a_better_fraction": 0.125
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": -0.05113114356494078,
+          "se_difference": 0.014032309171110624,
+          "n": 8,
+          "a_better_fraction": 1.0
+        }
+      }
+    },
+    {
+      "N": 25,
+      "K": 11,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.0931104117304192,
+            "se": 0.001802245123752812,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09794269666378236,
+            "se": 0.0018834593577254023,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08817457134934473,
+            "se": 0.0016792686964742375,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.004935840381074486,
+            "se": 0.0006858728924087865,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.026132630289038415,
+            "se": 0.000822395054463231,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.037712389512690396,
+            "se": 0.001156811205599832,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03750239476301531,
+            "se": 0.0013281562325790305,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.007011346422424063,
+            "se": 0.0027725682456258955,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.01865974557793194,
+            "se": 0.000794093118394103,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.041834772185563e-06,
+            "se": 2.348337255277607e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 43.108586616488424,
+            "se": 3.5288449360415965,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.2590870146776966e-15,
+            "se": 1.9567688486071268e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 3407.2070811381527,
+            "se": 1951.2914240569564,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1202.7278016499115,
+            "se": 4.715736645585538,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 2.849437696721522,
+            "se": 1.6416325484586123,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.92357926108724e-09,
+            "se": 2.0590072878843848e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09907915103879147,
+            "se": 0.0016142406197835147,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10421741393704562,
+            "se": 0.001691019918091243,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0924463840334,
+            "se": 0.0014585879438767603,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.006632767005391465,
+            "se": 0.0005360777885626311,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.025435548041433848,
+            "se": 0.0008840670346775614,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.035347196319721,
+            "se": 0.0011388645143591023,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03619918772047108,
+            "se": 0.0013668732447013035,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.004768657077343826,
+            "se": 0.002054526363570799,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.016285578067373435,
+            "se": 0.0007830866559997609,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 3.854655550800731e-06,
+            "se": 1.8601541380835354e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 40.9464987281656,
+            "se": 3.0715586137535644,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.9834828224318814e-15,
+            "se": 1.415727853363677e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 7989.674870671712,
+            "se": 5627.030999939706,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1397.9031510412178,
+            "se": 17.903827340448206,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 5.874446792863972,
+            "se": 4.178818144752208,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.884850395222318e-09,
+            "se": 3.0144631805146566e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.09362982720551534,
+            "se": 0.0017266171415444601,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09847787654458659,
+            "se": 0.001804105713646163,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08827087716209239,
+            "se": 0.0015733315346592692,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.00535895004342295,
+            "se": 0.0006478115946233319,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.026191161303301465,
+            "se": 0.0007759480194510198,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.037160287858258124,
+            "se": 0.0011512420080599967,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03818095789539157,
+            "se": 0.001300919292459205,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.006499334346284147,
+            "se": 0.0025368631315116556,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.018574340038901804,
+            "se": 0.0008102581280175113,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 3.7686414630514496e-06,
+            "se": 2.0734707580685848e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 43.618056896351455,
+            "se": 3.4938332385188744,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.3646015701039856e-15,
+            "se": 1.424128871787166e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 7082.5092699801,
+            "se": 5560.86324407423,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1105.7527237071479,
+            "se": 8.00932792264716,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 6.511815480170228,
+            "se": 5.139333694858439,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.773554124211676e-09,
+            "se": 3.0764685576876595e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.0005194154750961244,
+          "se_difference": 0.00014733822395526813,
+          "n": 40,
+          "a_better_fraction": 0.25
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.005449323833276139,
+          "se_difference": 0.0003527464523204035,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.00042310966234846445,
+          "se_difference": 0.00014617031274687665,
+          "n": 40,
+          "a_better_fraction": 0.325
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.0012738169619685147,
+          "se_difference": 0.0003448812316213492,
+          "n": 40,
+          "a_better_fraction": 0.725
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 3.662377783448706,
+          "se_difference": 3.4989441878160967,
+          "n": 8,
+          "a_better_fraction": 0.25
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.6373686873062567,
+          "se_difference": 1.033263463642653,
+          "n": 8,
+          "a_better_fraction": 0.25
+        }
+      }
+    },
+    {
+      "N": 100,
+      "K": 11,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.08574399312624115,
+            "se": 0.0016056167185458927,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09024489011310617,
+            "se": 0.0016897506053498424,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08738762656182208,
+            "se": 0.0015672230294080597,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.0016436334355809344,
+            "se": 0.00022607191867601864,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03242582954239065,
+            "se": 0.0015180926632088723,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.01987597231906104,
+            "se": 0.0006023674317604013,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04096928844240616,
+            "se": 0.0016682689123486934,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.4612105121117174e-10,
+            "se": 2.8644985440195652e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.005321964253091116,
+            "se": 9.555933832803677e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.454663191936038e-06,
+            "se": 8.23303596882183e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 31.79200923992638,
+            "se": 0.101875657690198,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.870360199525024e-15,
+            "se": 2.167102426692693e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1183.9167211358654,
+            "se": 69.68238017217475,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1210.882839022875,
+            "se": 4.7627693976082135,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9769930390678296,
+            "se": 0.0558507664925771,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.900560146842705e-09,
+            "se": 2.2193441362076198e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09222562198268217,
+            "se": 0.0015140423634254357,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09706874879785364,
+            "se": 0.0015935959019850966,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09160049247171524,
+            "se": 0.0013736849154820901,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0006251295109669094,
+            "se": 0.00023074287413109136,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.031700073795639896,
+            "se": 0.0014205685751589876,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.018322161451122213,
+            "se": 0.0006000189511283981,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.039630705276929995,
+            "se": 0.0015634094063303999,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 7.441604306772975e-11,
+            "se": 1.2434593503513065e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.004681697745668184,
+            "se": 9.983872718845315e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.202651133636396e-06,
+            "se": 6.889675045978881e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.198099662421804,
+            "se": 0.07060255764443932,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.9073965457371287e-15,
+            "se": 2.424028360949451e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1554.928980964653,
+            "se": 35.61175527645639,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1401.500354450281,
+            "se": 13.6764443872896,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.110545512266499,
+            "se": 0.0296278372703844,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.888275645470629e-09,
+            "se": 2.574827814310399e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.08639027019924257,
+            "se": 0.0015391284767970507,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09092759704812084,
+            "se": 0.0016197799628544505,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08748166369650837,
+            "se": 0.0014718458173770788,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.001091393497265798,
+            "se": 0.0002110816065484361,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.032715639168722874,
+            "se": 0.0013962651751686277,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.019389810462880817,
+            "se": 0.00060120750123346,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.04137614273111075,
+            "se": 0.001517610936772862,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 6.50902516652338e-11,
+            "se": 1.5751062836786292e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.005296088986216668,
+            "se": 9.749959161378876e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.2038924911501735e-06,
+            "se": 6.889553806204014e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 32.5347675545752,
+            "se": 0.09752734167962515,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.5516047608142857e-15,
+            "se": 1.2802284265200643e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1147.9799039013405,
+            "se": 56.74748129040949,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1110.0950344631585,
+            "se": 5.964646434702999,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0337482900183717,
+            "se": 0.050231619382685874,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.927141057720865e-09,
+            "se": 3.1293016280981226e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.0006462770730014157,
+          "se_difference": 8.737727775895763e-05,
+          "n": 40,
+          "a_better_fraction": 0.125
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.005835351783439595,
+          "se_difference": 0.0001645718193339083,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.0005522399383151366,
+          "se_difference": 6.741657130985879e-05,
+          "n": 40,
+          "a_better_fraction": 0.075
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.0017165230082327072,
+          "se_difference": 0.0001559799117509825,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.056755250950541916,
+          "se_difference": 0.011464934691476511,
+          "n": 8,
+          "a_better_fraction": 0.0
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": -0.0767972222481273,
+          "se_difference": 0.04018187362683317,
+          "n": 8,
+          "a_better_fraction": 0.75
+        }
+      }
+    },
+    {
+      "N": 400,
+      "K": 11,
+      "obs_noise_std": 0.0,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.08193803332599692,
+            "se": 0.0012735598562309326,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.08624093415330258,
+            "se": 0.0013401614794647054,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08442613360416802,
+            "se": 0.0012074410705027795,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.002488100278171094,
+            "se": 0.00015582201042250223,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.029233007307123093,
+            "se": 0.0015221054291725369,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.010103694576919859,
+            "se": 0.0004016378000465377,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.033423866763720604,
+            "se": 0.0016593985901712648,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.216721935891032e-10,
+            "se": 2.544531992373913e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0013576703187854224,
+            "se": 1.8287581492712756e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.333016796728443e-06,
+            "se": 1.8179089673797606e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 32.2758525909225,
+            "se": 0.057705367757495796,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.80183862222394e-15,
+            "se": 1.8363726687911594e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1178.0927217999822,
+            "se": 23.071749197165655,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1216.1030750720706,
+            "se": 2.784696873694251,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9687039906287978,
+            "se": 0.01851832655153027,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.871776676329357e-09,
+            "se": 3.967977934517214e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.08832688172544549,
+            "se": 0.0011204289390292714,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09296593645328054,
+            "se": 0.0011791960345760974,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0892351387683403,
+            "se": 0.000986118852545687,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.000908257042894796,
+            "se": 0.00016934849371111284,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.029551475593057586,
+            "se": 0.0014378146567194422,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.009399211306474548,
+            "se": 0.0003993430807336352,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03371779677954057,
+            "se": 0.00157896401647427,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 7.486268436428759e-11,
+            "se": 1.0745380848432688e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0012026288156063679,
+            "se": 1.6723926265905105e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.099676798997111e-06,
+            "se": 1.776519224186536e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.64329237649089,
+            "se": 0.03929494296154445,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.5222011978964788e-15,
+            "se": 2.2449223574722105e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1478.4820348755607,
+            "se": 16.55931179021775,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1414.2100640780393,
+            "se": 10.446059628402304,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0459520590677391,
+            "se": 0.01510877914628608,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.904046269411743e-09,
+            "se": 1.9421116720243912e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.08268296057706086,
+            "se": 0.001202846649935039,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.08702783893834512,
+            "se": 0.0012656693223013517,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08476691386738613,
+            "se": 0.0011082667717160048,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": -0.0020839532903252603,
+            "se": 0.00015579512740708317,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.030489690064769225,
+            "se": 0.0014214633312412547,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.0099412010430665,
+            "se": 0.00039507967552614625,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.034817280871051424,
+            "se": 0.0015514067574062271,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 1.2502451699211603e-10,
+            "se": 2.7094633978982e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0013498644763908086,
+            "se": 1.6929984955771217e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 4.1009259807692175e-06,
+            "se": 1.7764915159756796e-08,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.0502478933223,
+            "se": 0.05335891186690295,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 2.8503241433774916e-15,
+            "se": 1.739241196078175e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1118.9101251305738,
+            "se": 21.27173047228451,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1116.7613021867764,
+            "se": 4.260342297464858,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.002036316929853,
+            "se": 0.01951405088448746,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.889553568512193e-09,
+            "se": 3.6393980302519453e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.000744927251063943,
+          "se_difference": 8.260389550082067e-05,
+          "n": 40,
+          "a_better_fraction": 0.05
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.005643921148384643,
+          "se_difference": 0.00014966438824988318,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.00040414698784583343,
+          "se_difference": 4.821708554894219e-05,
+          "n": 40,
+          "a_better_fraction": 0.075
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.001175696247430464,
+          "se_difference": 8.02785700080206e-05,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.03333232630105494,
+          "se_difference": 0.004024510424205697,
+          "n": 8,
+          "a_better_fraction": 0.0
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": -0.04391574213788636,
+          "se_difference": 0.010994958278838906,
+          "n": 8,
+          "a_better_fraction": 1.0
+        }
+      }
+    },
+    {
+      "N": 25,
+      "K": 7,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.09987942613563468,
+            "se": 0.0014981461708466857,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10360998490995776,
+            "se": 0.001594857470855504,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0874544689635786,
+            "se": 0.0014044520472382108,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.012424957172056068,
+            "se": 0.0008724213667323118,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.034311556363533224,
+            "se": 0.0015038472609163812,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.03871865063668107,
+            "se": 0.0021062438236888613,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03673562490133837,
+            "se": 0.001947977092597038,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0001467994885039336,
+            "se": 0.00010334655947037505,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.018644585336267394,
+            "se": 0.000742045068117339,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00011120229417827428,
+            "se": 4.059800095618388e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 36.901666318633815,
+            "se": 2.769641124073129,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.428219521815155e-15,
+            "se": 7.673388901466214e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1419.3056267998297,
+            "se": 150.4232068252229,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1211.9213132318603,
+            "se": 4.174484232779405,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.1709606427916708,
+            "se": 0.12372737222719236,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.927072551521072e-09,
+            "se": 1.418872864190251e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.1038710268304942,
+            "se": 0.0013647454554342438,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10788126671486083,
+            "se": 0.0014531766870957824,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09192792900102228,
+            "se": 0.0011682438350359959,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.011943097829471925,
+            "se": 0.0008738184018063557,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.031803424570126484,
+            "se": 0.0014837264484897016,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.036404756509577314,
+            "se": 0.0020595941673805453,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03491621944197119,
+            "se": 0.0019564851046783597,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0001605900680026428,
+            "se": 9.13158651743716e-05,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.016691056324307275,
+            "se": 0.0006668076801246128,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00011110213331772269,
+            "se": 4.273429385783904e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 37.78385759361161,
+            "se": 2.7253015658128237,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.445198127836278e-15,
+            "se": 8.245686014630933e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1486.5122322445368,
+            "se": 198.31848440579768,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1386.3805419703874,
+            "se": 8.491617575762158,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0707873392875622,
+            "se": 0.14177597603512163,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.840313973243154e-09,
+            "se": 6.199172817442106e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.10023831711479388,
+            "se": 0.001422890792328426,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10400465913489867,
+            "se": 0.0015179338068983233,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0876774171560282,
+            "se": 0.0012958496261483434,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.012560899958765689,
+            "se": 0.0008697384309234154,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03368894753729175,
+            "se": 0.0015005240713344015,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.038040545260411514,
+            "se": 0.0020781440032985304,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03629849441702607,
+            "se": 0.0019618752538800906,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00014739093010307757,
+            "se": 9.787087070851619e-05,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.01867634977283194,
+            "se": 0.0007337328324298568,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00011068834286544222,
+            "se": 4.289059975394561e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 37.56653251802559,
+            "se": 2.8263350434108148,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.4350066274149143e-15,
+            "se": 7.285718098102743e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1329.1021163210535,
+            "se": 174.08358959887488,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1105.798387403758,
+            "se": 4.551736217331477,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.2012111811566695,
+            "se": 0.15653178675743257,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.894529369607822e-09,
+            "se": 2.603672652932345e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.00035889097915920153,
+          "se_difference": 0.0001313799692680659,
+          "n": 40,
+          "a_better_fraction": 0.35
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.003632709715700333,
+          "se_difference": 0.0002126171394728016,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.00013594278670962272,
+          "se_difference": 8.270267925798637e-05,
+          "n": 40,
+          "a_better_fraction": 0.3
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.0006178021292937643,
+          "se_difference": 0.00019891423545260865,
+          "n": 40,
+          "a_better_fraction": 0.3
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.030250538364998844,
+          "se_difference": 0.045475292962692364,
+          "n": 8,
+          "a_better_fraction": 0.5
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.1304238418691075,
+          "se_difference": 0.03102275109516388,
+          "n": 8,
+          "a_better_fraction": 0.125
+        }
+      }
+    },
+    {
+      "N": 100,
+      "K": 7,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.09393972502112743,
+            "se": 0.001706509452937119,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09739435898534798,
+            "se": 0.0018183730908495539,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09113856313878274,
+            "se": 0.0016820519913196786,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.002801161882344711,
+            "se": 0.00046762739896031127,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.01918687017822358,
+            "se": 0.00095207658567021,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.020164814217682882,
+            "se": 0.000890802324486348,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.022989425800995347,
+            "se": 0.001171139327242542,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0007978461373490473,
+            "se": 0.0004072093380510793,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.007015357918872964,
+            "se": 0.0001405956440136906,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010988122743423923,
+            "se": 1.4936740702085693e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 39.374106211456706,
+            "se": 2.8728686172381552,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.6770439204005783e-15,
+            "se": 7.907836527660432e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1548.833259481045,
+            "se": 203.7873742599396,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1207.998308308955,
+            "se": 4.085809786103934,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.2814704106834918,
+            "se": 0.1674024662216492,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.907130092543361e-09,
+            "se": 3.197991509337253e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09796114189082201,
+            "se": 0.0015214074961760488,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10176226972968964,
+            "se": 0.0016256630785038515,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09510766232052296,
+            "se": 0.0014366825272403162,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0028534795702990397,
+            "se": 0.0005099691503022643,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.017955377550995983,
+            "se": 0.0008797745445072946,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.018992876134033658,
+            "se": 0.0008377257014927909,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.021765904323626552,
+            "se": 0.0010900964247092951,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0008858423296951426,
+            "se": 0.00047453689052357747,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0065309953579970725,
+            "se": 0.00014040707358377015,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010943293668941602,
+            "se": 1.4697308498899844e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 40.51367593725378,
+            "se": 2.7896686676399334,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7218865222545788e-15,
+            "se": 8.881553106031882e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1563.7485080628078,
+            "se": 183.57834407533136,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1390.1761812821203,
+            "se": 12.586578110744497,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.1226452759195953,
+            "se": 0.12836484696770012,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.861783017593235e-09,
+            "se": 3.463878564147767e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.09399282672084958,
+            "se": 0.0016050673702482482,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09747552607674333,
+            "se": 0.0017144642043069053,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09112222098959291,
+            "se": 0.001566364682405102,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0028706057312566646,
+            "se": 0.0004836213339308521,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.01884379832076049,
+            "se": 0.0009270628805144628,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.019827424668621953,
+            "se": 0.0008798642254785848,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.02264659935392831,
+            "se": 0.0011494030693365066,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0008728598468293189,
+            "se": 0.00043760966716991745,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.007079443136114023,
+            "se": 0.00013999197020256258,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010930240697498077,
+            "se": 1.4697866658436036e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 40.07402211774489,
+            "se": 2.844546823319757,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7741016988814807e-15,
+            "se": 1.049514172777172e-16,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1377.3424276822739,
+            "se": 188.84551640345387,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1105.270945316911,
+            "se": 5.9104185169957075,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.2449013589935949,
+            "se": 0.16890176085030378,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.854639071294487e-09,
+            "se": 3.9544004885867744e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 5.310169972213008e-05,
+          "se_difference": 0.0001391608116252035,
+          "n": 40,
+          "a_better_fraction": 0.55
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.003968315169972429,
+          "se_difference": 0.0001886422404426897,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 6.944384891195318e-05,
+          "se_difference": 5.448397337967062e-05,
+          "n": 40,
+          "a_better_fraction": 0.45
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 1.712616095762489e-05,
+          "se_difference": 0.00010079246722106175,
+          "n": 40,
+          "a_better_fraction": 0.525
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": -0.03656905168989669,
+          "se_difference": 0.028358693818367788,
+          "n": 8,
+          "a_better_fraction": 0.75
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.12225608307399966,
+          "se_difference": 0.04646800888116425,
+          "n": 8,
+          "a_better_fraction": 0.125
+        }
+      }
+    },
+    {
+      "N": 400,
+      "K": 7,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        3,
+        7,
+        10,
+        13,
+        17,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.15000000000000002,
+        0.35000000000000003,
+        0.5,
+        0.65,
+        0.8500000000000001,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.09060205184364373,
+            "se": 0.0014623939389318099,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09386408794401493,
+            "se": 0.0015555740236327604,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08922690286045903,
+            "se": 0.001452480893177693,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.001375148983184693,
+            "se": 0.0003014917990055766,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.013817810625896477,
+            "se": 0.0004659241315869404,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.01254744230450775,
+            "se": 0.0004291743264413578,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.015745196917283905,
+            "se": 0.0005134273206407412,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0002125230916997442,
+            "se": 0.00021252292069034805,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0031629756213594276,
+            "se": 5.199094501122151e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010405252106326953,
+            "se": 3.5500473271099967e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 32.60938868225206,
+            "se": 1.279055315928977,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7903213633818637e-15,
+            "se": 8.620134091430611e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1119.352738994422,
+            "se": 74.62215584292557,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1206.465613956293,
+            "se": 4.051816283667973,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9282104969957057,
+            "se": 0.06298190962030957,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.895617282072227e-09,
+            "se": 4.321633038633697e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09494563619193448,
+            "se": 0.0012697055374577405,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09857264995115833,
+            "se": 0.0013568948469041603,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0933177382896416,
+            "se": 0.0012240087679281145,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0016278979022928731,
+            "se": 0.00033869942641981594,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.013339768139836653,
+            "se": 0.00046374219148298605,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.012053747548126954,
+            "se": 0.0004100924557512303,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.015223998175791753,
+            "se": 0.0004957971396973782,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0001899705700204017,
+            "se": 0.0001899704910013251,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.0031122708246726395,
+            "se": 5.04153899595291e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010358348794516957,
+            "se": 3.228537631822071e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 34.36258831425424,
+            "se": 1.294372377884819,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.787459069646502e-15,
+            "se": 7.937915459493124e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1322.885693621675,
+            "se": 83.58566947859498,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1381.5444886426417,
+            "se": 10.805292416137755,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9573591936630255,
+            "se": 0.060492716623895514,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.941281272737384e-09,
+            "se": 1.5730292928801335e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.09077511679914636,
+            "se": 0.001366889499278928,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09406752153854278,
+            "se": 0.0014579249362320563,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08928592857265502,
+            "se": 0.0013460200874458148,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.001489188226491335,
+            "se": 0.00031181349088470027,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.013732632375480131,
+            "se": 0.0004605282341316101,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.012404449954365498,
+            "se": 0.00041953385249111794,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.015650399225499413,
+            "se": 0.0004987369053278195,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.0002091223733731536,
+            "se": 0.0002091222495044776,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.003214671901813198,
+            "se": 5.1563885581947707e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010358471448371307,
+            "se": 3.2284794425245554e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.42478151104458,
+            "se": 1.2666319308317315,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7636933580256199e-15,
+            "se": 8.120917223695543e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1020.5375950177972,
+            "se": 71.1444975443944,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1101.719733197407,
+            "se": 5.287446520462526,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9266843862934553,
+            "se": 0.06576410848020635,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.909317406427599e-09,
+            "se": 3.4584342416635996e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.00017306495550263034,
+          "se_difference": 0.0001210266124831846,
+          "n": 40,
+          "a_better_fraction": 0.5
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.004170519392788123,
+          "se_difference": 0.00017767927354267097,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.00011403924330664196,
+          "se_difference": 3.041287997373466e-05,
+          "n": 40,
+          "a_better_fraction": 0.3
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -0.00013870967580153815,
+          "se_difference": 5.913415956909868e-05,
+          "n": 40,
+          "a_better_fraction": 0.65
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": -0.0015261107022503523,
+          "se_difference": 0.012970828905844622,
+          "n": 8,
+          "a_better_fraction": 0.75
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": -0.030674807369570053,
+          "se_difference": 0.023069902733494605,
+          "n": 8,
+          "a_better_fraction": 0.875
+        }
+      }
+    },
+    {
+      "N": 25,
+      "K": 11,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.10147478157935233,
+            "se": 0.0016251463438840706,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10679893242303953,
+            "se": 0.0017111826498451815,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08745415202775744,
+            "se": 0.001584738663646289,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.014020629551594905,
+            "se": 0.0008997464270351567,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03622559302524573,
+            "se": 0.0018146451897527397,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.04154135532983895,
+            "se": 0.001212509747762193,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03656830119250988,
+            "se": 0.002346157726237735,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00011012865917902784,
+            "se": 9.77351013175889e-05,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.01778585903164599,
+            "se": 0.0006884576268187618,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.0001012473348577867,
+            "se": 3.524706811748437e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 34.735957477050775,
+            "se": 2.189495218740243,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.3209051907825398e-15,
+            "se": 6.846144508425453e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1395.2422797776146,
+            "se": 355.0468229439728,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1206.8384784558298,
+            "se": 4.041918487699678,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.1563358765377902,
+            "se": 0.2940222905859729,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.81774971117306e-09,
+            "se": 4.0836530890585847e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.1046070055083292,
+            "se": 0.0014468686807195814,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.11010021090983517,
+            "se": 0.0015235389462677662,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09185105348529696,
+            "se": 0.0013616185272077423,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.012755952023032239,
+            "se": 0.0007610192176090903,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03354097398326039,
+            "se": 0.0017015174896026415,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.03856777465701566,
+            "se": 0.0010901699972459089,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03438395207661747,
+            "se": 0.0022279639361510004,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 4.117863596088292e-05,
+            "se": 3.091138595315669e-05,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.016121365224204164,
+            "se": 0.0006286862811236349,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010306213220519599,
+            "se": 4.0487916449136875e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 35.824895729638115,
+            "se": 2.166888576147775,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.1338586319853405e-15,
+            "se": 6.885931970308097e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1329.1030817787118,
+            "se": 357.3424405203683,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1386.0782608893323,
+            "se": 12.333502694045118,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9489968410346924,
+            "se": 0.24441563626698184,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.912150441468633e-09,
+            "se": 3.746413659801951e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.10161535043296559,
+            "se": 0.0015469696516091837,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.10694782131287517,
+            "se": 0.0016292027128989698,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08759758580774038,
+            "se": 0.0014798985475924567,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.01401776462522522,
+            "se": 0.0008646052140620873,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.03594732816718639,
+            "se": 0.0017787301055089539,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.04079579647104716,
+            "se": 0.001150583447898157,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.03619110084077815,
+            "se": 0.002332814883815082,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00010931536876458208,
+            "se": 9.036667724570823e-05,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.017874925367676296,
+            "se": 0.0006720980979032919,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010040466569393735,
+            "se": 3.5236388315799935e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 35.792845031477,
+            "se": 2.2769926541137404,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.3752020355806138e-15,
+            "se": 7.255547039957293e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1224.279485962517,
+            "se": 337.46107371416343,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1103.4670058245042,
+            "se": 5.4750815029313,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.1041369475775697,
+            "se": 0.2989333947349404,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.870223839810231e-09,
+            "se": 2.0371546866708876e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.00014056885361326787,
+          "se_difference": 0.0001390646505372851,
+          "n": 40,
+          "a_better_fraction": 0.5
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.00299165507536359,
+          "se_difference": 0.00025183843512322824,
+          "n": 40,
+          "a_better_fraction": 0.925
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -2.8649263696819536e-06,
+          "se_difference": 0.0001011561110138751,
+          "n": 40,
+          "a_better_fraction": 0.575
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.0012618126021929819,
+          "se_difference": 0.00020896152788386837,
+          "n": 40,
+          "a_better_fraction": 0.15
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": -0.05219892896022055,
+          "se_difference": 0.030309002211137265,
+          "n": 8,
+          "a_better_fraction": 0.625
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.15514010654287724,
+          "se_difference": 0.06408469700859566,
+          "n": 8,
+          "a_better_fraction": 0.25
+        }
+      }
+    },
+    {
+      "N": 100,
+      "K": 11,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.08972458182808976,
+            "se": 0.0015450474837169815,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09442508982368088,
+            "se": 0.001625871117054192,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08627933519311862,
+            "se": 0.0015176374863947939,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0034452466349711498,
+            "se": 0.00038160193047131243,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.016927006789819836,
+            "se": 0.0008078138180261963,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.022411405828670287,
+            "se": 0.0007682619446037969,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.019138868052827964,
+            "se": 0.0009624872339610452,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00019899575326715749,
+            "se": 0.000158329429158532,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.006951916589832061,
+            "se": 0.0001362516086003076,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.0001068314189785892,
+            "se": 1.2965111847986304e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 34.95497819903536,
+            "se": 2.0332873197832857,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7198048540834065e-15,
+            "se": 7.886218648986616e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1311.130859882742,
+            "se": 108.4872700567072,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1204.6599994496705,
+            "se": 4.505934651112687,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0876363030439724,
+            "se": 0.08807943201874371,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.845770354250871e-09,
+            "se": 4.20521834860536e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09415615481829068,
+            "se": 0.0013338364187197196,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.0990857683477249,
+            "se": 0.0014035734221419746,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09096042067410162,
+            "se": 0.0012830114907530622,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0031957341441890786,
+            "se": 0.00034769318091020754,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.015497178961936853,
+            "se": 0.0007100512090114725,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.020741494942888943,
+            "se": 0.0007347324699391505,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.017605634105986426,
+            "se": 0.0009015653583109049,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00014152842254979954,
+            "se": 0.00013104547007119837,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.006447664654475949,
+            "se": 0.0001262387837538877,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010540754286131742,
+            "se": 1.2147046685041504e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 36.88421617310861,
+            "se": 1.9813579231420742,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.56472057533108e-15,
+            "se": 8.074784344946703e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1453.620537100977,
+            "se": 101.47364870316373,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1381.5293792684602,
+            "se": 12.675543203054998,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0500252406824662,
+            "se": 0.06830470353241065,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.95299156075442e-09,
+            "se": 1.595808792547013e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.08995758301473758,
+            "se": 0.0014459711004155102,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.0946700899829295,
+            "se": 0.0015215797693287761,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0865351951509751,
+            "se": 0.0014102007701085662,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.003422387863762485,
+            "se": 0.00036865514710544725,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.01653376140778594,
+            "se": 0.000775908408127214,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.02197762641152773,
+            "se": 0.0007562666811842326,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.01865331588812515,
+            "se": 0.0009323625611528322,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 0.00019061318638867862,
+            "se": 0.00015357384474687242,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.006986136980074176,
+            "se": 0.00013138741895781254,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010541794286183137,
+            "se": 1.205729052000779e-06,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 35.848486736121906,
+            "se": 2.011808722240273,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7648209282850047e-15,
+            "se": 6.828589341947429e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1206.446786352006,
+            "se": 93.94615725844956,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1100.9370354524563,
+            "se": 5.86436434325738,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0943619210899078,
+            "se": 0.08209335011815834,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.82897241453084e-09,
+            "se": 6.175678978774325e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.00023300118664782153,
+          "se_difference": 0.0001171604784484893,
+          "n": 40,
+          "a_better_fraction": 0.425
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.004198571803553101,
+          "se_difference": 0.00017655525600317402,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -2.285877120866412e-05,
+          "se_difference": 4.723212071544158e-05,
+          "n": 40,
+          "a_better_fraction": 0.525
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 0.00022665371957340607,
+          "se_difference": 7.921730511471104e-05,
+          "n": 40,
+          "a_better_fraction": 0.3
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": 0.006725618045935397,
+          "se_difference": 0.016778141448709056,
+          "n": 8,
+          "a_better_fraction": 0.375
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.044336680407441625,
+          "se_difference": 0.02406041038236741,
+          "n": 8,
+          "a_better_fraction": 0.25
+        }
+      }
+    },
+    {
+      "N": 400,
+      "K": 11,
+      "obs_noise_std": 0.01,
+      "acquisition_indices": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ],
+      "acquisition_times": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "design_summary": {
+        "lift": {
+          "heldout_mmd2": {
+            "mean": 0.09059404288823623,
+            "se": 0.0016321261419123567,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09534717577330007,
+            "se": 0.001717570465613803,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.0889804917973848,
+            "se": 0.0016785124078876157,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0016135510908514145,
+            "se": 0.00021985332600244807,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.011466960067419266,
+            "se": 0.0004078463849815832,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.013658387762743937,
+            "se": 0.00034560937886305327,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.012835908399031454,
+            "se": 0.0005358987634784554,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 2.0478651194002636e-10,
+            "se": 6.778692844268724e-11,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.00312370286845493,
+            "se": 2.769695711062829e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010378954997343403,
+            "se": 4.469565023184388e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 33.292011441438206,
+            "se": 1.3792551349473967,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.7730608647958946e-15,
+            "se": 8.026314947623782e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1242.5778149214493,
+            "se": 193.39635473710618,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1206.4903990869946,
+            "se": 4.554973297786666,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0294150858110855,
+            "se": 0.16036110262046327,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.927405989105936e-09,
+            "se": 1.8142941212297277e-11,
+            "n": 8
+          }
+        },
+        "tangent": {
+          "heldout_mmd2": {
+            "mean": 0.09488371677530334,
+            "se": 0.0014132321504652277,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09986268294367903,
+            "se": 0.0014873130530616721,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.09311001437149113,
+            "se": 0.0014583814464353153,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0017737024038121916,
+            "se": 0.00023065241093310119,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.011039222315764343,
+            "se": 0.0003910936748478638,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.013119423132132008,
+            "se": 0.00032800993431271154,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.012324596030179397,
+            "se": 0.0005085029490520957,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 7.262958938259653e-06,
+            "se": 7.262823002532074e-06,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.003074793002369429,
+            "se": 2.7945039404567667e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.00010328969862336424,
+            "se": 4.2380363894245935e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 34.6739429002842,
+            "se": 1.3703662717103975,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.6170224881317807e-15,
+            "se": 7.146106143713606e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1327.3059245789796,
+            "se": 164.79768483722404,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1379.714245107938,
+            "se": 10.197724703973797,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 0.9600163522706763,
+            "se": 0.11713595327125215,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.907596362691606e-09,
+            "se": 4.135603769536285e-11,
+            "n": 8
+          }
+        },
+        "full": {
+          "heldout_mmd2": {
+            "mean": 0.0907125263164641,
+            "se": 0.001522940685572038,
+            "n": 40
+          },
+          "all_interior_mmd2": {
+            "mean": 0.09547278462211886,
+            "se": 0.0016026176694290874,
+            "n": 40
+          },
+          "oracle_heldout_mmd2": {
+            "mean": 0.08901383838957995,
+            "se": 0.0015728470507915004,
+            "n": 40
+          },
+          "delta_vs_population_heldout_mmd2": {
+            "mean": 0.0016986879268841599,
+            "se": 0.000218897874300135,
+            "n": 40
+          },
+          "heldout_moment_error": {
+            "mean": 0.011370765939376675,
+            "se": 0.00040314762277069734,
+            "n": 40
+          },
+          "acquisition_mean_rmse": {
+            "mean": 0.01351129443285593,
+            "se": 0.00034302146950909495,
+            "n": 40
+          },
+          "smoothed_moment_rmse": {
+            "mean": 0.012711735176330462,
+            "se": 0.0005265336614027557,
+            "n": 40
+          },
+          "max_soft_calibration_resid": {
+            "mean": 7.27687237258449e-06,
+            "se": 7.276678641284458e-06,
+            "n": 40
+          },
+          "mean_shrinkage_to_measurement": {
+            "mean": 0.003175525068069042,
+            "se": 2.72715747018587e-05,
+            "n": 40
+          },
+          "min_soft_hessian_eig": {
+            "mean": 0.0001032909244053918,
+            "se": 4.2379649110260904e-07,
+            "n": 40
+          },
+          "max_lambda_norm": {
+            "mean": 34.08448949686335,
+            "se": 1.3878869705207753,
+            "n": 40
+          },
+          "max_mean_h_raw": {
+            "mean": 1.8100104748342007e-15,
+            "se": 7.892790919548463e-17,
+            "n": 40
+          },
+          "noisy_full_action": {
+            "mean": 1119.9568781390387,
+            "se": 172.09137735537445,
+            "n": 8
+          },
+          "oracle_full_action_trial": {
+            "mean": 1100.9640202819471,
+            "se": 5.274170080369633,
+            "n": 8
+          },
+          "action_inflation_ratio": {
+            "mean": 1.0162469001961578,
+            "se": 0.15588910418371935,
+            "n": 8
+          },
+          "max_poisson_rel_resid": {
+            "mean": 9.82830188684752e-09,
+            "se": 6.012647346113147e-11,
+            "n": 8
+          }
+        }
+      },
+      "paired_comparisons": {
+        "full_vs_lift_heldout_mmd2": {
+          "mean_difference_a_minus_b": 0.00011848342822788037,
+          "se_difference": 0.00012402727085149826,
+          "n": 40,
+          "a_better_fraction": 0.475
+        },
+        "full_vs_tangent_heldout_mmd2": {
+          "mean_difference_a_minus_b": -0.004171190458839232,
+          "se_difference": 0.00016028109484456424,
+          "n": 40,
+          "a_better_fraction": 1.0
+        },
+        "full_vs_lift_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": 8.513683603274564e-05,
+          "se_difference": 3.0413845972422727e-05,
+          "n": 40,
+          "a_better_fraction": 0.3
+        },
+        "full_vs_tangent_delta_vs_population_mmd2": {
+          "mean_difference_a_minus_b": -7.50144769280317e-05,
+          "se_difference": 4.828699685066145e-05,
+          "n": 40,
+          "a_better_fraction": 0.65
+        },
+        "full_vs_lift_action_inflation": {
+          "mean_difference_a_minus_b": -0.013168185614927629,
+          "se_difference": 0.01118180458926504,
+          "n": 8,
+          "a_better_fraction": 0.75
+        },
+        "full_vs_tangent_action_inflation": {
+          "mean_difference_a_minus_b": 0.056230547925481586,
+          "se_difference": 0.042480722333194165,
+          "n": 8,
+          "a_better_fraction": 0.375
+        }
+      }
+    }
+  ],
+  "interpretation_notes": [
+    "Frozen-design C.1 test: no sensor angles are re-optimized under noise.",
+    "Finite samples are drawn from the same discrete external law used by the Stage B inverse, so N->infinity recovers the Stage B population moments without a truncation confound.",
+    "Moment trajectories are smoothed before differentiation; raw independent measurement noise is never finite-differenced.",
+    "The uncertainty-aware soft fiber solves E_q[Phi] + V lambda = c_hat and approaches the Stage B hard fiber as V->0.",
+    "Full-action statistics use only action_trials Monte Carlo replicates because each replicate requires weighted-Poisson solves at every time node."
+  ]
+}

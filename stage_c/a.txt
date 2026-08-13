@@ -1,0 +1,620 @@
+python stage_c_finite_measurement_robustness.py \
+    --backend "../stage_b/stage_b2_transport_conditioned_design.py" \
+    --preset reference \
+    --trials 40 \
+    --action-trials 8 \
+    --output stage_c1_reference.json
+W0812 09:48:09.261059   67802 cuda_executor.cc:1802] GPU interconnect information not available: INTERNAL: NVML doesn't support extracting fabric info or NVLink is not used by the device.
+W0812 09:48:09.263835   67636 cuda_executor.cc:1802] GPU interconnect information not available: INTERNAL: NVML doesn't support extracting fabric info or NVLink is not used by the device.
+==============================================================================
+Stage C.1 — finite/noisy measurements + analytic SI
+==============================================================================
+Backend           : /home/zanot/projects/tesseract2026/stage_b/stage_b2_transport_conditioned_design.py
+Preset            : reference
+Grid / time       : 39x39 / 21
+Trials            : 40 (full-action subset: 8)
+N budgets         : (25, 100, 400)
+K budgets         : (7, 11)
+Detector noise    : (0.0, 0.01)
+Frozen designs:
+  lift    : (1.63°, 161.63°)
+  tangent : (0.00°, 154.70°)
+  full    : (0.00°, 160.00°)
+
+Compiling / checking population Stage B metrics at the frozen designs...
+  lift    : Lift=8.718792e-02 | Full=1.757132e+03 | Tangent=4.150809e+00
+  tangent : Lift=9.154259e-02 | Full=1.545437e+03 | Tangent=3.586644e+00
+  full    : Lift=8.732543e-02 | Full=1.241432e+03 | Tangent=3.620528e+00
+Population check completed in 5.3s
+    condition N=  25, K= 7, noise=0.0000: trial 1/40
+    condition N=  25, K= 7, noise=0.0000: trial 2/40
+    condition N=  25, K= 7, noise=0.0000: trial 3/40
+    condition N=  25, K= 7, noise=0.0000: trial 4/40
+    condition N=  25, K= 7, noise=0.0000: trial 5/40
+    condition N=  25, K= 7, noise=0.0000: trial 6/40
+    condition N=  25, K= 7, noise=0.0000: trial 7/40
+    condition N=  25, K= 7, noise=0.0000: trial 8/40
+    condition N=  25, K= 7, noise=0.0000: trial 9/40
+    condition N=  25, K= 7, noise=0.0000: trial 10/40
+    condition N=  25, K= 7, noise=0.0000: trial 11/40
+    condition N=  25, K= 7, noise=0.0000: trial 12/40
+    condition N=  25, K= 7, noise=0.0000: trial 13/40
+    condition N=  25, K= 7, noise=0.0000: trial 14/40
+    condition N=  25, K= 7, noise=0.0000: trial 15/40
+    condition N=  25, K= 7, noise=0.0000: trial 16/40
+    condition N=  25, K= 7, noise=0.0000: trial 17/40
+    condition N=  25, K= 7, noise=0.0000: trial 18/40
+    condition N=  25, K= 7, noise=0.0000: trial 19/40
+    condition N=  25, K= 7, noise=0.0000: trial 20/40
+    condition N=  25, K= 7, noise=0.0000: trial 21/40
+    condition N=  25, K= 7, noise=0.0000: trial 22/40
+    condition N=  25, K= 7, noise=0.0000: trial 23/40
+    condition N=  25, K= 7, noise=0.0000: trial 24/40
+    condition N=  25, K= 7, noise=0.0000: trial 25/40
+    condition N=  25, K= 7, noise=0.0000: trial 26/40
+    condition N=  25, K= 7, noise=0.0000: trial 27/40
+    condition N=  25, K= 7, noise=0.0000: trial 28/40
+    condition N=  25, K= 7, noise=0.0000: trial 29/40
+    condition N=  25, K= 7, noise=0.0000: trial 30/40
+    condition N=  25, K= 7, noise=0.0000: trial 31/40
+    condition N=  25, K= 7, noise=0.0000: trial 32/40
+    condition N=  25, K= 7, noise=0.0000: trial 33/40
+    condition N=  25, K= 7, noise=0.0000: trial 34/40
+    condition N=  25, K= 7, noise=0.0000: trial 35/40
+    condition N=  25, K= 7, noise=0.0000: trial 36/40
+    condition N=  25, K= 7, noise=0.0000: trial 37/40
+    condition N=  25, K= 7, noise=0.0000: trial 38/40
+    condition N=  25, K= 7, noise=0.0000: trial 39/40
+    condition N=  25, K= 7, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=25, K=7, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.342660e-02 ± 1.58e-03 | Δvs-pop=+2.715e-03 ± 8.46e-04 | action inflation=1.7083 ± 4.55e-01 (n=8)
+Tangent-TC held-out MMD^2=9.961020e-02 ± 1.44e-03 | Δvs-pop=+5.004e-03 ± 8.21e-04 | action inflation=1.2493 ± 1.44e-01 (n=8)
+Full-TC    held-out MMD^2=9.390631e-02 ± 1.54e-03 | Δvs-pop=+3.234e-03 ± 8.33e-04 | action inflation=1.5389 ± 3.52e-01 (n=8)
+Full - Lift       : paired held-out Δ=+4.797e-04 ± 1.15e-04; Full better in 27.5% of trials
+Full - Tangent    : paired held-out Δ=-5.704e-03 ± 4.15e-04; Full better in 100.0% of trials
+    condition N= 100, K= 7, noise=0.0000: trial 1/40
+    condition N= 100, K= 7, noise=0.0000: trial 2/40
+    condition N= 100, K= 7, noise=0.0000: trial 3/40
+    condition N= 100, K= 7, noise=0.0000: trial 4/40
+    condition N= 100, K= 7, noise=0.0000: trial 5/40
+    condition N= 100, K= 7, noise=0.0000: trial 6/40
+    condition N= 100, K= 7, noise=0.0000: trial 7/40
+    condition N= 100, K= 7, noise=0.0000: trial 8/40
+    condition N= 100, K= 7, noise=0.0000: trial 9/40
+    condition N= 100, K= 7, noise=0.0000: trial 10/40
+    condition N= 100, K= 7, noise=0.0000: trial 11/40
+    condition N= 100, K= 7, noise=0.0000: trial 12/40
+    condition N= 100, K= 7, noise=0.0000: trial 13/40
+    condition N= 100, K= 7, noise=0.0000: trial 14/40
+    condition N= 100, K= 7, noise=0.0000: trial 15/40
+    condition N= 100, K= 7, noise=0.0000: trial 16/40
+    condition N= 100, K= 7, noise=0.0000: trial 17/40
+    condition N= 100, K= 7, noise=0.0000: trial 18/40
+    condition N= 100, K= 7, noise=0.0000: trial 19/40
+    condition N= 100, K= 7, noise=0.0000: trial 20/40
+    condition N= 100, K= 7, noise=0.0000: trial 21/40
+    condition N= 100, K= 7, noise=0.0000: trial 22/40
+    condition N= 100, K= 7, noise=0.0000: trial 23/40
+    condition N= 100, K= 7, noise=0.0000: trial 24/40
+    condition N= 100, K= 7, noise=0.0000: trial 25/40
+    condition N= 100, K= 7, noise=0.0000: trial 26/40
+    condition N= 100, K= 7, noise=0.0000: trial 27/40
+    condition N= 100, K= 7, noise=0.0000: trial 28/40
+    condition N= 100, K= 7, noise=0.0000: trial 29/40
+    condition N= 100, K= 7, noise=0.0000: trial 30/40
+    condition N= 100, K= 7, noise=0.0000: trial 31/40
+    condition N= 100, K= 7, noise=0.0000: trial 32/40
+    condition N= 100, K= 7, noise=0.0000: trial 33/40
+    condition N= 100, K= 7, noise=0.0000: trial 34/40
+    condition N= 100, K= 7, noise=0.0000: trial 35/40
+    condition N= 100, K= 7, noise=0.0000: trial 36/40
+    condition N= 100, K= 7, noise=0.0000: trial 37/40
+    condition N= 100, K= 7, noise=0.0000: trial 38/40
+    condition N= 100, K= 7, noise=0.0000: trial 39/40
+    condition N= 100, K= 7, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=100, K=7, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=8.556912e-02 ± 1.65e-03 | Δvs-pop=-3.086e-03 ± 3.09e-04 | action inflation=0.9822 ± 3.38e-02 (n=8)
+Tangent-TC held-out MMD^2=9.283122e-02 ± 1.42e-03 | Δvs-pop=-2.818e-04 ± 2.65e-04 | action inflation=1.0922 ± 2.28e-02 (n=8)
+Full-TC    held-out MMD^2=8.641367e-02 ± 1.55e-03 | Δvs-pop=-2.429e-03 ± 2.98e-04 | action inflation=1.0353 ± 3.24e-02 (n=8)
+Full - Lift       : paired held-out Δ=+8.446e-04 ± 1.22e-04; Full better in 12.5% of trials
+Full - Tangent    : paired held-out Δ=-6.418e-03 ± 2.57e-04; Full better in 100.0% of trials
+    condition N= 400, K= 7, noise=0.0000: trial 1/40
+    condition N= 400, K= 7, noise=0.0000: trial 2/40
+    condition N= 400, K= 7, noise=0.0000: trial 3/40
+    condition N= 400, K= 7, noise=0.0000: trial 4/40
+    condition N= 400, K= 7, noise=0.0000: trial 5/40
+    condition N= 400, K= 7, noise=0.0000: trial 6/40
+    condition N= 400, K= 7, noise=0.0000: trial 7/40
+    condition N= 400, K= 7, noise=0.0000: trial 8/40
+    condition N= 400, K= 7, noise=0.0000: trial 9/40
+    condition N= 400, K= 7, noise=0.0000: trial 10/40
+    condition N= 400, K= 7, noise=0.0000: trial 11/40
+    condition N= 400, K= 7, noise=0.0000: trial 12/40
+    condition N= 400, K= 7, noise=0.0000: trial 13/40
+    condition N= 400, K= 7, noise=0.0000: trial 14/40
+    condition N= 400, K= 7, noise=0.0000: trial 15/40
+    condition N= 400, K= 7, noise=0.0000: trial 16/40
+    condition N= 400, K= 7, noise=0.0000: trial 17/40
+    condition N= 400, K= 7, noise=0.0000: trial 18/40
+    condition N= 400, K= 7, noise=0.0000: trial 19/40
+    condition N= 400, K= 7, noise=0.0000: trial 20/40
+    condition N= 400, K= 7, noise=0.0000: trial 21/40
+    condition N= 400, K= 7, noise=0.0000: trial 22/40
+    condition N= 400, K= 7, noise=0.0000: trial 23/40
+    condition N= 400, K= 7, noise=0.0000: trial 24/40
+    condition N= 400, K= 7, noise=0.0000: trial 25/40
+    condition N= 400, K= 7, noise=0.0000: trial 26/40
+    condition N= 400, K= 7, noise=0.0000: trial 27/40
+    condition N= 400, K= 7, noise=0.0000: trial 28/40
+    condition N= 400, K= 7, noise=0.0000: trial 29/40
+    condition N= 400, K= 7, noise=0.0000: trial 30/40
+    condition N= 400, K= 7, noise=0.0000: trial 31/40
+    condition N= 400, K= 7, noise=0.0000: trial 32/40
+    condition N= 400, K= 7, noise=0.0000: trial 33/40
+    condition N= 400, K= 7, noise=0.0000: trial 34/40
+    condition N= 400, K= 7, noise=0.0000: trial 35/40
+    condition N= 400, K= 7, noise=0.0000: trial 36/40
+    condition N= 400, K= 7, noise=0.0000: trial 37/40
+    condition N= 400, K= 7, noise=0.0000: trial 38/40
+    condition N= 400, K= 7, noise=0.0000: trial 39/40
+    condition N= 400, K= 7, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=400, K=7, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=8.634098e-02 ± 1.65e-03 | Δvs-pop=-3.826e-03 ± 2.21e-04 | action inflation=0.9743 ± 2.77e-02 (n=8)
+Tangent-TC held-out MMD^2=9.286204e-02 ± 1.46e-03 | Δvs-pop=-1.167e-03 ± 1.93e-04 | action inflation=1.0606 ± 2.82e-02 (n=8)
+Full-TC    held-out MMD^2=8.704363e-02 ± 1.56e-03 | Δvs-pop=-3.096e-03 ± 2.12e-04 | action inflation=1.0095 ± 2.91e-02 (n=8)
+Full - Lift       : paired held-out Δ=+7.026e-04 ± 1.00e-04; Full better in 17.5% of trials
+Full - Tangent    : paired held-out Δ=-5.818e-03 ± 1.55e-04; Full better in 100.0% of trials
+    condition N=  25, K=11, noise=0.0000: trial 1/40
+    condition N=  25, K=11, noise=0.0000: trial 2/40
+    condition N=  25, K=11, noise=0.0000: trial 3/40
+    condition N=  25, K=11, noise=0.0000: trial 4/40
+    condition N=  25, K=11, noise=0.0000: trial 5/40
+    condition N=  25, K=11, noise=0.0000: trial 6/40
+    condition N=  25, K=11, noise=0.0000: trial 7/40
+    condition N=  25, K=11, noise=0.0000: trial 8/40
+    condition N=  25, K=11, noise=0.0000: trial 9/40
+    condition N=  25, K=11, noise=0.0000: trial 10/40
+    condition N=  25, K=11, noise=0.0000: trial 11/40
+    condition N=  25, K=11, noise=0.0000: trial 12/40
+    condition N=  25, K=11, noise=0.0000: trial 13/40
+    condition N=  25, K=11, noise=0.0000: trial 14/40
+    condition N=  25, K=11, noise=0.0000: trial 15/40
+    condition N=  25, K=11, noise=0.0000: trial 16/40
+    condition N=  25, K=11, noise=0.0000: trial 17/40
+    condition N=  25, K=11, noise=0.0000: trial 18/40
+    condition N=  25, K=11, noise=0.0000: trial 19/40
+    condition N=  25, K=11, noise=0.0000: trial 20/40
+    condition N=  25, K=11, noise=0.0000: trial 21/40
+    condition N=  25, K=11, noise=0.0000: trial 22/40
+    condition N=  25, K=11, noise=0.0000: trial 23/40
+    condition N=  25, K=11, noise=0.0000: trial 24/40
+    condition N=  25, K=11, noise=0.0000: trial 25/40
+    condition N=  25, K=11, noise=0.0000: trial 26/40
+    condition N=  25, K=11, noise=0.0000: trial 27/40
+    condition N=  25, K=11, noise=0.0000: trial 28/40
+    condition N=  25, K=11, noise=0.0000: trial 29/40
+    condition N=  25, K=11, noise=0.0000: trial 30/40
+    condition N=  25, K=11, noise=0.0000: trial 31/40
+    condition N=  25, K=11, noise=0.0000: trial 32/40
+    condition N=  25, K=11, noise=0.0000: trial 33/40
+    condition N=  25, K=11, noise=0.0000: trial 34/40
+    condition N=  25, K=11, noise=0.0000: trial 35/40
+    condition N=  25, K=11, noise=0.0000: trial 36/40
+    condition N=  25, K=11, noise=0.0000: trial 37/40
+    condition N=  25, K=11, noise=0.0000: trial 38/40
+    condition N=  25, K=11, noise=0.0000: trial 39/40
+    condition N=  25, K=11, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=25, K=11, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.311041e-02 ± 1.80e-03 | Δvs-pop=+4.936e-03 ± 6.86e-04 | action inflation=2.8494 ± 1.64e+00 (n=8)
+Tangent-TC held-out MMD^2=9.907915e-02 ± 1.61e-03 | Δvs-pop=+6.633e-03 ± 5.36e-04 | action inflation=5.8744 ± 4.18e+00 (n=8)
+Full-TC    held-out MMD^2=9.362983e-02 ± 1.73e-03 | Δvs-pop=+5.359e-03 ± 6.48e-04 | action inflation=6.5118 ± 5.14e+00 (n=8)
+Full - Lift       : paired held-out Δ=+5.194e-04 ± 1.47e-04; Full better in 25.0% of trials
+Full - Tangent    : paired held-out Δ=-5.449e-03 ± 3.53e-04; Full better in 100.0% of trials
+    condition N= 100, K=11, noise=0.0000: trial 1/40
+    condition N= 100, K=11, noise=0.0000: trial 2/40
+    condition N= 100, K=11, noise=0.0000: trial 3/40
+    condition N= 100, K=11, noise=0.0000: trial 4/40
+    condition N= 100, K=11, noise=0.0000: trial 5/40
+    condition N= 100, K=11, noise=0.0000: trial 6/40
+    condition N= 100, K=11, noise=0.0000: trial 7/40
+    condition N= 100, K=11, noise=0.0000: trial 8/40
+    condition N= 100, K=11, noise=0.0000: trial 9/40
+    condition N= 100, K=11, noise=0.0000: trial 10/40
+    condition N= 100, K=11, noise=0.0000: trial 11/40
+    condition N= 100, K=11, noise=0.0000: trial 12/40
+    condition N= 100, K=11, noise=0.0000: trial 13/40
+    condition N= 100, K=11, noise=0.0000: trial 14/40
+    condition N= 100, K=11, noise=0.0000: trial 15/40
+    condition N= 100, K=11, noise=0.0000: trial 16/40
+    condition N= 100, K=11, noise=0.0000: trial 17/40
+    condition N= 100, K=11, noise=0.0000: trial 18/40
+    condition N= 100, K=11, noise=0.0000: trial 19/40
+    condition N= 100, K=11, noise=0.0000: trial 20/40
+    condition N= 100, K=11, noise=0.0000: trial 21/40
+    condition N= 100, K=11, noise=0.0000: trial 22/40
+    condition N= 100, K=11, noise=0.0000: trial 23/40
+    condition N= 100, K=11, noise=0.0000: trial 24/40
+    condition N= 100, K=11, noise=0.0000: trial 25/40
+    condition N= 100, K=11, noise=0.0000: trial 26/40
+    condition N= 100, K=11, noise=0.0000: trial 27/40
+    condition N= 100, K=11, noise=0.0000: trial 28/40
+    condition N= 100, K=11, noise=0.0000: trial 29/40
+    condition N= 100, K=11, noise=0.0000: trial 30/40
+    condition N= 100, K=11, noise=0.0000: trial 31/40
+    condition N= 100, K=11, noise=0.0000: trial 32/40
+    condition N= 100, K=11, noise=0.0000: trial 33/40
+    condition N= 100, K=11, noise=0.0000: trial 34/40
+    condition N= 100, K=11, noise=0.0000: trial 35/40
+    condition N= 100, K=11, noise=0.0000: trial 36/40
+    condition N= 100, K=11, noise=0.0000: trial 37/40
+    condition N= 100, K=11, noise=0.0000: trial 38/40
+    condition N= 100, K=11, noise=0.0000: trial 39/40
+    condition N= 100, K=11, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=100, K=11, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=8.574399e-02 ± 1.61e-03 | Δvs-pop=-1.644e-03 ± 2.26e-04 | action inflation=0.9770 ± 5.59e-02 (n=8)
+Tangent-TC held-out MMD^2=9.222562e-02 ± 1.51e-03 | Δvs-pop=+6.251e-04 ± 2.31e-04 | action inflation=1.1105 ± 2.96e-02 (n=8)
+Full-TC    held-out MMD^2=8.639027e-02 ± 1.54e-03 | Δvs-pop=-1.091e-03 ± 2.11e-04 | action inflation=1.0337 ± 5.02e-02 (n=8)
+Full - Lift       : paired held-out Δ=+6.463e-04 ± 8.74e-05; Full better in 12.5% of trials
+Full - Tangent    : paired held-out Δ=-5.835e-03 ± 1.65e-04; Full better in 100.0% of trials
+    condition N= 400, K=11, noise=0.0000: trial 1/40
+    condition N= 400, K=11, noise=0.0000: trial 2/40
+    condition N= 400, K=11, noise=0.0000: trial 3/40
+    condition N= 400, K=11, noise=0.0000: trial 4/40
+    condition N= 400, K=11, noise=0.0000: trial 5/40
+    condition N= 400, K=11, noise=0.0000: trial 6/40
+    condition N= 400, K=11, noise=0.0000: trial 7/40
+    condition N= 400, K=11, noise=0.0000: trial 8/40
+    condition N= 400, K=11, noise=0.0000: trial 9/40
+    condition N= 400, K=11, noise=0.0000: trial 10/40
+    condition N= 400, K=11, noise=0.0000: trial 11/40
+    condition N= 400, K=11, noise=0.0000: trial 12/40
+    condition N= 400, K=11, noise=0.0000: trial 13/40
+    condition N= 400, K=11, noise=0.0000: trial 14/40
+    condition N= 400, K=11, noise=0.0000: trial 15/40
+    condition N= 400, K=11, noise=0.0000: trial 16/40
+    condition N= 400, K=11, noise=0.0000: trial 17/40
+    condition N= 400, K=11, noise=0.0000: trial 18/40
+    condition N= 400, K=11, noise=0.0000: trial 19/40
+    condition N= 400, K=11, noise=0.0000: trial 20/40
+    condition N= 400, K=11, noise=0.0000: trial 21/40
+    condition N= 400, K=11, noise=0.0000: trial 22/40
+    condition N= 400, K=11, noise=0.0000: trial 23/40
+    condition N= 400, K=11, noise=0.0000: trial 24/40
+    condition N= 400, K=11, noise=0.0000: trial 25/40
+    condition N= 400, K=11, noise=0.0000: trial 26/40
+    condition N= 400, K=11, noise=0.0000: trial 27/40
+    condition N= 400, K=11, noise=0.0000: trial 28/40
+    condition N= 400, K=11, noise=0.0000: trial 29/40
+    condition N= 400, K=11, noise=0.0000: trial 30/40
+    condition N= 400, K=11, noise=0.0000: trial 31/40
+    condition N= 400, K=11, noise=0.0000: trial 32/40
+    condition N= 400, K=11, noise=0.0000: trial 33/40
+    condition N= 400, K=11, noise=0.0000: trial 34/40
+    condition N= 400, K=11, noise=0.0000: trial 35/40
+    condition N= 400, K=11, noise=0.0000: trial 36/40
+    condition N= 400, K=11, noise=0.0000: trial 37/40
+    condition N= 400, K=11, noise=0.0000: trial 38/40
+    condition N= 400, K=11, noise=0.0000: trial 39/40
+    condition N= 400, K=11, noise=0.0000: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=400, K=11, detector noise std=0.0000
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=8.193803e-02 ± 1.27e-03 | Δvs-pop=-2.488e-03 ± 1.56e-04 | action inflation=0.9687 ± 1.85e-02 (n=8)
+Tangent-TC held-out MMD^2=8.832688e-02 ± 1.12e-03 | Δvs-pop=-9.083e-04 ± 1.69e-04 | action inflation=1.0460 ± 1.51e-02 (n=8)
+Full-TC    held-out MMD^2=8.268296e-02 ± 1.20e-03 | Δvs-pop=-2.084e-03 ± 1.56e-04 | action inflation=1.0020 ± 1.95e-02 (n=8)
+Full - Lift       : paired held-out Δ=+7.449e-04 ± 8.26e-05; Full better in 5.0% of trials
+Full - Tangent    : paired held-out Δ=-5.644e-03 ± 1.50e-04; Full better in 100.0% of trials
+    condition N=  25, K= 7, noise=0.0100: trial 1/40
+    condition N=  25, K= 7, noise=0.0100: trial 2/40
+    condition N=  25, K= 7, noise=0.0100: trial 3/40
+    condition N=  25, K= 7, noise=0.0100: trial 4/40
+    condition N=  25, K= 7, noise=0.0100: trial 5/40
+    condition N=  25, K= 7, noise=0.0100: trial 6/40
+    condition N=  25, K= 7, noise=0.0100: trial 7/40
+    condition N=  25, K= 7, noise=0.0100: trial 8/40
+    condition N=  25, K= 7, noise=0.0100: trial 9/40
+    condition N=  25, K= 7, noise=0.0100: trial 10/40
+    condition N=  25, K= 7, noise=0.0100: trial 11/40
+    condition N=  25, K= 7, noise=0.0100: trial 12/40
+    condition N=  25, K= 7, noise=0.0100: trial 13/40
+    condition N=  25, K= 7, noise=0.0100: trial 14/40
+    condition N=  25, K= 7, noise=0.0100: trial 15/40
+    condition N=  25, K= 7, noise=0.0100: trial 16/40
+    condition N=  25, K= 7, noise=0.0100: trial 17/40
+    condition N=  25, K= 7, noise=0.0100: trial 18/40
+    condition N=  25, K= 7, noise=0.0100: trial 19/40
+    condition N=  25, K= 7, noise=0.0100: trial 20/40
+    condition N=  25, K= 7, noise=0.0100: trial 21/40
+    condition N=  25, K= 7, noise=0.0100: trial 22/40
+    condition N=  25, K= 7, noise=0.0100: trial 23/40
+    condition N=  25, K= 7, noise=0.0100: trial 24/40
+    condition N=  25, K= 7, noise=0.0100: trial 25/40
+    condition N=  25, K= 7, noise=0.0100: trial 26/40
+    condition N=  25, K= 7, noise=0.0100: trial 27/40
+    condition N=  25, K= 7, noise=0.0100: trial 28/40
+    condition N=  25, K= 7, noise=0.0100: trial 29/40
+    condition N=  25, K= 7, noise=0.0100: trial 30/40
+    condition N=  25, K= 7, noise=0.0100: trial 31/40
+    condition N=  25, K= 7, noise=0.0100: trial 32/40
+    condition N=  25, K= 7, noise=0.0100: trial 33/40
+    condition N=  25, K= 7, noise=0.0100: trial 34/40
+    condition N=  25, K= 7, noise=0.0100: trial 35/40
+    condition N=  25, K= 7, noise=0.0100: trial 36/40
+    condition N=  25, K= 7, noise=0.0100: trial 37/40
+    condition N=  25, K= 7, noise=0.0100: trial 38/40
+    condition N=  25, K= 7, noise=0.0100: trial 39/40
+    condition N=  25, K= 7, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=25, K=7, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.987943e-02 ± 1.50e-03 | Δvs-pop=+1.242e-02 ± 8.72e-04 | action inflation=1.1710 ± 1.24e-01 (n=8)
+Tangent-TC held-out MMD^2=1.038710e-01 ± 1.36e-03 | Δvs-pop=+1.194e-02 ± 8.74e-04 | action inflation=1.0708 ± 1.42e-01 (n=8)
+Full-TC    held-out MMD^2=1.002383e-01 ± 1.42e-03 | Δvs-pop=+1.256e-02 ± 8.70e-04 | action inflation=1.2012 ± 1.57e-01 (n=8)
+Full - Lift       : paired held-out Δ=+3.589e-04 ± 1.31e-04; Full better in 35.0% of trials
+Full - Tangent    : paired held-out Δ=-3.633e-03 ± 2.13e-04; Full better in 100.0% of trials
+    condition N= 100, K= 7, noise=0.0100: trial 1/40
+    condition N= 100, K= 7, noise=0.0100: trial 2/40
+    condition N= 100, K= 7, noise=0.0100: trial 3/40
+    condition N= 100, K= 7, noise=0.0100: trial 4/40
+    condition N= 100, K= 7, noise=0.0100: trial 5/40
+    condition N= 100, K= 7, noise=0.0100: trial 6/40
+    condition N= 100, K= 7, noise=0.0100: trial 7/40
+    condition N= 100, K= 7, noise=0.0100: trial 8/40
+    condition N= 100, K= 7, noise=0.0100: trial 9/40
+    condition N= 100, K= 7, noise=0.0100: trial 10/40
+    condition N= 100, K= 7, noise=0.0100: trial 11/40
+    condition N= 100, K= 7, noise=0.0100: trial 12/40
+    condition N= 100, K= 7, noise=0.0100: trial 13/40
+    condition N= 100, K= 7, noise=0.0100: trial 14/40
+    condition N= 100, K= 7, noise=0.0100: trial 15/40
+    condition N= 100, K= 7, noise=0.0100: trial 16/40
+    condition N= 100, K= 7, noise=0.0100: trial 17/40
+    condition N= 100, K= 7, noise=0.0100: trial 18/40
+    condition N= 100, K= 7, noise=0.0100: trial 19/40
+    condition N= 100, K= 7, noise=0.0100: trial 20/40
+    condition N= 100, K= 7, noise=0.0100: trial 21/40
+    condition N= 100, K= 7, noise=0.0100: trial 22/40
+    condition N= 100, K= 7, noise=0.0100: trial 23/40
+    condition N= 100, K= 7, noise=0.0100: trial 24/40
+    condition N= 100, K= 7, noise=0.0100: trial 25/40
+    condition N= 100, K= 7, noise=0.0100: trial 26/40
+    condition N= 100, K= 7, noise=0.0100: trial 27/40
+    condition N= 100, K= 7, noise=0.0100: trial 28/40
+    condition N= 100, K= 7, noise=0.0100: trial 29/40
+    condition N= 100, K= 7, noise=0.0100: trial 30/40
+    condition N= 100, K= 7, noise=0.0100: trial 31/40
+    condition N= 100, K= 7, noise=0.0100: trial 32/40
+    condition N= 100, K= 7, noise=0.0100: trial 33/40
+    condition N= 100, K= 7, noise=0.0100: trial 34/40
+    condition N= 100, K= 7, noise=0.0100: trial 35/40
+    condition N= 100, K= 7, noise=0.0100: trial 36/40
+    condition N= 100, K= 7, noise=0.0100: trial 37/40
+    condition N= 100, K= 7, noise=0.0100: trial 38/40
+    condition N= 100, K= 7, noise=0.0100: trial 39/40
+    condition N= 100, K= 7, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=100, K=7, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.393973e-02 ± 1.71e-03 | Δvs-pop=+2.801e-03 ± 4.68e-04 | action inflation=1.2815 ± 1.67e-01 (n=8)
+Tangent-TC held-out MMD^2=9.796114e-02 ± 1.52e-03 | Δvs-pop=+2.853e-03 ± 5.10e-04 | action inflation=1.1226 ± 1.28e-01 (n=8)
+Full-TC    held-out MMD^2=9.399283e-02 ± 1.61e-03 | Δvs-pop=+2.871e-03 ± 4.84e-04 | action inflation=1.2449 ± 1.69e-01 (n=8)
+Full - Lift       : paired held-out Δ=+5.310e-05 ± 1.39e-04; Full better in 55.0% of trials
+Full - Tangent    : paired held-out Δ=-3.968e-03 ± 1.89e-04; Full better in 100.0% of trials
+    condition N= 400, K= 7, noise=0.0100: trial 1/40
+    condition N= 400, K= 7, noise=0.0100: trial 2/40
+    condition N= 400, K= 7, noise=0.0100: trial 3/40
+    condition N= 400, K= 7, noise=0.0100: trial 4/40
+    condition N= 400, K= 7, noise=0.0100: trial 5/40
+    condition N= 400, K= 7, noise=0.0100: trial 6/40
+    condition N= 400, K= 7, noise=0.0100: trial 7/40
+    condition N= 400, K= 7, noise=0.0100: trial 8/40
+    condition N= 400, K= 7, noise=0.0100: trial 9/40
+    condition N= 400, K= 7, noise=0.0100: trial 10/40
+    condition N= 400, K= 7, noise=0.0100: trial 11/40
+    condition N= 400, K= 7, noise=0.0100: trial 12/40
+    condition N= 400, K= 7, noise=0.0100: trial 13/40
+    condition N= 400, K= 7, noise=0.0100: trial 14/40
+    condition N= 400, K= 7, noise=0.0100: trial 15/40
+    condition N= 400, K= 7, noise=0.0100: trial 16/40
+    condition N= 400, K= 7, noise=0.0100: trial 17/40
+    condition N= 400, K= 7, noise=0.0100: trial 18/40
+    condition N= 400, K= 7, noise=0.0100: trial 19/40
+    condition N= 400, K= 7, noise=0.0100: trial 20/40
+    condition N= 400, K= 7, noise=0.0100: trial 21/40
+    condition N= 400, K= 7, noise=0.0100: trial 22/40
+    condition N= 400, K= 7, noise=0.0100: trial 23/40
+    condition N= 400, K= 7, noise=0.0100: trial 24/40
+    condition N= 400, K= 7, noise=0.0100: trial 25/40
+    condition N= 400, K= 7, noise=0.0100: trial 26/40
+    condition N= 400, K= 7, noise=0.0100: trial 27/40
+    condition N= 400, K= 7, noise=0.0100: trial 28/40
+    condition N= 400, K= 7, noise=0.0100: trial 29/40
+    condition N= 400, K= 7, noise=0.0100: trial 30/40
+    condition N= 400, K= 7, noise=0.0100: trial 31/40
+    condition N= 400, K= 7, noise=0.0100: trial 32/40
+    condition N= 400, K= 7, noise=0.0100: trial 33/40
+    condition N= 400, K= 7, noise=0.0100: trial 34/40
+    condition N= 400, K= 7, noise=0.0100: trial 35/40
+    condition N= 400, K= 7, noise=0.0100: trial 36/40
+    condition N= 400, K= 7, noise=0.0100: trial 37/40
+    condition N= 400, K= 7, noise=0.0100: trial 38/40
+    condition N= 400, K= 7, noise=0.0100: trial 39/40
+    condition N= 400, K= 7, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=400, K=7, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.060205e-02 ± 1.46e-03 | Δvs-pop=+1.375e-03 ± 3.01e-04 | action inflation=0.9282 ± 6.30e-02 (n=8)
+Tangent-TC held-out MMD^2=9.494564e-02 ± 1.27e-03 | Δvs-pop=+1.628e-03 ± 3.39e-04 | action inflation=0.9574 ± 6.05e-02 (n=8)
+Full-TC    held-out MMD^2=9.077512e-02 ± 1.37e-03 | Δvs-pop=+1.489e-03 ± 3.12e-04 | action inflation=0.9267 ± 6.58e-02 (n=8)
+Full - Lift       : paired held-out Δ=+1.731e-04 ± 1.21e-04; Full better in 50.0% of trials
+Full - Tangent    : paired held-out Δ=-4.171e-03 ± 1.78e-04; Full better in 100.0% of trials
+    condition N=  25, K=11, noise=0.0100: trial 1/40
+    condition N=  25, K=11, noise=0.0100: trial 2/40
+    condition N=  25, K=11, noise=0.0100: trial 3/40
+    condition N=  25, K=11, noise=0.0100: trial 4/40
+    condition N=  25, K=11, noise=0.0100: trial 5/40
+    condition N=  25, K=11, noise=0.0100: trial 6/40
+    condition N=  25, K=11, noise=0.0100: trial 7/40
+    condition N=  25, K=11, noise=0.0100: trial 8/40
+    condition N=  25, K=11, noise=0.0100: trial 9/40
+    condition N=  25, K=11, noise=0.0100: trial 10/40
+    condition N=  25, K=11, noise=0.0100: trial 11/40
+    condition N=  25, K=11, noise=0.0100: trial 12/40
+    condition N=  25, K=11, noise=0.0100: trial 13/40
+    condition N=  25, K=11, noise=0.0100: trial 14/40
+    condition N=  25, K=11, noise=0.0100: trial 15/40
+    condition N=  25, K=11, noise=0.0100: trial 16/40
+    condition N=  25, K=11, noise=0.0100: trial 17/40
+    condition N=  25, K=11, noise=0.0100: trial 18/40
+    condition N=  25, K=11, noise=0.0100: trial 19/40
+    condition N=  25, K=11, noise=0.0100: trial 20/40
+    condition N=  25, K=11, noise=0.0100: trial 21/40
+    condition N=  25, K=11, noise=0.0100: trial 22/40
+    condition N=  25, K=11, noise=0.0100: trial 23/40
+    condition N=  25, K=11, noise=0.0100: trial 24/40
+    condition N=  25, K=11, noise=0.0100: trial 25/40
+    condition N=  25, K=11, noise=0.0100: trial 26/40
+    condition N=  25, K=11, noise=0.0100: trial 27/40
+    condition N=  25, K=11, noise=0.0100: trial 28/40
+    condition N=  25, K=11, noise=0.0100: trial 29/40
+    condition N=  25, K=11, noise=0.0100: trial 30/40
+    condition N=  25, K=11, noise=0.0100: trial 31/40
+    condition N=  25, K=11, noise=0.0100: trial 32/40
+    condition N=  25, K=11, noise=0.0100: trial 33/40
+    condition N=  25, K=11, noise=0.0100: trial 34/40
+    condition N=  25, K=11, noise=0.0100: trial 35/40
+    condition N=  25, K=11, noise=0.0100: trial 36/40
+    condition N=  25, K=11, noise=0.0100: trial 37/40
+    condition N=  25, K=11, noise=0.0100: trial 38/40
+    condition N=  25, K=11, noise=0.0100: trial 39/40
+    condition N=  25, K=11, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=25, K=11, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=1.014748e-01 ± 1.63e-03 | Δvs-pop=+1.402e-02 ± 9.00e-04 | action inflation=1.1563 ± 2.94e-01 (n=8)
+Tangent-TC held-out MMD^2=1.046070e-01 ± 1.45e-03 | Δvs-pop=+1.276e-02 ± 7.61e-04 | action inflation=0.9490 ± 2.44e-01 (n=8)
+Full-TC    held-out MMD^2=1.016154e-01 ± 1.55e-03 | Δvs-pop=+1.402e-02 ± 8.65e-04 | action inflation=1.1041 ± 2.99e-01 (n=8)
+Full - Lift       : paired held-out Δ=+1.406e-04 ± 1.39e-04; Full better in 50.0% of trials
+Full - Tangent    : paired held-out Δ=-2.992e-03 ± 2.52e-04; Full better in 92.5% of trials
+    condition N= 100, K=11, noise=0.0100: trial 1/40
+    condition N= 100, K=11, noise=0.0100: trial 2/40
+    condition N= 100, K=11, noise=0.0100: trial 3/40
+    condition N= 100, K=11, noise=0.0100: trial 4/40
+    condition N= 100, K=11, noise=0.0100: trial 5/40
+    condition N= 100, K=11, noise=0.0100: trial 6/40
+    condition N= 100, K=11, noise=0.0100: trial 7/40
+    condition N= 100, K=11, noise=0.0100: trial 8/40
+    condition N= 100, K=11, noise=0.0100: trial 9/40
+    condition N= 100, K=11, noise=0.0100: trial 10/40
+    condition N= 100, K=11, noise=0.0100: trial 11/40
+    condition N= 100, K=11, noise=0.0100: trial 12/40
+    condition N= 100, K=11, noise=0.0100: trial 13/40
+    condition N= 100, K=11, noise=0.0100: trial 14/40
+    condition N= 100, K=11, noise=0.0100: trial 15/40
+    condition N= 100, K=11, noise=0.0100: trial 16/40
+    condition N= 100, K=11, noise=0.0100: trial 17/40
+    condition N= 100, K=11, noise=0.0100: trial 18/40
+    condition N= 100, K=11, noise=0.0100: trial 19/40
+    condition N= 100, K=11, noise=0.0100: trial 20/40
+    condition N= 100, K=11, noise=0.0100: trial 21/40
+    condition N= 100, K=11, noise=0.0100: trial 22/40
+    condition N= 100, K=11, noise=0.0100: trial 23/40
+    condition N= 100, K=11, noise=0.0100: trial 24/40
+    condition N= 100, K=11, noise=0.0100: trial 25/40
+    condition N= 100, K=11, noise=0.0100: trial 26/40
+    condition N= 100, K=11, noise=0.0100: trial 27/40
+    condition N= 100, K=11, noise=0.0100: trial 28/40
+    condition N= 100, K=11, noise=0.0100: trial 29/40
+    condition N= 100, K=11, noise=0.0100: trial 30/40
+    condition N= 100, K=11, noise=0.0100: trial 31/40
+    condition N= 100, K=11, noise=0.0100: trial 32/40
+    condition N= 100, K=11, noise=0.0100: trial 33/40
+    condition N= 100, K=11, noise=0.0100: trial 34/40
+    condition N= 100, K=11, noise=0.0100: trial 35/40
+    condition N= 100, K=11, noise=0.0100: trial 36/40
+    condition N= 100, K=11, noise=0.0100: trial 37/40
+    condition N= 100, K=11, noise=0.0100: trial 38/40
+    condition N= 100, K=11, noise=0.0100: trial 39/40
+    condition N= 100, K=11, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=100, K=11, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=8.972458e-02 ± 1.55e-03 | Δvs-pop=+3.445e-03 ± 3.82e-04 | action inflation=1.0876 ± 8.81e-02 (n=8)
+Tangent-TC held-out MMD^2=9.415615e-02 ± 1.33e-03 | Δvs-pop=+3.196e-03 ± 3.48e-04 | action inflation=1.0500 ± 6.83e-02 (n=8)
+Full-TC    held-out MMD^2=8.995758e-02 ± 1.45e-03 | Δvs-pop=+3.422e-03 ± 3.69e-04 | action inflation=1.0944 ± 8.21e-02 (n=8)
+Full - Lift       : paired held-out Δ=+2.330e-04 ± 1.17e-04; Full better in 42.5% of trials
+Full - Tangent    : paired held-out Δ=-4.199e-03 ± 1.77e-04; Full better in 100.0% of trials
+    condition N= 400, K=11, noise=0.0100: trial 1/40
+    condition N= 400, K=11, noise=0.0100: trial 2/40
+    condition N= 400, K=11, noise=0.0100: trial 3/40
+    condition N= 400, K=11, noise=0.0100: trial 4/40
+    condition N= 400, K=11, noise=0.0100: trial 5/40
+    condition N= 400, K=11, noise=0.0100: trial 6/40
+    condition N= 400, K=11, noise=0.0100: trial 7/40
+    condition N= 400, K=11, noise=0.0100: trial 8/40
+    condition N= 400, K=11, noise=0.0100: trial 9/40
+    condition N= 400, K=11, noise=0.0100: trial 10/40
+    condition N= 400, K=11, noise=0.0100: trial 11/40
+    condition N= 400, K=11, noise=0.0100: trial 12/40
+    condition N= 400, K=11, noise=0.0100: trial 13/40
+    condition N= 400, K=11, noise=0.0100: trial 14/40
+    condition N= 400, K=11, noise=0.0100: trial 15/40
+    condition N= 400, K=11, noise=0.0100: trial 16/40
+    condition N= 400, K=11, noise=0.0100: trial 17/40
+    condition N= 400, K=11, noise=0.0100: trial 18/40
+    condition N= 400, K=11, noise=0.0100: trial 19/40
+    condition N= 400, K=11, noise=0.0100: trial 20/40
+    condition N= 400, K=11, noise=0.0100: trial 21/40
+    condition N= 400, K=11, noise=0.0100: trial 22/40
+    condition N= 400, K=11, noise=0.0100: trial 23/40
+    condition N= 400, K=11, noise=0.0100: trial 24/40
+    condition N= 400, K=11, noise=0.0100: trial 25/40
+    condition N= 400, K=11, noise=0.0100: trial 26/40
+    condition N= 400, K=11, noise=0.0100: trial 27/40
+    condition N= 400, K=11, noise=0.0100: trial 28/40
+    condition N= 400, K=11, noise=0.0100: trial 29/40
+    condition N= 400, K=11, noise=0.0100: trial 30/40
+    condition N= 400, K=11, noise=0.0100: trial 31/40
+    condition N= 400, K=11, noise=0.0100: trial 32/40
+    condition N= 400, K=11, noise=0.0100: trial 33/40
+    condition N= 400, K=11, noise=0.0100: trial 34/40
+    condition N= 400, K=11, noise=0.0100: trial 35/40
+    condition N= 400, K=11, noise=0.0100: trial 36/40
+    condition N= 400, K=11, noise=0.0100: trial 37/40
+    condition N= 400, K=11, noise=0.0100: trial 38/40
+    condition N= 400, K=11, noise=0.0100: trial 39/40
+    condition N= 400, K=11, noise=0.0100: trial 40/40
+
+------------------------------------------------------------------------------
+Stage C condition: N=400, K=11, detector noise std=0.0100
+------------------------------------------------------------------------------
+Lift       held-out MMD^2=9.059404e-02 ± 1.63e-03 | Δvs-pop=+1.614e-03 ± 2.20e-04 | action inflation=1.0294 ± 1.60e-01 (n=8)
+Tangent-TC held-out MMD^2=9.488372e-02 ± 1.41e-03 | Δvs-pop=+1.774e-03 ± 2.31e-04 | action inflation=0.9600 ± 1.17e-01 (n=8)
+Full-TC    held-out MMD^2=9.071253e-02 ± 1.52e-03 | Δvs-pop=+1.699e-03 ± 2.19e-04 | action inflation=1.0162 ± 1.56e-01 (n=8)
+Full - Lift       : paired held-out Δ=+1.185e-04 ± 1.24e-04; Full better in 47.5% of trials
+Full - Tangent    : paired held-out Δ=-4.171e-03 ± 1.60e-04; Full better in 100.0% of trials
+
+==============================================================================
+Wrote Stage C results to: /home/zanot/projects/tesseract2026/stage_c/stage_c1_reference.json
+==============================================================================
