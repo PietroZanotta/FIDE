@@ -256,3 +256,95 @@ def lexicographic_optimize(
         "L_max": l_max,
         "R_max": r_max,
     }
+
+
+def point_box_violation(
+    *,
+    n_sensors: int,
+    x_bounds: tuple[float, float],
+    y_bounds: tuple[float, float],
+) -> Objective:
+    """Return ``max(bound violation)`` for flat 2-D point-sensor designs."""
+    n_sensors = int(n_sensors)
+    x0, x1 = map(float, x_bounds)
+    y0, y1 = map(float, y_bounds)
+    if n_sensors < 1:
+        raise ValueError("n_sensors must be >= 1")
+    if not x1 > x0 or not y1 > y0:
+        raise ValueError("invalid point-sensor bounds")
+
+    def violation(eta: Array) -> Array:
+        centers = jnp.asarray(eta, dtype=jnp.float64).reshape((n_sensors, 2))
+        vx = jnp.maximum(x0 - centers[:, 0], centers[:, 0] - x1)
+        vy = jnp.maximum(y0 - centers[:, 1], centers[:, 1] - y1)
+        return jnp.maximum(jnp.max(vx), jnp.max(vy))
+
+    return violation
+
+
+def point_separation_violation(min_sep: float, *, n_sensors: int) -> Objective:
+    """Return ``min_sep - min_{i<j} ||s_i-s_j||`` for point sensors."""
+    min_sep = float(min_sep)
+    n_sensors = int(n_sensors)
+    if min_sep < 0.0:
+        raise ValueError("min_sep must be nonnegative")
+    if n_sensors < 2:
+        return lambda eta: jnp.asarray(-jnp.inf, dtype=jnp.float64)
+
+    def violation(eta: Array) -> Array:
+        centers = jnp.asarray(eta, dtype=jnp.float64).reshape((n_sensors, 2))
+        diff = centers[:, None, :] - centers[None, :, :]
+        dist = jnp.sqrt(jnp.maximum(jnp.sum(diff * diff, axis=-1), 1.0e-300))
+        diag = jnp.eye(n_sensors, dtype=bool)
+        dist = jnp.where(diag, jnp.inf, dist)
+        return min_sep - jnp.min(dist)
+
+    return violation
+
+
+def random_point_sensor_starts(
+    key: Array,
+    count: int,
+    *,
+    n_sensors: int,
+    x_bounds: tuple[float, float],
+    y_bounds: tuple[float, float],
+    min_sep: float = 0.0,
+    oversample: int = 64,
+) -> Array:
+    """Generate broad CRN-friendly starts for free 2-D point sensors.
+
+    The return shape is ``[count, 2*n_sensors]``.  No known or historical optimum
+    is encoded in the generator.
+    """
+    count = int(count)
+    n_sensors = int(n_sensors)
+    if count < 1 or n_sensors < 1:
+        raise ValueError("count and n_sensors must be >= 1")
+    x0, x1 = map(float, x_bounds)
+    y0, y1 = map(float, y_bounds)
+    if not x1 > x0 or not y1 > y0:
+        raise ValueError("invalid point-sensor bounds")
+
+    total = max(count * int(oversample), count)
+    raw = jax.random.uniform(key, (total, n_sensors, 2), dtype=jnp.float64)
+    x = x0 + (x1 - x0) * raw[..., 0]
+    y = y0 + (y1 - y0) * raw[..., 1]
+    candidates = jnp.stack([x, y], axis=-1)
+
+    if n_sensors >= 2 and float(min_sep) > 0.0:
+        diff = candidates[:, :, None, :] - candidates[:, None, :, :]
+        d2 = jnp.sum(diff * diff, axis=-1)
+        diag = jnp.eye(n_sensors, dtype=bool)[None, :, :]
+        d2 = jnp.where(diag, jnp.inf, d2)
+        valid = jnp.sqrt(jnp.min(d2, axis=(1, 2))) >= float(min_sep)
+    else:
+        valid = jnp.ones((total,), dtype=bool)
+
+    order = jnp.argsort(~valid)
+    if int(jnp.sum(valid)) < count:
+        raise ValueError(
+            "Could not generate enough separated point-sensor starts; "
+            "increase oversample or relax min_sep"
+        )
+    return candidates[order[:count]].reshape((count, 2 * n_sensors))

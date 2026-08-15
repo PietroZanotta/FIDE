@@ -1,0 +1,302 @@
+{
+  "config": {
+    "law": {
+      "epsilon_l": 0.002,
+      "epsilon_r": 0.002,
+      "mmd_bandwidths": [
+        0.05,
+        0.1,
+        0.2,
+        0.4
+      ]
+    },
+    "measurement": {
+      "acquisition_k": 5,
+      "boundary_margin": 0.24,
+      "finite_n": 64,
+      "min_sep": 0.24,
+      "n_sensors": 4,
+      "obs_noise_std": 0.005,
+      "sensor_width": 0.12
+    },
+    "moment_reconstruction": {
+      "internal_knots": 3,
+      "kind": "endpoint_anchored_cubic_penalized_ls",
+      "ridge_rel": 1e-10,
+      "roughness_quadrature_order": 8,
+      "smoothing": 0.0001
+    },
+    "name": "vortices_double_gyre",
+    "optimization": {
+      "constraint_penalty": 10000.0,
+      "feasibility_tol": 1e-06,
+      "full_exact_audit_candidates": 30,
+      "full_exact_rescore_candidates": 8,
+      "full_gradient_cg_maxiter": 40,
+      "full_gradient_cg_tol": 1e-06,
+      "full_gradient_grid_nx": 16,
+      "full_gradient_grid_ny": 8,
+      "full_gradient_time_n": 3,
+      "full_gradient_trials": 1,
+      "full_learning_rate": 0.004,
+      "full_local_scale": 0.06,
+      "full_local_starts": 10,
+      "full_prescreen_trials": 1,
+      "full_steps": 0,
+      "invalid_penalty": 1000.0,
+      "law_exact_audit_candidates": 24,
+      "law_gradient_trials": 1,
+      "law_learning_rate": 0.008,
+      "law_min_exact_valid": 8,
+      "law_steps": 0,
+      "learning_rate": 0.01,
+      "population_exact_audit_candidates": 20,
+      "population_learning_rate": 0.01,
+      "population_min_exact_valid": 6,
+      "population_steps": 0,
+      "smoke_probe_count": 16,
+      "start_count": 4,
+      "start_oversample": 128,
+      "tangent_exact_audit_candidates": 30,
+      "tangent_exact_rescore_candidates": 10,
+      "tangent_gradient_trials": 1,
+      "tangent_learning_rate": 0.006,
+      "tangent_local_scale": 0.08,
+      "tangent_local_starts": 12,
+      "tangent_steps": 0
+    },
+    "particle_mfsi": {
+      "covariance_ridge": 1e-07,
+      "exact_covariance_min_eig": 1e-12,
+      "exact_covariance_ridge": 0.0,
+      "exact_tangent_ridge": 0.0,
+      "max_tangent_compatibility_residual": 1e-07,
+      "tangent_pinv_rcond": 1e-10,
+      "tangent_ridge": 1e-07
+    },
+    "poisson": {
+      "cg_maxiter": 200,
+      "cg_tol": 1e-08,
+      "gauge_strength": 1.0,
+      "grid_nx": 32,
+      "grid_ny": 16,
+      "operator_floor_rel": 2e-05,
+      "time_n": 5,
+      "x_max": 2.0,
+      "x_min": 0.0,
+      "y_max": 1.0,
+      "y_min": 0.0
+    },
+    "projection": {
+      "implicit_ridge": 0.0,
+      "lambda_clip": 1000.0,
+      "lbfgs_maxiter": 800,
+      "max_retries": 2,
+      "max_steps": 300,
+      "newton_ridge": 1e-07,
+      "retry_clip_multiplier": 2.0,
+      "search_line_search_steps": 6,
+      "search_max_steps": 80,
+      "search_residual_tol": 1e-07,
+      "solver_accept_tol": 2e-06,
+      "step_cap": 20.0
+    },
+    "randomness": {
+      "action_trials": 1,
+      "law_trials": 1,
+      "selection_namespace": 9890,
+      "validation_namespace": 9891,
+      "validation_trials": 1
+    },
+    "raster": {
+      "bandwidth": 0.0,
+      "truncate": 4.0
+    },
+    "reference": {
+      "bank_seed_offset": 3001,
+      "endpoint_particles": 2048,
+      "endpoint_seed_offset": 2001,
+      "particles": 1024,
+      "rk4_substeps_per_time_interval": 2
+    },
+    "reference_training": {
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.999,
+      "adam_eps": 1e-08,
+      "batch_size": 128,
+      "bridge_noise_std": 0.0,
+      "bridge_schedule": "linear",
+      "grad_clip_norm": 10.0,
+      "hidden_layers": 2,
+      "hidden_width": 32,
+      "learning_rate": 0.002,
+      "log_every": 5,
+      "min_learning_rate_ratio": 0.05,
+      "seed": 20260815,
+      "train_steps": 10
+    },
+    "seed": 20260815,
+    "truth": {
+      "amplitude": 0.1,
+      "endpoint_rk4_substeps": 32,
+      "epsilon": 0.25,
+      "horizon": 10.0,
+      "initial": {
+        "background_weight": 0.1,
+        "centers": [
+          [
+            0.45,
+            0.25
+          ],
+          [
+            0.78,
+            0.72
+          ],
+          [
+            1.28,
+            0.28
+          ],
+          [
+            1.62,
+            0.68
+          ]
+        ],
+        "mixture_weights": [
+          0.3,
+          0.2,
+          0.25,
+          0.25
+        ],
+        "std_x": 0.07,
+        "std_y": 0.07
+      },
+      "period": 10.0,
+      "rk4_substeps_per_time_interval": 4,
+      "truth_particles": 2048,
+      "truth_seed_offset": 1001
+    },
+    "validity": {
+      "max_finite_calibration_resid": 0.001,
+      "max_poisson_relative_residual": 0.001,
+      "max_population_calibration_resid": 1e-05,
+      "min_ess_fraction": 0.03,
+      "min_in_domain_base_mass": 0.99,
+      "tangent_lower_bound_tol": 1e-06
+    }
+  },
+  "config_hash": "8bcc2a69a1300806ffa2d1a09cb1b4cc195f76a315974d702a57b310e1078b51",
+  "experiment": "vortices_double_gyre",
+  "reference": {
+    "checkpoint": "/home/zanot/projects/tesseract2026/experiments/vortices/outputs/smoke/reference.npz",
+    "metadata": {
+      "bridge": {
+        "independent_endpoint_pairing": true,
+        "noise_std": 0.0,
+        "schedule": "linear"
+      },
+      "endpoint_signature": "4f25fa087629921c884c81a5d34486b99be9d63cd62936a918de22e228466876",
+      "experiment": "vortices_double_gyre",
+      "history": [
+        {
+          "conditional_fm_loss": 0.6394732088416402,
+          "grad_norm_preclip": 0.3965048474042482,
+          "learning_rate": 0.001953503690480396,
+          "step": 1
+        },
+        {
+          "conditional_fm_loss": 0.5863175154736817,
+          "grad_norm_preclip": 0.33125272982795856,
+          "learning_rate": 0.0010500000000000002,
+          "step": 5
+        },
+        {
+          "conditional_fm_loss": 0.5882505103187806,
+          "grad_norm_preclip": 0.34933181778688177,
+          "learning_rate": 0.0001,
+          "step": 10
+        }
+      ],
+      "network": {
+        "hidden_layers": 2,
+        "hidden_width": 32,
+        "parameter_layers": 3
+      },
+      "training": {
+        "batch_size": 128,
+        "seed": 20260815,
+        "steps": 10
+      },
+      "training_signature": "04a24586b6a93b82ccf3aae98b6d4d807d85948bfcaa04bfe99da29d5369b75d"
+    },
+    "min_in_domain_base_mass": 0.994140625
+  },
+  "schema_version": 1,
+  "smoke": true,
+  "smoke_centers": [
+    [
+      1.0054391187867293,
+      0.45190032164510396
+    ],
+    [
+      1.6637738445769186,
+      0.4553394877649872
+    ],
+    [
+      0.8846273006975893,
+      0.7418274510919728
+    ],
+    [
+      0.3619336863727898,
+      0.2705334360643854
+    ]
+  ],
+  "smoke_design": [
+    1.0054391187867293,
+    0.45190032164510396,
+    1.6637738445769186,
+    0.4553394877649872,
+    0.8846273006975893,
+    0.7418274510919728,
+    0.3619336863727898,
+    0.2705334360643854
+  ],
+  "smoke_metrics": {
+    "centers": [
+      [
+        1.0054391187867293,
+        0.45190032164510396
+      ],
+      [
+        1.6637738445769186,
+        0.4553394877649872
+      ],
+      [
+        0.8846273006975893,
+        0.7418274510919728
+      ],
+      [
+        0.3619336863727898,
+        0.2705334360643854
+      ]
+    ],
+    "full_action": 268580.69805096736,
+    "invalid_reason": null,
+    "law_risk": 0.12329755406547942,
+    "max_calibration_residual": 0.00031991081276101536,
+    "max_poisson_relative_residual": 6.940761550836484e-05,
+    "max_tangent_compatibility_residual": 3.2071911505610696e-12,
+    "min_covariance_eigenvalue": 6.288219005238526e-09,
+    "min_ess_fraction": 0.2663887403821247,
+    "spline_residual_sum_squares": 0.00036686434965619473,
+    "spline_roughness": 25.663642320641472,
+    "tangent_action": 427.89729974624134,
+    "tangent_full_gap": 268152.80075122113,
+    "tangent_lower_bound_violation": 0.0,
+    "trial": 0,
+    "valid": true
+  },
+  "truth": {
+    "min_in_domain_fraction": 1.0,
+    "signature": "7888fda894cad1eb42bb6a15172a6359016e26c57783d2c4e6719365314ef270"
+  }
+}

@@ -80,3 +80,68 @@ def rasterize_projected_particles(
     safe_mass = jnp.where(occupied, mass, 1.0)
     h = jnp.where(occupied, source / safe_mass, 0.0)
     return RasterResult(q, mass, h, source_before, source_after)
+
+
+def gaussian_kernel_2d_rect(
+    sigma_y_cells: float,
+    sigma_x_cells: float,
+    truncate: float,
+) -> Array:
+    """Separable anisotropic Gaussian antialiasing kernel in grid-cell units."""
+    sy = float(sigma_y_cells)
+    sx = float(sigma_x_cells)
+    if sy <= 0.0 and sx <= 0.0:
+        return jnp.ones((1, 1), dtype=jnp.float64)
+    sy = max(sy, 1.0e-15)
+    sx = max(sx, 1.0e-15)
+    ry = max(1, int(math.ceil(float(truncate) * sy)))
+    rx = max(1, int(math.ceil(float(truncate) * sx)))
+    yy = jnp.arange(-ry, ry + 1, dtype=jnp.float64)
+    xx = jnp.arange(-rx, rx + 1, dtype=jnp.float64)
+    ky = jnp.exp(-0.5 * (yy / sy) ** 2)
+    kx = jnp.exp(-0.5 * (xx / sx) ** 2)
+    ky = ky / jnp.sum(ky)
+    kx = kx / jnp.sum(kx)
+    return ky[:, None] * kx[None, :]
+
+
+def rasterize_projected_particles_rect(
+    x: Array,
+    weights: Array,
+    forcing: Array,
+    grid,
+    cfg: RasterConfig = RasterConfig(),
+) -> RasterResult:
+    """Rectangular-grid sibling of ``rasterize_projected_particles``.
+
+    The historical square-grid function is intentionally unchanged.  ``grid`` is
+    expected to provide ``size``, ``shape``, ``dx``, ``dy``, ``cell_area`` and
+    ``flat_bin_index`` (e.g. ``RectangularGrid2D``).
+    """
+    x = jnp.asarray(x, dtype=jnp.float64)
+    weights = jnp.asarray(weights, dtype=jnp.float64)
+    forcing = jnp.asarray(forcing, dtype=jnp.float64)
+
+    idx = grid.flat_bin_index(x)
+    mass_flat = jnp.zeros(int(grid.size), dtype=jnp.float64).at[idx].add(weights)
+    source_flat = jnp.zeros(int(grid.size), dtype=jnp.float64).at[idx].add(weights * forcing)
+    mass = mass_flat.reshape(grid.shape)
+    source = source_flat.reshape(grid.shape)
+
+    bandwidth = float(cfg.bandwidth) if cfg.bandwidth > 0.0 else 0.35 * min(grid.dx, grid.dy)
+    kernel = gaussian_kernel_2d_rect(bandwidth / grid.dy, bandwidth / grid.dx, cfg.truncate)
+    mass = jsp.signal.convolve2d(mass, kernel, mode="same")
+    source = jsp.signal.convolve2d(source, kernel, mode="same")
+
+    norm = jnp.maximum(jnp.sum(mass), 1.0e-300)
+    mass = mass / norm
+    source = source / norm
+    source_before = jnp.sum(source)
+    source = source - mass * source_before
+    source_after = jnp.sum(source)
+
+    q = mass / float(grid.cell_area)
+    occupied = mass > 1.0e-300
+    safe_mass = jnp.where(occupied, mass, 1.0)
+    h = jnp.where(occupied, source / safe_mass, 0.0)
+    return RasterResult(q, mass, h, source_before, source_after)

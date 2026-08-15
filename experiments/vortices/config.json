@@ -1,0 +1,239 @@
+{
+  "name": "vortices_double_gyre",
+  "seed": 20260815,
+  "truth": {
+    "amplitude": 0.1,
+    "epsilon": 0.25,
+    "horizon": 10.0,
+    "period": 10.0,
+    "truth_particles": 50000,
+    "truth_seed_offset": 1001,
+    "rk4_substeps_per_time_interval": 32,
+    "endpoint_rk4_substeps": 512,
+    "initial": {
+      "background_weight": 0.1,
+      "mixture_weights": [
+        0.3,
+        0.2,
+        0.25,
+        0.25
+      ],
+      "centers": [
+        [
+          0.45,
+          0.25
+        ],
+        [
+          0.78,
+          0.72
+        ],
+        [
+          1.28,
+          0.28
+        ],
+        [
+          1.62,
+          0.68
+        ]
+      ],
+      "std_x": 0.07,
+      "std_y": 0.07
+    }
+  },
+  "law": {
+    "mmd_bandwidths": [
+      0.05,
+      0.1,
+      0.2,
+      0.4
+    ],
+    "epsilon_l": 0.002,
+    "epsilon_r": 0.002
+  },
+  "measurement": {
+    "n_sensors": 4,
+    "sensor_width": 0.12,
+    "boundary_margin": 0.24,
+    "min_sep": 0.24,
+    "finite_n": 2000,
+    "acquisition_k": 9,
+    "obs_noise_std": 0.005
+  },
+  "moment_reconstruction": {
+    "kind": "endpoint_anchored_cubic_penalized_ls",
+    "internal_knots": 3,
+    "smoothing": 0.0001,
+    "ridge_rel": 1e-10,
+    "roughness_quadrature_order": 8
+  },
+  "reference_training": {
+    "seed": 20260815,
+    "hidden_width": 128,
+    "hidden_layers": 4,
+    "train_steps": 12000,
+    "batch_size": 2048,
+    "learning_rate": 0.001,
+    "min_learning_rate_ratio": 0.05,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_eps": 1e-08,
+    "grad_clip_norm": 10.0,
+    "bridge_schedule": "linear",
+    "bridge_noise_std": 0.0,
+    "log_every": 500
+  },
+  "reference": {
+    "endpoint_particles": 50000,
+    "endpoint_seed_offset": 2001,
+    "particles": 32768,
+    "bank_seed_offset": 3001,
+    "rk4_substeps_per_time_interval": 16
+  },
+  "projection": {
+    "max_steps": 300,
+    "newton_ridge": 1e-07,
+    "step_cap": 20.0,
+    "lambda_clip": 1000.0,
+    "implicit_ridge": 0.0,
+    "search_max_steps": 80,
+    "search_residual_tol": 1e-07,
+    "search_line_search_steps": 6,
+    "solver_accept_tol": 2e-06,
+    "lbfgs_maxiter": 800,
+    "retry_clip_multiplier": 2.0,
+    "max_retries": 2
+  },
+  "particle_mfsi": {
+    "covariance_ridge": 1e-07,
+    "tangent_ridge": 1e-07,
+    "exact_covariance_ridge": 0.0,
+    "exact_covariance_min_eig": 1e-12,
+    "exact_tangent_ridge": 0.0,
+    "tangent_pinv_rcond": 1e-10,
+    "max_tangent_compatibility_residual": 1e-07
+  },
+  "raster": {
+    "bandwidth": 0.0,
+    "truncate": 4.0
+  },
+  "poisson": {
+    "x_min": 0.0,
+    "x_max": 2.0,
+    "y_min": 0.0,
+    "y_max": 1.0,
+    "grid_nx": 128,
+    "grid_ny": 64,
+    "time_n": 21,
+    "operator_floor_rel": 2e-05,
+    "cg_tol": 1e-08,
+    "cg_maxiter": 520,
+    "gauge_strength": 1.0
+  },
+  "validity": {
+    "max_population_calibration_resid": 1e-05,
+    "max_finite_calibration_resid": 0.001,
+    "min_ess_fraction": 0.03,
+    "min_in_domain_base_mass": 0.995,
+    "tangent_lower_bound_tol": 1e-06
+  },
+  "optimization": {
+    "population_steps": 100,
+    "law_steps": 80,
+    "tangent_steps": 60,
+    "full_steps": 40,
+    "learning_rate": 0.01,
+    "population_learning_rate": 0.01,
+    "law_learning_rate": 0.008,
+    "tangent_learning_rate": 0.006,
+    "full_learning_rate": 0.004,
+    "constraint_penalty": 10000.0,
+    "feasibility_tol": 1e-06,
+    "invalid_penalty": 1000.0,
+    "start_count": 64,
+    "start_oversample": 128,
+    "population_exact_audit_candidates": 20,
+    "population_min_exact_valid": 6,
+    "law_gradient_trials": 4,
+    "law_exact_audit_candidates": 24,
+    "law_min_exact_valid": 8,
+    "tangent_gradient_trials": 4,
+    "tangent_local_starts": 12,
+    "tangent_local_scale": 0.08,
+    "tangent_exact_audit_candidates": 30,
+    "tangent_exact_rescore_candidates": 10,
+    "full_gradient_trials": 2,
+    "full_gradient_time_n": 7,
+    "full_gradient_grid_nx": 64,
+    "full_gradient_grid_ny": 32,
+    "full_gradient_cg_tol": 1e-06,
+    "full_gradient_cg_maxiter": 120,
+    "full_local_starts": 10,
+    "full_local_scale": 0.06,
+    "full_exact_audit_candidates": 30,
+    "full_prescreen_trials": 4,
+    "full_exact_rescore_candidates": 8
+  },
+  "randomness": {
+    "law_trials": 16,
+    "action_trials": 24,
+    "validation_trials": 64,
+    "selection_namespace": 9890,
+    "validation_namespace": 9891
+  },
+  "smoke": {
+    "truth": {
+      "truth_particles": 2048,
+      "rk4_substeps_per_time_interval": 4,
+      "endpoint_rk4_substeps": 32
+    },
+    "measurement": {
+      "finite_n": 64,
+      "acquisition_k": 5
+    },
+    "reference_training": {
+      "hidden_width": 32,
+      "hidden_layers": 2,
+      "train_steps": 10,
+      "batch_size": 128,
+      "learning_rate": 0.002,
+      "log_every": 5
+    },
+    "reference": {
+      "endpoint_particles": 2048,
+      "particles": 1024,
+      "rk4_substeps_per_time_interval": 2
+    },
+    "poisson": {
+      "grid_nx": 32,
+      "grid_ny": 16,
+      "time_n": 5,
+      "cg_maxiter": 200
+    },
+    "optimization": {
+      "population_steps": 0,
+      "law_steps": 0,
+      "tangent_steps": 0,
+      "full_steps": 0,
+      "start_count": 4,
+      "start_oversample": 128,
+      "smoke_probe_count": 16,
+      "full_gradient_time_n": 3,
+      "full_gradient_grid_nx": 16,
+      "full_gradient_grid_ny": 8,
+      "full_gradient_cg_maxiter": 40,
+      "law_gradient_trials": 1,
+      "tangent_gradient_trials": 1,
+      "full_gradient_trials": 1,
+      "full_prescreen_trials": 1
+    },
+    "randomness": {
+      "law_trials": 1,
+      "action_trials": 1,
+      "validation_trials": 1
+    },
+    "validity": {
+      "min_in_domain_base_mass": 0.99,
+      "max_poisson_relative_residual": 0.001
+    }
+  }
+}
