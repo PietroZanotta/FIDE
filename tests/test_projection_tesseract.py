@@ -6,7 +6,10 @@ import numpy as np
 import pytest
 
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
-from mfsi.projection_tesseract import is_tesseract_iprojection_available
+from mfsi.projection_tesseract import (
+    is_tesseract_iprojection_available,
+    solve_i_projection_trajectory_tesseract_forward,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -77,3 +80,25 @@ def test_native_trajectory_matches_jax_forward_and_vjp():
         (phi_dot, target_dot),
     )[1]
     np.testing.assert_allclose(actual_jvp, expected_jvp, rtol=2e-6, atol=2e-8)
+
+
+def test_direct_forward_audit_path_matches_differentiable_native_path():
+    phi, base, targets = _inputs()
+    cfg = IProjectionConfig(
+        max_steps=100,
+        residual_tol=1.0e-9,
+        newton_ridge=1.0e-9,
+        line_search_steps=6,
+    )
+    expected = EmpiricalIProjector(
+        cfg, trajectory_backend="tesseract_cpp"
+    ).project_trajectory(phi, base, targets)
+    log_base = jnp.where(base > 0.0, jnp.log(base), -jnp.inf)
+    actual = solve_i_projection_trajectory_tesseract_forward(
+        np.asarray(phi), np.asarray(log_base), np.asarray(targets), cfg
+    )
+    np.testing.assert_allclose(
+        actual["lambda_values"], expected.lam, rtol=2e-7, atol=2e-7
+    )
+    assert np.all(actual["converged"])
+    assert np.max(actual["residual_norm"]) <= cfg.residual_tol

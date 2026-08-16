@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import importlib
 from pathlib import Path
+import sys
 from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 if TYPE_CHECKING:
     from .projection import IProjectionConfig
@@ -32,6 +35,48 @@ def is_tesseract_iprojection_available() -> bool:
     return (_native_root() / "tesseract_api.py").is_file() and any(
         (_native_root() / "build").glob("_iprojection_native*.so")
     )
+
+
+@lru_cache(maxsize=1)
+def _native_module() -> Any:
+    """Load the forward C++ kernel without the differentiable JAX wrapper."""
+    build_dir = _native_root() / "build"
+    if str(build_dir) not in sys.path:
+        sys.path.insert(0, str(build_dir))
+    try:
+        return importlib.import_module("_iprojection_native")
+    except ImportError as exc:
+        raise TesseractIProjectionUnavailable(
+            "The native I-projection extension is unavailable; see its README."
+        ) from exc
+
+
+def solve_i_projection_trajectory_tesseract_forward(
+    phi: np.ndarray,
+    log_base_weights: np.ndarray,
+    targets: np.ndarray,
+    cfg: IProjectionConfig,
+) -> dict[str, np.ndarray]:
+    """Run the native forward solver directly for non-differentiated audits.
+
+    Exact audits never request a derivative, so routing them through a JAX custom
+    primitive only adds device transfers and compilation.  The same C++ Newton
+    kernel is called here, with contiguous float64 arrays and its convergence
+    diagnostics preserved for explicit post-checking by the caller.
+    """
+    result = _native_module().solve_batch(
+        np.ascontiguousarray(phi, dtype=np.float64),
+        np.ascontiguousarray(log_base_weights, dtype=np.float64),
+        np.ascontiguousarray(targets, dtype=np.float64),
+        int(cfg.max_steps),
+        float(cfg.residual_tol),
+        float(cfg.newton_ridge),
+        float(cfg.step_cap),
+        float(cfg.lambda_clip),
+        int(cfg.line_search_steps),
+        float(cfg.implicit_ridge),
+    )
+    return {name: np.asarray(value) for name, value in result.items()}
 
 
 @lru_cache(maxsize=1)

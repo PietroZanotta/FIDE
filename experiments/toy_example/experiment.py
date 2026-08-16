@@ -732,6 +732,22 @@ class ToyExperiment:
             ),
             trajectory_backend=str(proj_cfg.get("trajectory_backend", "jax")),
         )
+        # Final law audits use the declared full Newton budget.  Their targets are
+        # independent across trials, so the native backend can solve the complete
+        # [trial,time] bank at once and any missed roots can be repaired by the
+        # authoritative SciPy fallback below.
+        self.exact_projector = EmpiricalIProjector(
+            IProjectionConfig(
+                max_steps=int(proj_cfg.get("max_steps", 300)),
+                residual_tol=float(proj_cfg.get("solver_accept_tol", 2.0e-6)),
+                newton_ridge=float(proj_cfg.get("newton_ridge", 1e-7)),
+                step_cap=float(proj_cfg.get("step_cap", 20.0)),
+                lambda_clip=float(proj_cfg.get("lambda_clip", 1000.0)),
+                line_search_steps=int(proj_cfg.get("line_search_steps", 8)),
+                implicit_ridge=float(proj_cfg.get("implicit_ridge", 0.0)),
+            ),
+            trajectory_backend=str(proj_cfg.get("trajectory_backend", "jax")),
+        )
         self.moment_cfg = QuadraticBridgeConfig(
             ridge_rel=float(mom_cfg.get("ridge_rel", 1e-12)),
             variance_floor=float(mom_cfg.get("variance_floor", 1e-10)),
@@ -1152,14 +1168,119 @@ class ToyExperiment:
         self._exact_reconstruct_cache[cache_key] = result
         return result
 
-    def _exact_tilt(self, phi: np.ndarray, base: np.ndarray, target: np.ndarray, lam0: np.ndarray):
+    @partial(jax.jit, static_argnums=0)
+    def _exact_reconstruction_fit_batch(
+        self,
+        phi_grid: Array,
+        bank: TrialBank,
+        trial_indices: Array,
+    ):
+        """Vectorized unconstrained GLS fits used by exact law rescoring."""
+
+        def one(trial):
+            y, V, c0, c1 = self._measurement_data(phi_grid, bank, trial)
+            fit = fit_quadratic_bridge_gls(
+                self.times[self.acq_idx], y, V, c0, c1, self.times, self.moment_cfg
+            )
+            return fit.beta, fit.information, c0, c1
+
+        return jax.vmap(one)(trial_indices)
+
+    def _exact_reconstruct_batch(
+        self, eta: Array, bank: TrialBank
+    ) -> list[dict[str, Any]]:
+        """Batch GLS work, then retain exact per-trial polytope projections."""
+        key = self._exact_key(eta)
+        count = int(bank.masses.shape[0])
+        cache_keys = [(key, id(bank), trial) for trial in range(count)]
+        cached = [self._exact_reconstruct_cache.get(item) for item in cache_keys]
+        if all(item is not None for item in cached):
+            return [dict(item) for item in cached]
+        # A partial cache is unusual and keeping its existing values is preferable
+        # to compiling a second batch shape solely to fill a few missing rows.
+        if any(item is not None for item in cached):
+            return [self._exact_reconstruct(eta, bank, trial) for trial in range(count)]
+
+        g = self._exact_geometry(eta)
+        common_poly = self._exact_polytope(eta)
+        batch = self._exact_reconstruction_fit_batch(
+            jnp.asarray(g["phi_grid"], dtype=jnp.float64),
+            bank,
+            jnp.arange(count, dtype=jnp.int32),
+        )
+        beta_u, information, c0, c1 = (
+            np.asarray(value, dtype=np.float64) for value in jax.device_get(batch)
+        )
+        times = np.asarray(self.times, dtype=np.float64)
+        bridge = times * (1.0 - times)
+        bridge_dot = 1.0 - 2.0 * times
+        tol = float(
+            self.cfg.get("feasibility", {}).get(
+                "feasibility_tol", self.cfg.get("feasibility", {}).get("tol", 1.0e-9)
+            )
+        )
+        results = []
+        for trial in range(count):
+            poly = common_poly
+            if max(
+                np.max(np.abs(c0[trial] - g["c0"])),
+                np.max(np.abs(c1[trial] - g["c1"])),
+            ) > 1.0e-11:
+                poly = build_common_quadratic_beta_polytope_2d(
+                    times=times,
+                    c0=c0[trial],
+                    c1=c1[trial],
+                    physical_features=g["phi_grid"],
+                    particle_features_by_time=g["phi_nodes"],
+                    particle_mask_by_time=np.asarray(self.reference_in_domain, dtype=bool),
+                    margin=float(self.feasibility_margin),
+                    physical_equations=g["physical_equations"],
+                    particle_equations=g["particle_equations"],
+                )
+            projection = project_metric_polytope_exact_2d(
+                beta_u[trial], information[trial], poly, tol=tol
+            )
+            linear = (
+                (1.0 - times[:, None]) * c0[trial][None, :]
+                + times[:, None] * c1[trial][None, :]
+            )
+            c = linear + bridge[:, None] * projection.beta[None, :]
+            c_dot = (
+                (c1[trial] - c0[trial])[None, :]
+                + bridge_dot[:, None] * projection.beta[None, :]
+            )
+            result = {
+                "c": c,
+                "c_dot": c_dot,
+                "beta": projection.beta,
+                "projection_distance": float(projection.distance),
+                "max_unconstrained_violation": float(projection.max_unconstrained_violation),
+                "endpoint_feasibility_violation": float(poly.endpoint_max_violation),
+            }
+            self._exact_reconstruct_cache[cache_keys[trial]] = result
+            results.append(result)
+        return results
+
+    def _exact_tilt(
+        self,
+        phi: np.ndarray,
+        base: np.ndarray,
+        target: np.ndarray,
+        lam0: np.ndarray,
+        *,
+        newton_steps: int | None = None,
+    ):
         proj_cfg = self.cfg.get("projection", {})
         return robust_empirical_tilt_exact(
             phi,
             base,
             target,
             lam0=lam0,
-            newton_steps=int(proj_cfg.get("max_steps", 300)),
+            newton_steps=(
+                int(proj_cfg.get("max_steps", 300))
+                if newton_steps is None
+                else int(newton_steps)
+            ),
             newton_ridge=float(proj_cfg.get("newton_ridge", 1.0e-7)),
             step_cap=float(proj_cfg.get("step_cap", 20.0)),
             lambda_clip=float(proj_cfg.get("lambda_clip", 1000.0)),
@@ -1168,6 +1289,267 @@ class ToyExperiment:
             retry_multiplier=float(proj_cfg.get("retry_clip_multiplier", 2.0)),
             retries=int(proj_cfg.get("max_retries", 2)),
         )
+
+    def _exact_law_projection_batch(
+        self,
+        phi_nodes: np.ndarray,
+        targets: np.ndarray,
+        *,
+        base_weights: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Calibrate every law-audit trial/time pair, repairing missed roots.
+
+        The fast path is the same full-budget Newton trajectory used elsewhere,
+        evaluated as one native batch.  Residuals are recomputed independently in
+        NumPy; any non-finite or above-tolerance system is sent directly to the
+        robust L-BFGS-B fallback from its best native multiplier.
+        """
+        phi = np.asarray(phi_nodes, dtype=np.float64)
+        base = np.asarray(
+            self.reference_weights if base_weights is None else base_weights,
+            dtype=np.float64,
+        )
+        base = base / np.maximum(np.sum(base, axis=-1, keepdims=True), 1.0e-300)
+        log_base = np.full_like(base, -np.inf)
+        positive = base > 0.0
+        log_base[positive] = np.log(base[positive])
+        targets = np.asarray(targets, dtype=np.float64)
+
+        if self.exact_projector.trajectory_backend == "tesseract_cpp":
+            from mfsi.projection_tesseract import (
+                solve_i_projection_trajectory_tesseract_forward,
+            )
+
+            native_result = solve_i_projection_trajectory_tesseract_forward(
+                phi, log_base, targets, self.exact_projector.cfg
+            )
+            lam = np.asarray(native_result["lambda_values"], dtype=np.float64)
+        else:
+            state = self.exact_projector.project_trajectory(
+                jnp.asarray(phi), jnp.asarray(base), jnp.asarray(targets)
+            )
+            lam = np.asarray(jax.device_get(state.lam), dtype=np.float64)
+
+        def states_from_lambda(lambda_values):
+            logits = log_base[None, :, :] + np.einsum(
+                "tnm,btm->btn", phi, lambda_values
+            )
+            logits = logits - np.max(logits, axis=-1, keepdims=True)
+            weights = np.exp(logits)
+            weights = weights / np.maximum(
+                np.sum(weights, axis=-1, keepdims=True), 1.0e-300
+            )
+            moments = np.einsum("btn,tnm->btm", weights, phi)
+            residual_norm = np.linalg.norm(moments - targets, axis=-1)
+            ess_projected = 1.0 / np.maximum(
+                np.sum(weights * weights, axis=-1), 1.0e-300
+            )
+            ess_base = 1.0 / np.maximum(np.sum(base * base, axis=-1), 1.0e-300)
+            return weights, moments, residual_norm, ess_projected / ess_base[None, :]
+
+        weights, moments, residual_norm, ess_fraction = states_from_lambda(lam)
+        accept_tol = float(self.cfg.get("projection", {}).get("solver_accept_tol", 2.0e-6))
+        bad = (~np.isfinite(residual_norm)) | (residual_norm > accept_tol)
+        for trial, t_idx in np.argwhere(bad):
+            # Native Newton has already exhausted the declared budget.  Starting
+            # the robust solver from that multiplier and skipping duplicate Newton
+            # work reaches its independent L-BFGS-B/retry path immediately.
+            fallback_start = lam[trial, t_idx]
+            if not np.all(np.isfinite(fallback_start)):
+                fallback_start = np.zeros(phi.shape[-1], dtype=np.float64)
+            st = self._exact_tilt(
+                phi[t_idx],
+                base[t_idx],
+                targets[trial, t_idx],
+                fallback_start,
+                newton_steps=0,
+            )
+            lam[trial, t_idx] = st.lam
+            weights[trial, t_idx] = st.weights
+            moments[trial, t_idx] = st.moments
+            residual_norm[trial, t_idx] = st.residual_norm
+            ess_fraction[trial, t_idx] = st.ess_fraction
+        return weights, moments, residual_norm, ess_fraction
+
+    @partial(jax.jit, static_argnums=0)
+    def _exact_population_scores_batch(self, weights: Array, truth: Array) -> Array:
+        """Rasterize and MMD-score every alpha/interior-time pair together."""
+        idx = self.population_idx
+
+        def raster_alpha(alpha_weights):
+            return jax.vmap(
+                lambda nodes, row: rasterize_projected_particles(
+                    nodes,
+                    row,
+                    jnp.zeros_like(row),
+                    self.grid,
+                    self.raster_cfg,
+                ).mass
+            )(self.reference_nodes[idx], alpha_weights)
+
+        mass = jax.vmap(raster_alpha)(weights)
+        truth_mass = truth[:, idx].reshape(
+            (truth.shape[0], idx.shape[0], self.grid.n, self.grid.n)
+        )
+        values = jax.vmap(
+            jax.vmap(lambda p, q: gaussian_mmd2_grid_mass(p, q, self.mmd_kernel))
+        )(mass, truth_mass)
+        time_w = self.time_w[idx]
+        time_w = time_w / jnp.sum(time_w)
+        return jnp.sum(values * time_w[None, :], axis=1)
+
+    @partial(jax.jit, static_argnums=0)
+    def _exact_law_scores_batch(self, weights: Array, truth: Array) -> Array:
+        """Rasterize and score all trial/held-out laws in one compiled graph."""
+        held = self.heldout_idx
+
+        def raster_trial(trial_weights):
+            return jax.vmap(
+                lambda nodes, row: rasterize_projected_particles(
+                    nodes,
+                    row,
+                    jnp.zeros_like(row),
+                    self.grid,
+                    self.raster_cfg,
+                ).mass
+            )(self.reference_nodes[held], trial_weights[held])
+
+        mass = jax.vmap(raster_trial)(weights)
+        truth_mass = truth[:, held].reshape(
+            (truth.shape[0], held.shape[0], self.grid.n, self.grid.n)
+        )
+        values = jax.vmap(
+            jax.vmap(lambda p, q: gaussian_mmd2_grid_mass(p, q, self.mmd_kernel))
+        )(mass, truth_mass)
+        held_w = self.time_w[held]
+        held_w = held_w / jnp.sum(held_w)
+        return jnp.sum(values * held_w[None, :], axis=1)
+
+    def _exact_finite_rows_batch(
+        self, eta: Array, bank: TrialBank
+    ) -> list[dict[str, Any]]:
+        """Full-fidelity exact-law rows with batched numerical kernels."""
+        eta = self.family.canonicalize(eta)
+        count = int(bank.masses.shape[0])
+        trial_cache_keys = [
+            (
+                self._exact_key(eta),
+                id(bank),
+                trial,
+                True,
+                False,
+                False,
+            )
+            for trial in range(count)
+        ]
+        cached = [self._exact_trial_result_cache.get(key) for key in trial_cache_keys]
+        if all(row is not None for row in cached):
+            return [dict(row) for row in cached]
+
+        try:
+            g = self._exact_geometry(eta)
+            poly = self._exact_polytope(eta)
+            reconstructions = self._exact_reconstruct_batch(eta, bank)
+        except ExactFeasibilityError:
+            # Reuse the scalar failure constructor to keep rejection rows and
+            # reasons identical. The negative geometry result is already cached.
+            return [
+                self._exact_trial_result(
+                    eta,
+                    bank,
+                    trial,
+                    compute_law=True,
+                    compute_tangent=False,
+                    compute_full=False,
+                )
+                for trial in range(count)
+            ]
+
+        targets = np.stack([row["c"] for row in reconstructions])
+        physical = np.asarray(poly.physical_equations, dtype=np.float64)
+        physical_violation = np.max(
+            np.einsum("fm,btm->btf", physical[:, :2], targets)
+            + physical[None, None, :, 2],
+            axis=-1,
+        )
+        particle_violation = np.empty_like(physical_violation)
+        for t_idx, equations in enumerate(poly.particle_equations):
+            eq = np.asarray(equations, dtype=np.float64)
+            particle_violation[:, t_idx] = np.max(
+                targets[:, t_idx] @ eq[:, :2].T + eq[None, :, 2], axis=-1
+            )
+        max_hull = np.max(np.maximum(physical_violation, particle_violation), axis=1)
+
+        weights, _, residual_norm, ess_fraction = self._exact_law_projection_batch(
+            g["phi_nodes"], targets
+        )
+        scores = np.asarray(
+            jax.device_get(
+                self._exact_law_scores_batch(
+                    jnp.asarray(weights, dtype=jnp.float64), bank.masses
+                )
+            ),
+            dtype=np.float64,
+        )
+        max_resid = np.max(residual_norm, axis=1)
+        min_ess = np.min(ess_fraction, axis=1)
+        trial_alphas = np.asarray(bank.alphas, dtype=np.float64)
+
+        valid_cfg = self.cfg["validity"]
+        max_cal_allowed = float(valid_cfg.get("max_finite_calibration_resid", 1.0e-3))
+        min_ess_allowed = float(valid_cfg.get("min_ess_fraction", 0.03))
+        base_mass_ok = float(np.min(np.asarray(self.reference_base_mass))) >= float(
+            valid_cfg.get("min_in_domain_base_mass", 0.995)
+        )
+        hull_tol = max(
+            1.0e-10,
+            10.0
+            * float(
+                self.cfg.get("feasibility", {}).get(
+                    "feasibility_tol", self.cfg.get("feasibility", {}).get("tol", 1.0e-9)
+                )
+            ),
+        )
+
+        rows = []
+        for trial in range(count):
+            rec = reconstructions[trial]
+            valid = bool(
+                base_mass_ok
+                and rec["endpoint_feasibility_violation"] <= hull_tol
+                and max_hull[trial] <= hull_tol
+                and max_resid[trial] <= max_cal_allowed
+                and min_ess[trial] >= min_ess_allowed
+                and np.isfinite(scores[trial])
+            )
+            row = {
+                "trial": int(trial),
+                "alpha": float(trial_alphas[trial]),
+                "valid": valid,
+                "invalid_reason": (
+                    None if valid else "calibration_ess_hull_or_identifiability_gate"
+                ),
+                "law_risk": float(scores[trial]) if valid else float("nan"),
+                "tangent_action": float("nan"),
+                "full_action": float("nan"),
+                "max_calibration_residual": float(max_resid[trial]),
+                "min_ess_fraction": float(min_ess[trial]),
+                "max_hull_violation": float(max_hull[trial]),
+                "feasibility_projection_distance": float(rec["projection_distance"]),
+                "max_poisson_relative_residual": float("nan"),
+                "max_tangent_compatibility_residual": float("nan"),
+                "min_covariance_eigenvalue": float("nan"),
+                "tangent_full_gap": float("nan"),
+                "tangent_lower_bound_violation": float("nan"),
+            }
+            # Preserve a previously computed scalar row if this is an unusual
+            # partially cached call; otherwise publish the batched equivalent.
+            if cached[trial] is not None:
+                row = dict(cached[trial])
+            else:
+                self._exact_trial_result_cache[trial_cache_keys[trial]] = row
+            rows.append(row)
+        return rows
 
     def exact_population_result(self, eta: Array) -> dict[str, Any]:
         """Strict authoritative L(eta): invalid alpha/time rows are rejected."""
@@ -1179,11 +1561,10 @@ class ToyExperiment:
         alphas, alpha_w = self.population.alpha_quadrature(
             int(self.cfg["population"].get("alpha_quadrature_n", 5))
         )
-        alphas = np.asarray(alphas, dtype=np.float64)
+        alphas_j = jnp.asarray(alphas, dtype=jnp.float64)
+        alphas = np.asarray(alphas_j, dtype=np.float64)
         alpha_w = np.asarray(alpha_w, dtype=np.float64)
         idx = np.asarray(self.population_idx, dtype=np.int32)
-        tw = np.asarray(self.time_w, dtype=np.float64)[idx]
-        tw = tw / np.sum(tw)
         valid_cfg = self.cfg["validity"]
         max_cal_allowed = float(valid_cfg.get("max_population_calibration_resid", 1.0e-5))
         min_ess_allowed = float(valid_cfg.get("min_ess_fraction", 0.03))
@@ -1192,48 +1573,44 @@ class ToyExperiment:
         )
         hull_tol = max(1.0e-10, 10.0 * float(self.cfg.get("feasibility", {}).get("feasibility_tol", self.cfg.get("feasibility", {}).get("tol", 1.0e-9))))
 
-        alpha_scores = []
-        max_resid = 0.0
-        min_ess = np.inf
-        max_hull = -np.inf
-        all_valid = bool(base_mass_ok)
-        for alpha in alphas:
-            truth = np.asarray(
-                self.population.masses(self.times, jnp.asarray(alpha)), dtype=np.float64
-            ).reshape((len(self.times), -1))
-            targets = truth @ g["phi_grid"]
-            lam = np.zeros(2, dtype=np.float64)
-            vals = []
-            for t_idx in idx:
-                hull_v = max_hull_violation(g["particle_equations"][int(t_idx)], targets[int(t_idx)])
-                max_hull = max(max_hull, hull_v)
-                st = self._exact_tilt(
-                    g["phi_nodes"][int(t_idx)],
-                    np.asarray(self.reference_weights[int(t_idx)], dtype=np.float64),
-                    targets[int(t_idx)],
-                    lam,
-                )
-                lam = st.lam
-                max_resid = max(max_resid, st.residual_norm)
-                min_ess = min(min_ess, st.ess_fraction)
-                mass = self._raster_mass_from_weights(
-                    int(t_idx), jnp.asarray(st.weights, dtype=jnp.float64)
-                )
-                vals.append(float(gaussian_mmd2_grid_mass(
-                    mass,
-                    jnp.asarray(truth[int(t_idx)].reshape((self.grid.n, self.grid.n))),
-                    self.mmd_kernel,
-                )))
-                all_valid = all_valid and (hull_v <= hull_tol)
-            alpha_scores.append(float(np.sum(tw * np.asarray(vals))))
+        truth = np.asarray(
+            jax.vmap(lambda alpha: self.population.masses(self.times, alpha))(alphas_j),
+            dtype=np.float64,
+        ).reshape((len(alphas), len(self.times), -1))
+        targets = truth @ g["phi_grid"]
+        hull_by_alpha = np.empty((len(alphas), len(idx)), dtype=np.float64)
+        for local_t, t_idx in enumerate(idx):
+            equations = np.asarray(g["particle_equations"][int(t_idx)], dtype=np.float64)
+            hull_by_alpha[:, local_t] = np.max(
+                targets[:, t_idx] @ equations[:, :2].T + equations[None, :, 2],
+                axis=-1,
+            )
 
+        weights, _, residual_norm, ess_fraction = self._exact_law_projection_batch(
+            g["phi_nodes"][idx],
+            targets[:, idx],
+            base_weights=np.asarray(self.reference_weights, dtype=np.float64)[idx],
+        )
+        alpha_scores = np.asarray(
+            jax.device_get(
+                self._exact_population_scores_batch(
+                    jnp.asarray(weights, dtype=jnp.float64),
+                    jnp.asarray(truth, dtype=jnp.float64),
+                )
+            ),
+            dtype=np.float64,
+        )
+        max_resid = float(np.max(residual_norm))
+        min_ess = float(np.min(ess_fraction))
+        max_hull = float(np.max(hull_by_alpha))
         all_valid = bool(
-            all_valid
+            base_mass_ok
+            and max_hull <= hull_tol
             and max_resid <= max_cal_allowed
             and min_ess >= min_ess_allowed
             and np.all(np.isfinite(alpha_scores))
         )
-        value = float(np.sum(alpha_w * np.asarray(alpha_scores))) if all_valid else float("inf")
+        value = float(np.sum(alpha_w * alpha_scores)) if all_valid else float("inf")
         result = {
             "valid": all_valid,
             "value": value,
@@ -1475,12 +1852,7 @@ class ToyExperiment:
         cache_key = (self._exact_key(eta), id(bank))
         if cache_key in self._exact_finite_result_cache:
             return self._exact_finite_result_cache[cache_key]
-        rows = [
-            self._exact_trial_result(
-                eta, bank, r, compute_law=True, compute_tangent=False, compute_full=False
-            )
-            for r in range(int(bank.masses.shape[0]))
-        ]
+        rows = self._exact_finite_rows_batch(eta, bank)
         valid = bool(all(row["valid"] and np.isfinite(row["law_risk"]) for row in rows))
         value = float(np.mean([row["law_risk"] for row in rows])) if valid else float("inf")
         result = {"valid": valid, "value": value, "rows": rows}
