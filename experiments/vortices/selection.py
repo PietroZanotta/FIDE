@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any, Callable
 
 import jax
@@ -16,6 +17,52 @@ from mfsi.design import (
 )
 
 Array = jax.Array
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds < 60.0:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(round(seconds)), 60)
+    return f"{minutes}m{secs:02d}s"
+
+
+def _optimizer_progress(name: str):
+    started = time.perf_counter()
+    last = 0
+
+    def report(completed: int, total: int) -> None:
+        nonlocal last
+        stride = max(1, total // 10)
+        if completed == 1 or completed == total or completed - last >= stride:
+            elapsed = time.perf_counter() - started
+            rate = completed / max(elapsed, 1.0e-12)
+            eta = (total - completed) / max(rate, 1.0e-12)
+            print(
+                f"[progress] {name}: Adam trajectories {completed}/{total} "
+                f"elapsed={_format_duration(elapsed)} eta={_format_duration(eta)}",
+                flush=True,
+            )
+            last = completed
+
+    return report
+
+
+def _progress_iter(items, *, desc: str):
+    total = len(items)
+    started = time.perf_counter()
+    stride = max(1, total // 10) if total else 1
+    print(f"[progress] {desc}: 0/{total}", flush=True)
+    for completed, item in enumerate(items, start=1):
+        yield item
+        if completed == 1 or completed == total or completed % stride == 0:
+            elapsed = time.perf_counter() - started
+            rate = completed / max(elapsed, 1.0e-12)
+            eta = (total - completed) / max(rate, 1.0e-12)
+            print(
+                f"[progress] {desc}: {completed}/{total} "
+                f"elapsed={_format_duration(elapsed)} eta={_format_duration(eta)}",
+                flush=True,
+            )
 
 
 def _prefix_bank(bank, count: int):
@@ -89,6 +136,19 @@ def _rank_pool(exp, pool: list[Array], score: Callable[[Array], Array], constrai
     return ranked
 
 
+def _optimizer_starts(starts: Array, cfg: dict[str, Any], stage: str) -> Array:
+    """Use a small deterministic Adam subset; all seeds remain in audit pools."""
+    total = int(starts.shape[0])
+    requested = int(cfg["optimization"].get(f"{stage}_start_count", total))
+    count = max(1, min(requested, total))
+    print(
+        f"[search] {stage}: optimizing {count}/{total} starts; "
+        "retaining every start for ranking/audit",
+        flush=True,
+    )
+    return starts[:count]
+
+
 def _audit_population(exp, ranked, *, limit: int, min_valid: int) -> tuple[Array, list[dict[str, Any]]]:
     # boundary-fix diagnostic version: keep the authoritative acceptance rule,
     # but surface why candidates were rejected instead of collapsing everything
@@ -100,7 +160,7 @@ def _audit_population(exp, ranked, *, limit: int, min_valid: int) -> tuple[Array
     min_base_mass_allowed = float(validity.get("min_in_domain_base_mass", 0.995))
     reference_min_base_mass = float(np.min(np.asarray(exp.reference_base_mass, dtype=np.float64)))
 
-    for _, fast, eta in ranked:
+    for _, fast, eta in _progress_iter(ranked, desc="stage 1 exact population audit"):
         if len(rows) >= int(limit) and sum(r["valid"] for r in rows) >= int(min_valid):
             break
         exact = exp.exact_population_result(eta)
@@ -170,7 +230,7 @@ def _audit_law(
     mandatory_keys = {_key(exp, e) for e in (mandatory or [])}
     ordered = [r for r in ranked if _key(exp, r[2]) in mandatory_keys] + [r for r in ranked if _key(exp, r[2]) not in mandatory_keys]
     rows = []
-    for violation, fast, eta in ordered:
+    for violation, fast, eta in _progress_iter(ordered, desc="stage 2 exact law audit"):
         if len(rows) >= int(limit) and sum(r["valid"] for r in rows) >= int(min_valid):
             break
         pop = exp.exact_population_result(eta)
@@ -207,7 +267,7 @@ def _audit_action(
     ordered = [r for r in ranked if _key(exp, r[2]) in mandatory_keys] + [r for r in ranked if _key(exp, r[2]) not in mandatory_keys]
     law_valid = []
     audited = 0
-    for violation, proxy, eta in ordered:
+    for violation, proxy, eta in _progress_iter(ordered, desc=f"{name}: exact law screen"):
         if audited >= int(audit_limit) and len(law_valid) >= int(finalist_count):
             break
         audited += 1
@@ -226,7 +286,7 @@ def _audit_action(
 
     if exact_prescreen is not None:
         prescreened = []
-        for row in law_valid:
+        for row in _progress_iter(law_valid, desc=f"{name}: exact action prescreen"):
             rec = exact_prescreen(row["eta"])
             if rec["valid"] and np.isfinite(rec["value"]):
                 rr = dict(row)
@@ -248,7 +308,7 @@ def _audit_action(
             final_keys.add(key)
 
     rows = []
-    for row in finalists:
+    for row in _progress_iter(finalists, desc=f"{name}: exact finalist rescore"):
         rec = exact_action(row["eta"])
         rows.append({
             "eta": np.asarray(row["eta"]).tolist(), "proxy": row["proxy"],
@@ -276,15 +336,31 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     eps_l = float(law_cfg["epsilon_l"])
     eps_r = float(law_cfg["epsilon_r"])
     geometry = _geometry_constraints(exp)
+    stage_timings: dict[str, float] = {}
+
+    def stage_started(name: str) -> float:
+        print(f"[timing] starting {name}", flush=True)
+        return time.perf_counter()
+
+    def stage_finished(name: str, started: float) -> None:
+        stage_timings[name] = time.perf_counter() - started
+        print(
+            f"[timing] finished {name} in {_format_duration(stage_timings[name])}",
+            flush=True,
+        )
 
     # ------------------------------------------------------------------
     # 1/4 DG-Exact information risk L
     # ------------------------------------------------------------------
     print("[1/4] optimizing exact-moment oracle law risk L", flush=True)
+    stage_1_started = stage_started("stage_1_population")
     pop_cfg = _opt_cfg(cfg, "population")
+    pop_optimizer_starts = _optimizer_starts(starts, cfg, "population")
     pop_candidates = optimize_multistart_candidates(
-        exp.population_loss, starts, pop_cfg, constraints=geometry,
+        exp.population_loss, pop_optimizer_starts, pop_cfg, constraints=geometry,
         canonicalize=exp.family.canonicalize,
+        vectorize_starts=False,
+        progress_callback=_optimizer_progress("stage 1 population"),
     ) if pop_cfg.steps > 0 else []
     pop_pool = _dedupe(exp, list(starts) + [r.eta for r in pop_candidates])
     pop_ranked = _rank_pool(exp, pop_pool, exp.population_loss, geometry)
@@ -295,6 +371,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     )
     L_star = float(exp.exact_population_result(population_eta)["value"])
     L_max = L_star + eps_l
+    stage_finished("stage_1_population", stage_1_started)
 
     # ------------------------------------------------------------------
     # 2/4 sparse/noisy spline law risk R under L tolerance
@@ -308,12 +385,16 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     law_obj = lambda eta: exp.finite_risk(eta, law_grad_bank)
     law_cfg_opt = _opt_cfg(cfg, "law")
     law_starts = jnp.stack(_dedupe(exp, [population_eta] + list(starts)))
+    law_optimizer_starts = _optimizer_starts(law_starts, cfg, "law")
     print("[2/4] optimizing sparse/noisy cubic-spline law risk R", flush=True)
+    stage_2_started = stage_started("stage_2_finite_law")
     law_candidates = optimize_multistart_candidates(
-        law_obj, law_starts, law_cfg_opt, constraints=law_constraints,
+        law_obj, law_optimizer_starts, law_cfg_opt, constraints=law_constraints,
         canonicalize=exp.family.canonicalize,
     
-        vectorize_starts=False,) if law_cfg_opt.steps > 0 else []
+        vectorize_starts=False,
+        progress_callback=_optimizer_progress("stage 2 finite law"),
+    ) if law_cfg_opt.steps > 0 else []
     law_pool = _dedupe(exp, list(law_starts) + [r.eta for r in law_candidates])
     law_ranked = _rank_pool(exp, law_pool, law_obj, law_constraints)
     law_eta, law_rows = _audit_law(
@@ -324,6 +405,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     )
     R_star = float(exp.exact_finite_result(law_eta, law_bank)["value"])
     R_max = R_star + eps_r
+    stage_finished("stage_2_finite_law", stage_2_started)
 
     # Shared differentiable law constraints for transport stages.
     fast_R_anchor = float(jax.jit(lambda e: exp.finite_risk(e, law_grad_bank))(law_eta))
@@ -344,17 +426,21 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         count_per_center=int(opt.get("tangent_local_starts", 12)),
         scale=float(opt.get("tangent_local_scale", 0.08)), seed=int(cfg["seed"]) + 401,
     )
-    tangent_starts = jnp.stack(_dedupe(exp, [law_eta, population_eta] + list(starts) + local))
+    tangent_starts = jnp.stack(_dedupe(exp, [law_eta, population_eta] + local + list(starts)))
+    tangent_optimizer_starts = _optimizer_starts(tangent_starts, cfg, "tangent")
     tangent_obj_raw = lambda eta: exp.tangent_action_gradient(eta, grad_tan_bank)
     tan_anchor = max(float(tangent_obj_raw(law_eta)), 1.0e-12)
     tangent_obj = lambda eta: tangent_obj_raw(eta) / tan_anchor
     tan_cfg = _opt_cfg(cfg, "tangent")
     print("[3/4] optimizing tangent correction action", flush=True)
+    stage_3_started = stage_started("stage_3_tangent")
     tan_candidates = optimize_multistart_candidates(
-        tangent_obj, tangent_starts, tan_cfg, constraints=action_constraints,
+        tangent_obj, tangent_optimizer_starts, tan_cfg, constraints=action_constraints,
         canonicalize=exp.family.canonicalize,
     
-        vectorize_starts=False,) if tan_cfg.steps > 0 else []
+        vectorize_starts=False,
+        progress_callback=_optimizer_progress("stage 3 tangent"),
+    ) if tan_cfg.steps > 0 else []
     tan_pool = _dedupe(exp, list(tangent_starts) + [r.eta for r in tan_candidates])
     tan_ranked = _rank_pool(exp, tan_pool, tangent_obj_raw, action_constraints)
     tangent_eta, tangent_rows = _audit_action(
@@ -365,6 +451,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         finalist_count=int(opt.get("tangent_exact_rescore_candidates", 8)),
         mandatory=[law_eta, population_eta],
     )
+    stage_finished("stage_3_tangent", stage_3_started)
 
     # ------------------------------------------------------------------
     # 4/4 full weighted-Poisson action
@@ -375,15 +462,27 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         count_per_center=int(opt.get("full_local_starts", 12)),
         scale=float(opt.get("full_local_scale", 0.06)), seed=int(cfg["seed"]) + 501,
     )
-    full_starts = jnp.stack(_dedupe(exp, [law_eta, tangent_eta, population_eta] + list(starts) + local_full))
+    full_starts = jnp.stack(
+        _dedupe(exp, [law_eta, tangent_eta, population_eta] + local_full + list(starts))
+    )
+    full_optimizer_starts = _optimizer_starts(full_starts, cfg, "full")
     full_raw = lambda eta: exp.full_action_gradient(eta, grad_full_bank)
     full_anchor = max(float(full_raw(law_eta)), 1.0e-12)
     full_obj = lambda eta: full_raw(eta) / full_anchor
     full_cfg = _opt_cfg(cfg, "full")
-    print("[4/4] optimizing lower-resolution full weighted-Poisson action proxy", flush=True)
+    print(
+        "[4/4] optimizing lower-resolution full weighted-Poisson action proxy "
+        f"({len(exp.full_gradient_time_idx)}/{len(exp.times)} times, "
+        f"grid={exp.full_gradient_grid.nx}x{exp.full_gradient_grid.ny}, "
+        f"I-projection={exp.iprojection_backend}, "
+        f"Poisson={exp.full_gradient_poisson_backend})",
+        flush=True,
+    )
+    stage_4_started = stage_started("stage_4_full")
     full_candidates = optimize_multistart_candidates(
-        full_obj, full_starts, full_cfg, constraints=action_constraints,
+        full_obj, full_optimizer_starts, full_cfg, constraints=action_constraints,
         canonicalize=exp.family.canonicalize, vectorize_starts=False,
+        progress_callback=_optimizer_progress("stage 4 full"),
     ) if full_cfg.steps > 0 else []
     full_pool = _dedupe(exp, list(full_starts) + [r.eta for r in full_candidates])
     full_ranked = _rank_pool(exp, full_pool, full_raw, action_constraints)
@@ -397,11 +496,13 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         finalist_count=int(opt.get("full_exact_rescore_candidates", 10)),
         mandatory=[law_eta, tangent_eta, population_eta],
     )
+    stage_finished("stage_4_full", stage_4_started)
 
     return {
         "population_eta": population_eta, "law_eta": law_eta,
         "tangent_eta": tangent_eta, "full_eta": full_eta,
         "L_star": L_star, "L_max": L_max, "R_star": R_star, "R_max": R_max,
+        "stage_timings_seconds": stage_timings,
         "audit": {
             "population": population_rows, "law": law_rows,
             "tangent": tangent_rows, "full": full_rows,

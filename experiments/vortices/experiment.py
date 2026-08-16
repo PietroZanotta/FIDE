@@ -4,11 +4,14 @@ import csv
 import json
 import math
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
+import time
 from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
+import jax.scipy as jsp
 import numpy as np
 
 from domain import DoubleGyreConfig, DoubleGyreTruth, EmpiricalEndpointSource, InitialLawConfig
@@ -21,12 +24,86 @@ from mfsi.measurements import GaussianPointSensors2D
 from mfsi.metrics import gaussian_mmd2_grid_mass, multiscale_gaussian_mmd_kernel_rect
 from mfsi.moments import AnchoredCubicSplineConfig, AnchoredCubicSplineReconstructor
 from mfsi.particles import ParticleMFSIConfig, particle_mfsi_state
-from mfsi.poisson import PoissonConfig, solve_weighted_poisson
+from mfsi.poisson import PoissonConfig, solve_weighted_poisson, weighted_laplacian
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
 from mfsi.raster import RasterConfig, rasterize_projected_particles_rect
 from mfsi.reference import MLPReferenceFlow, save_npz_checkpoint
 
 Array = jax.Array
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(float(seconds), 0.0)
+    if seconds < 60.0:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(round(seconds)), 60)
+    if minutes < 60:
+        return f"{minutes}m{secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m{secs:02d}s"
+
+
+def _progress_iter(items, *, desc: str, total: int | None = None):
+    """Log-friendly progress with elapsed time and ETA."""
+    if total is None:
+        total = len(items)
+    total = int(total)
+    started = time.perf_counter()
+    last_report = started
+    completed = 0
+    stride = max(1, total // 10) if total else 1
+    print(f"[progress] {desc}: 0/{total}", flush=True)
+    try:
+        for completed, item in enumerate(items, start=1):
+            yield item
+            now = time.perf_counter()
+            if completed == 1 or completed == total or completed % stride == 0 or now - last_report >= 15.0:
+                elapsed = now - started
+                rate = completed / max(elapsed, 1.0e-12)
+                eta = (total - completed) / max(rate, 1.0e-12)
+                print(
+                    f"[progress] {desc}: {completed}/{total} "
+                    f"({100.0 * completed / max(total, 1):5.1f}%) "
+                    f"elapsed={_format_duration(elapsed)} "
+                    f"eta={_format_duration(eta)} rate={rate:.2f}/s",
+                    flush=True,
+                )
+                last_report = now
+    finally:
+        if completed < total:
+            print(
+                f"[progress] {desc}: stopped after {completed}/{total} "
+                f"elapsed={_format_duration(time.perf_counter() - started)}",
+                flush=True,
+            )
+
+
+@partial(jax.jit, static_argnames=("dx", "operator_floor_rel", "gauge_strength"))
+def _batched_poisson_diagnostics(
+    psi: Array,
+    q: Array,
+    h: Array,
+    *,
+    dx: float,
+    operator_floor_rel: float,
+    gauge_strength: float,
+) -> tuple[Array, Array]:
+    """Physical actions and true residuals for an explicit Poisson batch."""
+    q_floor = operator_floor_rel * jnp.max(q, axis=(-2, -1), keepdims=True)
+    q_operator = q + q_floor
+    rhs = -(q * h)
+    flat_q = q.reshape((q.shape[0], -1))
+    gauge = flat_q / jnp.maximum(jnp.linalg.norm(flat_q, axis=-1, keepdims=True), 1.0e-300)
+    gauge = gauge.reshape(q.shape)
+    operator_psi = jax.vmap(lambda p, qo: weighted_laplacian(p, qo, dx))(psi, q_operator)
+    gauge_projection = jnp.sum(gauge * psi, axis=(-2, -1), keepdims=True)
+    residual = operator_psi + gauge_strength * gauge * gauge_projection - rhs
+    residual_norm = jnp.linalg.norm(residual.reshape((residual.shape[0], -1)), axis=-1)
+    rhs_norm = jnp.linalg.norm(rhs.reshape((rhs.shape[0], -1)), axis=-1)
+    relative_residual = residual_norm / jnp.maximum(rhs_norm, 1.0e-14)
+    physical_operator = jax.vmap(lambda p, qp: weighted_laplacian(p, qp, dx))(psi, q)
+    actions = (dx * dx) * jnp.sum(psi * physical_operator, axis=(-2, -1))
+    return actions, relative_residual
 
 
 
@@ -458,15 +535,32 @@ class VortexExperiment:
         )
 
         proj = cfg["projection"]
-        self.projector = EmpiricalIProjector(IProjectionConfig(
-            max_steps=int(proj.get("search_max_steps", proj.get("max_steps", 300))),
-            residual_tol=float(proj.get("search_residual_tol", proj.get("residual_tol", 1.0e-10))),
-            newton_ridge=float(proj.get("newton_ridge", 1.0e-7)),
-            step_cap=float(proj.get("step_cap", 20.0)),
-            lambda_clip=float(proj.get("lambda_clip", 1000.0)),
-            line_search_steps=int(proj.get("search_line_search_steps", proj.get("line_search_steps", 8))),
-            implicit_ridge=float(proj.get("implicit_ridge", 0.0)),
-        ))
+        self.iprojection_backend = str(proj.get("trajectory_backend", "jax"))
+        if self.iprojection_backend not in {"jax", "tesseract_cpp"}:
+            raise ValueError("projection.trajectory_backend must be 'jax' or 'tesseract_cpp'")
+        if self.iprojection_backend == "tesseract_cpp":
+            from mfsi.projection_tesseract import (
+                TesseractIProjectionUnavailable,
+                is_tesseract_iprojection_available,
+            )
+
+            if not is_tesseract_iprojection_available():
+                raise TesseractIProjectionUnavailable(
+                    "vortices requests the native I-projection backend, but "
+                    "Tesseract-JAX or the compiled extension is unavailable"
+                )
+        self.projector = EmpiricalIProjector(
+            IProjectionConfig(
+                max_steps=int(proj.get("search_max_steps", proj.get("max_steps", 300))),
+                residual_tol=float(proj.get("search_residual_tol", proj.get("residual_tol", 1.0e-10))),
+                newton_ridge=float(proj.get("newton_ridge", 1.0e-7)),
+                step_cap=float(proj.get("step_cap", 20.0)),
+                lambda_clip=float(proj.get("lambda_clip", 1000.0)),
+                line_search_steps=int(proj.get("search_line_search_steps", proj.get("line_search_steps", 8))),
+                implicit_ridge=float(proj.get("implicit_ridge", 0.0)),
+            ),
+            trajectory_backend=self.iprojection_backend,
+        )
         pcfg = cfg.get("particle_mfsi", {})
         self.particle_cfg = ParticleMFSIConfig(
             covariance_ridge=float(pcfg.get("covariance_ridge", 1.0e-7)),
@@ -503,6 +597,30 @@ class VortexExperiment:
         grad_idx = np.unique(np.rint(np.linspace(0, len(self.times) - 1, grad_time_n)).astype(np.int32))
         self.full_gradient_time_idx = jnp.asarray(grad_idx, dtype=jnp.int32)
         self.full_gradient_time_w = _trap_weights(self.times[self.full_gradient_time_idx])
+        self.full_gradient_poisson_backend = str(opt.get("full_gradient_poisson_backend", "jax"))
+        self.full_exact_poisson_backend = str(
+            opt.get("full_exact_poisson_backend", self.full_gradient_poisson_backend)
+        )
+        for key, backend in (
+            ("full_gradient_poisson_backend", self.full_gradient_poisson_backend),
+            ("full_exact_poisson_backend", self.full_exact_poisson_backend),
+        ):
+            if backend not in {"jax", "tesseract_cpp"}:
+                raise ValueError(f"optimization.{key} must be 'jax' or 'tesseract_cpp'")
+        if "tesseract_cpp" in {
+            self.full_gradient_poisson_backend,
+            self.full_exact_poisson_backend,
+        }:
+            from mfsi.poisson_tesseract import (
+                TesseractPoissonUnavailable,
+                is_tesseract_poisson_available,
+            )
+
+            if not is_tesseract_poisson_available():
+                raise TesseractPoissonUnavailable(
+                    "vortices requests the native Poisson backend, but "
+                    "Tesseract-JAX or the compiled extension is unavailable"
+                )
 
         self.reference_in_domain = self.grid.in_domain(self.reference_nodes)
         self.reference_base_mass = jnp.sum(
@@ -524,7 +642,16 @@ class VortexExperiment:
             cfg["law"].get("mmd_bandwidths", [0.05, 0.10, 0.20, 0.40]),
         )
         self.truth_masses = self._truth_grid_masses()
+        self.truth_kernel_potential = jax.vmap(
+            lambda mass: jsp.signal.fftconvolve(mass, self.mmd_kernel, mode="same")
+        )(self.truth_masses)
+        self.truth_kernel_self = jnp.sum(
+            self.truth_masses * self.truth_kernel_potential, axis=(-2, -1)
+        )
         self._exact_cache: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._exact_geometry_cache: tuple[
+            tuple[float, ...], tuple[np.ndarray, np.ndarray, np.ndarray]
+        ] | None = None
 
     def _truth_grid_masses(self) -> Array:
         n = int(self.truth_particles.shape[1])
@@ -543,6 +670,33 @@ class VortexExperiment:
         grad_ref = self.family.feature_gradients(self.reference_nodes, eta)
         return phi_truth, phi_ref, grad_ref
 
+    def _law_risk_rows(self, masses: Array) -> Array:
+        """MMD rows with the truth-side convolution precomputed once per run."""
+        kernel = self.mmd_kernel
+        truth_potential = self.truth_kernel_potential
+        truth_self = self.truth_kernel_self
+
+        def one_trial(trial_masses):
+            projected_potential = jax.vmap(
+                lambda mass: jsp.signal.fftconvolve(mass, kernel, mode="same")
+            )(trial_masses)
+            projected_self = jnp.sum(
+                trial_masses * projected_potential, axis=(-2, -1)
+            )
+            cross = jnp.sum(trial_masses * truth_potential, axis=(-2, -1))
+            return jnp.maximum(projected_self + truth_self - 2.0 * cross, 0.0)
+
+        return jax.vmap(one_trial)(masses)
+
+    def _law_risk_at_time(self, mass: Array, t_idx: int) -> Array:
+        projected = jsp.signal.fftconvolve(mass, self.mmd_kernel, mode="same")
+        value = (
+            jnp.sum(mass * projected)
+            + self.truth_kernel_self[t_idx]
+            - 2.0 * jnp.sum(mass * self.truth_kernel_potential[t_idx])
+        )
+        return jnp.maximum(value, 0.0)
+
     def _measurement_reconstruction(
         self, phi_truth: Array, bank: ObservationTrialBank, trial: int | Array
     ) -> Reconstruction:
@@ -556,6 +710,97 @@ class VortexExperiment:
         y = jnp.where(endpoint[:, None], exact, y)
         fit = self.reconstructor.reconstruct(y, exact[0], exact[-1])
         return Reconstruction(fit.c, fit.c_dot, fit.coefficients, fit.residual_sum_squares, fit.roughness)
+
+    def _measurement_reconstruction_batch(
+        self, phi_truth: Array, bank: ObservationTrialBank
+    ) -> Reconstruction:
+        trials = jnp.arange(int(bank.sample_indices.shape[0]), dtype=jnp.int32)
+        return jax.vmap(lambda trial: self._measurement_reconstruction(phi_truth, bank, trial))(trials)
+
+    def _particle_trajectory(
+        self,
+        *,
+        phi: Array,
+        grad_phi: Array,
+        velocity: Array,
+        base_weights: Array,
+        targets: Array,
+        targets_dot: Array,
+    ):
+        """Project and form particle forcing/tangent action for a `[B,T]` bank."""
+        projection = self.projector.project_trajectory(phi, base_weights, targets)
+        weights = projection.weights
+        advective = jnp.einsum("tnmd,tnd->tnm", grad_phi, velocity)
+        mean_advective = jnp.einsum("btn,tnm->btm", weights, advective)
+        g = jnp.einsum("tnm,btm->btn", advective, projection.lam)
+        mean_g = jnp.einsum("btn,btn->bt", weights, g)
+        centered_phi = phi[None, :, :, :] - projection.moments[:, :, None, :]
+        cov_phi_g = jnp.einsum(
+            "btn,btnm,btn->btm",
+            weights,
+            centered_phi,
+            g - mean_g[:, :, None],
+        )
+        eye = jnp.eye(phi.shape[-1], dtype=phi.dtype)
+        lambda_dot = jnp.linalg.solve(
+            projection.covariance + float(self.particle_cfg.covariance_ridge) * eye,
+            (targets_dot - mean_advective - cov_phi_g)[..., None],
+        )[..., 0]
+        forcing = jnp.einsum("btnm,btm->btn", centered_phi, lambda_dot)
+        forcing = forcing + g - mean_g[:, :, None]
+        forcing = forcing - jnp.einsum("btn,btn->bt", weights, forcing)[:, :, None]
+
+        tangent_gram = jnp.einsum("btn,tnmd,tnkd->btmk", weights, grad_phi, grad_phi)
+        tangent_residual = mean_advective - targets_dot
+        tangent_coeff = jnp.linalg.solve(
+            tangent_gram + float(self.particle_cfg.tangent_ridge) * eye,
+            tangent_residual[..., None],
+        )[..., 0]
+        tangent_action = jnp.einsum("btm,btm->bt", tangent_residual, tangent_coeff)
+        return projection, forcing, tangent_action
+
+    def _raster_trajectory(self, weights: Array, forcing: Array, *, time_idx: Array, grid):
+        nodes = self.reference_nodes[time_idx]
+
+        def raster_trial(w_trial, f_trial):
+            return jax.vmap(
+                lambda x, w, f: rasterize_projected_particles_rect(
+                    x, w, f, grid, self.raster_cfg
+                )
+            )(nodes, w_trial, f_trial)
+
+        return jax.vmap(raster_trial)(weights, forcing)
+
+    def _poisson_batch(
+        self,
+        q: Array,
+        h: Array,
+        *,
+        cfg: PoissonConfig,
+        backend: str,
+    ) -> tuple[Array, Array]:
+        """Return `[B,T]` physical actions/residuals from one flattened batch."""
+        leading_shape = q.shape[:2]
+        q_flat = q.reshape((-1,) + q.shape[-2:])
+        h_flat = h.reshape((-1,) + h.shape[-2:])
+        if backend == "tesseract_cpp":
+            from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract
+
+            psi = solve_weighted_poisson_batch_tesseract(q_flat, h_flat, cfg)
+            actions, residuals = _batched_poisson_diagnostics(
+                psi,
+                q_flat,
+                h_flat,
+                dx=float(cfg.dx),
+                operator_floor_rel=float(cfg.operator_floor_rel),
+                gauge_strength=float(cfg.gauge_strength),
+            )
+        else:
+            solved = jax.vmap(lambda q_one, h_one: solve_weighted_poisson(q_one, h_one, cfg))(
+                q_flat, h_flat
+            )
+            actions, residuals = solved.action, solved.relative_residual
+        return actions.reshape(leading_shape), residuals.reshape(leading_shape)
 
     def _validity(self, max_resid: Array, min_ess: Array, poisson_rel: Array | None = None) -> Array:
         v = self.cfg.get("validity", {})
@@ -578,19 +823,19 @@ class VortexExperiment:
     def population_loss(self, eta: Array) -> Array:
         """DG-Exact oracle risk: exact hidden moments, no sparse observation layer."""
         phi_truth, phi_ref, _ = self._geometry(eta)
-        targets = jnp.mean(phi_truth, axis=1)
-        lam = jnp.zeros((self.family.n_sensors,), dtype=jnp.float64)
-        vals = []
-        max_resid = jnp.asarray(0.0)
-        min_ess = jnp.asarray(jnp.inf)
-        for t_idx in range(len(self.times)):
-            st = self.projector.project(phi_ref[t_idx], self.reference_weights[t_idx], targets[t_idx], lam0=lam)
-            lam = st.lam
-            max_resid = jnp.maximum(max_resid, jnp.linalg.norm(st.residual))
-            min_ess = jnp.minimum(min_ess, st.ess_fraction)
-            qmass = self._raster_projected_mass(t_idx, st.weights)
-            vals.append(gaussian_mmd2_grid_mass(qmass, self.truth_masses[t_idx], self.mmd_kernel))
-        risk = jnp.sum(self.time_w * jnp.stack(vals))
+        targets = jnp.mean(phi_truth, axis=1)[None, :, :]
+        projection = self.projector.project_trajectory(phi_ref, self.reference_weights, targets)
+        zeros = jnp.zeros_like(projection.weights)
+        rasters = self._raster_trajectory(
+            projection.weights,
+            zeros,
+            time_idx=jnp.arange(len(self.times), dtype=jnp.int32),
+            grid=self.grid,
+        )
+        vals = self._law_risk_rows(rasters.mass)[0]
+        risk = jnp.sum(self.time_w * vals)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual[0], axis=-1))
+        min_ess = jnp.min(projection.ess_fraction[0])
         v = self.cfg.get("validity", {})
         valid = (
             (max_resid <= float(v.get("max_population_calibration_resid", 1.0e-5)))
@@ -601,24 +846,21 @@ class VortexExperiment:
 
     def finite_risk(self, eta: Array, bank: ObservationTrialBank) -> Array:
         phi_truth, phi_ref, _ = self._geometry(eta)
-        rows = []
-        for trial in range(int(bank.sample_indices.shape[0])):
-            rec = self._measurement_reconstruction(phi_truth, bank, trial)
-            lam = jnp.zeros((self.family.n_sensors,), dtype=jnp.float64)
-            vals = []
-            max_resid = jnp.asarray(0.0)
-            min_ess = jnp.asarray(jnp.inf)
-            for t_idx in range(len(self.times)):
-                st = self.projector.project(phi_ref[t_idx], self.reference_weights[t_idx], rec.c[t_idx], lam0=lam)
-                lam = st.lam
-                max_resid = jnp.maximum(max_resid, jnp.linalg.norm(st.residual))
-                min_ess = jnp.minimum(min_ess, st.ess_fraction)
-                qmass = self._raster_projected_mass(t_idx, st.weights)
-                vals.append(gaussian_mmd2_grid_mass(qmass, self.truth_masses[t_idx], self.mmd_kernel))
-            risk = jnp.sum(self.time_w * jnp.stack(vals))
-            valid = self._validity(max_resid, min_ess)
-            rows.append(jnp.where(valid, risk, risk + float(self.cfg.get("optimization", {}).get("invalid_penalty", 1.0e3))))
-        return jnp.mean(jnp.stack(rows))
+        rec = self._measurement_reconstruction_batch(phi_truth, bank)
+        projection = self.projector.project_trajectory(phi_ref, self.reference_weights, rec.c)
+        rasters = self._raster_trajectory(
+            projection.weights,
+            jnp.zeros_like(projection.weights),
+            time_idx=jnp.arange(len(self.times), dtype=jnp.int32),
+            grid=self.grid,
+        )
+        vals = self._law_risk_rows(rasters.mass)
+        risks = jnp.sum(vals * self.time_w[None, :], axis=1)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
+        valid = self._validity(max_resid, min_ess)
+        penalty = float(self.cfg.get("optimization", {}).get("invalid_penalty", 1.0e3))
+        return jnp.mean(jnp.where(valid, risks, risks + penalty))
 
     def _one_trial_metrics_from_geometry(
         self,
@@ -665,11 +907,19 @@ class VortexExperiment:
 
     def tangent_action(self, eta: Array, bank: ObservationTrialBank) -> Array:
         phi_truth, phi_ref, grad_ref = self._geometry(eta)
-        vals = []
-        for trial in range(int(bank.sample_indices.shape[0])):
-            row = self._one_trial_metrics_from_geometry(phi_truth, phi_ref, grad_ref, bank, trial, full=False)
-            vals.append(jnp.where(row.valid, row.tangent_action, row.tangent_action + 1.0e5))
-        return jnp.mean(jnp.stack(vals))
+        rec = self._measurement_reconstruction_batch(phi_truth, bank)
+        projection, _, tangent = self._particle_trajectory(
+            phi=phi_ref,
+            grad_phi=grad_ref,
+            velocity=self.reference_velocity,
+            base_weights=self.reference_weights,
+            targets=rec.c,
+            targets_dot=rec.c_dot,
+        )
+        values = jnp.sum(tangent * self.time_w[None, :], axis=1)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
+        return jnp.mean(jnp.where(self._validity(max_resid, min_ess), values, values + 1.0e5))
 
     def tangent_action_gradient(self, eta: Array, bank: ObservationTrialBank) -> Array:
         return self.tangent_action(eta, bank)
@@ -729,19 +979,60 @@ class VortexExperiment:
 
     def full_action_gradient(self, eta: Array, bank: ObservationTrialBank) -> Array:
         phi_truth, phi_ref, grad_ref = self._geometry(eta)
-        vals = [
-            self._one_trial_full_action_gradient(phi_truth, phi_ref, grad_ref, bank, trial)
-            for trial in range(int(bank.sample_indices.shape[0]))
-        ]
-        return jnp.mean(jnp.stack(vals))
+        rec = self._measurement_reconstruction_batch(phi_truth, bank)
+        time_idx = self.full_gradient_time_idx
+        projection, forcing, _ = self._particle_trajectory(
+            phi=phi_ref[time_idx],
+            grad_phi=grad_ref[time_idx],
+            velocity=self.reference_velocity[time_idx],
+            base_weights=self.reference_weights[time_idx],
+            targets=rec.c[:, time_idx],
+            targets_dot=rec.c_dot[:, time_idx],
+        )
+        rasters = self._raster_trajectory(
+            projection.weights,
+            forcing,
+            time_idx=time_idx,
+            grid=self.full_gradient_grid,
+        )
+        actions, _ = self._poisson_batch(
+            rasters.q,
+            rasters.h,
+            cfg=self.poisson_gradient_cfg,
+            backend=self.full_gradient_poisson_backend,
+        )
+        values = jnp.sum(actions * self.full_gradient_time_w[None, :], axis=1)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
+        return jnp.mean(jnp.where(self._validity(max_resid, min_ess), values, values + 1.0e5))
 
     def full_action(self, eta: Array, bank: ObservationTrialBank) -> Array:
         phi_truth, phi_ref, grad_ref = self._geometry(eta)
-        vals = []
-        for trial in range(int(bank.sample_indices.shape[0])):
-            row = self._one_trial_metrics_from_geometry(phi_truth, phi_ref, grad_ref, bank, trial, full=True)
-            vals.append(jnp.where(row.valid, row.full_action, row.full_action + 1.0e5))
-        return jnp.mean(jnp.stack(vals))
+        rec = self._measurement_reconstruction_batch(phi_truth, bank)
+        projection, forcing, _ = self._particle_trajectory(
+            phi=phi_ref,
+            grad_phi=grad_ref,
+            velocity=self.reference_velocity,
+            base_weights=self.reference_weights,
+            targets=rec.c,
+            targets_dot=rec.c_dot,
+        )
+        all_times = jnp.arange(len(self.times), dtype=jnp.int32)
+        rasters = self._raster_trajectory(
+            projection.weights, forcing, time_idx=all_times, grid=self.grid
+        )
+        actions, residuals = self._poisson_batch(
+            rasters.q,
+            rasters.h,
+            cfg=self.poisson_cfg,
+            backend=self.full_exact_poisson_backend,
+        )
+        values = jnp.sum(actions * self.time_w[None, :], axis=1)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
+        max_poisson = jnp.max(residuals, axis=1)
+        valid = self._validity(max_resid, min_ess, max_poisson)
+        return jnp.mean(jnp.where(valid, values, values + 1.0e5))
 
     def _exact_tilt(self, phi: np.ndarray, base: np.ndarray, target: np.ndarray, lam0: np.ndarray):
         p = self.cfg.get("projection", {})
@@ -760,13 +1051,21 @@ class VortexExperiment:
     def _exact_key(self, eta: Array) -> tuple[float, ...]:
         return tuple(np.round(np.asarray(self.family.canonicalize(eta), dtype=np.float64), 12))
 
+    def _exact_geometry(self, eta: Array) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Single-entry host cache; exact trial banks reuse geometry for every trial."""
+        key = self._exact_key(eta)
+        cached = self._exact_geometry_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        geometry = tuple(np.asarray(x, dtype=np.float64) for x in self._geometry(eta))
+        self._exact_geometry_cache = (key, geometry)
+        return geometry
+
     def exact_population_result(self, eta: Array) -> dict[str, Any]:
         key = ("population", self._exact_key(eta))
         if key in self._exact_cache:
             return dict(self._exact_cache[key])
-        phi_truth, phi_ref, _ = self._geometry(eta)
-        phi_truth_np = np.asarray(phi_truth)
-        phi_ref_np = np.asarray(phi_ref)
+        phi_truth_np, phi_ref_np, _ = self._exact_geometry(eta)
         targets = np.mean(phi_truth_np, axis=1)
         lam = np.zeros(self.family.n_sensors, dtype=np.float64)
         vals = []
@@ -778,7 +1077,7 @@ class VortexExperiment:
             max_resid = max(max_resid, st.residual_norm)
             min_ess = min(min_ess, st.ess_fraction)
             mass = self._raster_projected_mass(t_idx, jnp.asarray(st.weights))
-            vals.append(float(gaussian_mmd2_grid_mass(mass, self.truth_masses[t_idx], self.mmd_kernel)))
+            vals.append(float(self._law_risk_at_time(mass, t_idx)))
         valid = bool(valid and max_resid <= float(self.cfg["validity"].get("max_population_calibration_resid", 1.0e-5)) and min_ess >= float(self.cfg["validity"].get("min_ess_fraction", 0.03)))
         value = float(np.sum(np.asarray(self.time_w) * np.asarray(vals))) if valid else float("inf")
         out = {"valid": valid, "value": value, "max_calibration_residual": max_resid, "min_ess_fraction": min_ess}
@@ -798,14 +1097,15 @@ class VortexExperiment:
         cache_key = ("trial", self._exact_key(eta), id(bank), int(trial), compute_law, compute_tangent, compute_full)
         if cache_key in self._exact_cache:
             return dict(self._exact_cache[cache_key])
-        phi_truth, phi_ref, grad_ref = self._geometry(eta)
+        phi_truth_np, phi_ref_np, grad_ref_np = self._exact_geometry(eta)
+        phi_truth = jnp.asarray(phi_truth_np)
         rec = self._measurement_reconstruction(phi_truth, bank, trial)
-        phi_ref_np = np.asarray(phi_ref)
-        grad_np = np.asarray(grad_ref) if (compute_tangent or compute_full) else None
+        grad_np = grad_ref_np if (compute_tangent or compute_full) else None
         rec_c = np.asarray(rec.c)
         rec_cd = np.asarray(rec.c_dot)
         lam = np.zeros(self.family.n_sensors, dtype=np.float64)
         law_vals, tan_vals, full_vals = [], [], []
+        full_q_rows, full_h_rows = [], []
         max_resid, min_ess, max_poisson = 0.0, np.inf, 0.0
         max_compat, min_cov_eig = 0.0, np.inf
         valid = float(np.min(np.asarray(self.reference_base_mass))) >= float(self.cfg["validity"].get("min_in_domain_base_mass", 0.995))
@@ -854,11 +1154,27 @@ class VortexExperiment:
                     self.reference_nodes[t_idx], jnp.asarray(st.weights), jnp.asarray(forcing), self.grid, self.raster_cfg
                 )
                 if compute_law:
-                    law_vals.append(float(gaussian_mmd2_grid_mass(ras.mass, self.truth_masses[t_idx], self.mmd_kernel)))
+                    law_vals.append(float(self._law_risk_at_time(ras.mass, t_idx)))
                 if compute_full:
-                    pois = solve_weighted_poisson(ras.q, ras.h, self.poisson_cfg)
-                    full_vals.append(float(pois.action))
-                    max_poisson = max(max_poisson, float(pois.relative_residual))
+                    if self.full_exact_poisson_backend == "tesseract_cpp":
+                        full_q_rows.append(ras.q)
+                        full_h_rows.append(ras.h)
+                    else:
+                        pois = solve_weighted_poisson(ras.q, ras.h, self.poisson_cfg)
+                        full_vals.append(float(pois.action))
+                        max_poisson = max(max_poisson, float(pois.relative_residual))
+
+        if compute_full and self.full_exact_poisson_backend == "tesseract_cpp":
+            q_batch = jnp.stack(full_q_rows)[None, ...]
+            h_batch = jnp.stack(full_h_rows)[None, ...]
+            actions, residuals = self._poisson_batch(
+                q_batch,
+                h_batch,
+                cfg=self.poisson_cfg,
+                backend=self.full_exact_poisson_backend,
+            )
+            full_vals = np.asarray(actions[0], dtype=np.float64).tolist()
+            max_poisson = float(np.max(np.asarray(residuals[0], dtype=np.float64)))
 
         valid = bool(
             valid
@@ -909,10 +1225,19 @@ class VortexExperiment:
         valid = bool(all(r["valid"] and np.isfinite(r["full_action"]) for r in rows))
         return {"valid": valid, "value": float(np.mean([r["full_action"] for r in rows])) if valid else float("inf"), "rows": rows}
 
-    def evaluate_trials_exact(self, eta: Array, bank: ObservationTrialBank) -> list[dict[str, Any]]:
+    def evaluate_trials_exact(
+        self,
+        eta: Array,
+        bank: ObservationTrialBank,
+        *,
+        progress_desc: str | None = None,
+    ) -> list[dict[str, Any]]:
         centers = np.asarray(self.family.centers(self.family.canonicalize(eta)), dtype=np.float64).tolist()
         out = []
-        for r in range(int(bank.sample_indices.shape[0])):
+        trials = range(int(bank.sample_indices.shape[0]))
+        if progress_desc is not None:
+            trials = _progress_iter(trials, desc=progress_desc, total=int(bank.sample_indices.shape[0]))
+        for r in trials:
             row = self._exact_trial_result(eta, bank, r, compute_law=True, compute_tangent=True, compute_full=True)
             row["centers"] = centers
             out.append(row)
@@ -934,6 +1259,7 @@ def _paired_reduction(full_values: list[float], law_values: list[float]) -> dict
 
 
 def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False) -> dict[str, Any]:
+    run_started = time.perf_counter()
     cfg = json.loads(json.dumps(cfg))
     cfg.setdefault("validity", {})
     cfg["validity"].setdefault("max_population_calibration_resid", 1.0e-5)
@@ -942,6 +1268,56 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     cfg["validity"].setdefault("min_in_domain_base_mass", 0.995)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    config_hash = fingerprint(cfg)
+    timing_path = output_dir / "run_timing.json"
+    previous_phases: dict[str, float] = {}
+    if timing_path.exists():
+        try:
+            previous = json.loads(timing_path.read_text(encoding="utf-8"))
+            if previous.get("config_hash") == config_hash:
+                previous_phases = {
+                    str(name): float(seconds)
+                    for name, seconds in previous.get("phases_seconds", {}).items()
+                }
+                print(
+                    "[timing] previous compatible run took "
+                    f"{_format_duration(float(previous['total_seconds']))}",
+                    flush=True,
+                )
+        except (OSError, ValueError, TypeError, KeyError):
+            print("[timing] ignoring unreadable prior run_timing.json", flush=True)
+
+    phase_timings: dict[str, float] = {}
+
+    def begin_phase(name: str) -> float:
+        expected = previous_phases.get(name)
+        suffix = (
+            f"; previous compatible run={_format_duration(expected)}"
+            if expected is not None
+            else ""
+        )
+        print(f"[timing] starting {name}{suffix}", flush=True)
+        return time.perf_counter()
+
+    def finish_phase(name: str, started: float) -> None:
+        elapsed = time.perf_counter() - started
+        phase_timings[name] = elapsed
+        print(
+            f"[timing] finished {name} in {_format_duration(elapsed)}; "
+            f"run elapsed={_format_duration(time.perf_counter() - run_started)}",
+            flush=True,
+        )
+
+    def timing_payload() -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "config_hash": config_hash,
+            "total_seconds": float(time.perf_counter() - run_started),
+            "phases_seconds": dict(phase_timings),
+        }
+
+    setup_started = begin_phase("setup_and_cached_inputs")
 
     times = jnp.linspace(0.0, 1.0, int(cfg["poisson"]["time_n"]), dtype=jnp.float64)
     truth = _truth_from_cfg(cfg)
@@ -984,8 +1360,17 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         min_sep=float(meas.get("min_sep", 0.24)),
         oversample=int(cfg["optimization"].get("start_oversample", 64)),
     )
+    print(
+        "[backends] "
+        f"I-projection={exp.iprojection_backend}, "
+        f"Poisson proxy={exp.full_gradient_poisson_backend}, "
+        f"Poisson exact={exp.full_exact_poisson_backend}",
+        flush=True,
+    )
+    finish_phase("setup_and_cached_inputs", setup_started)
 
     if smoke:
+        smoke_started = begin_phase("smoke_exact_path")
         probes = random_point_sensor_starts(
             jax.random.PRNGKey(int(cfg["seed"]) + 17017),
             max(16, int(cfg["optimization"].get("smoke_probe_count", 32))),
@@ -994,7 +1379,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         )
         smoke_bank = prefix_bank(selection, 1)
         chosen = None
-        for eta in probes:
+        for eta in _progress_iter(probes, desc="smoke: exact-valid design search"):
             pre = exp._exact_trial_result(eta, smoke_bank, 0, compute_law=False, compute_tangent=False, compute_full=False)
             if pre["valid"]:
                 chosen = eta
@@ -1002,9 +1387,16 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         if chosen is None:
             raise RuntimeError("smoke could not find an exact-valid point-sensor design")
         metrics = exp.evaluate_trials_exact(chosen, smoke_bank)[0]
+        finish_phase("smoke_exact_path", smoke_started)
+        timings = timing_payload()
         result = {
             "schema_version": 1, "experiment": "vortices_double_gyre", "smoke": True,
-            "config": cfg, "config_hash": fingerprint(cfg),
+            "config": cfg, "config_hash": config_hash, "timings_seconds": timings,
+            "backends": {
+                "iprojection": exp.iprojection_backend,
+                "full_gradient_poisson": exp.full_gradient_poisson_backend,
+                "full_exact_poisson": exp.full_exact_poisson_backend,
+            },
             "truth": {"signature": truth_signature, "min_in_domain_fraction": float(jnp.min(exp.truth_in_domain_fraction))},
             "reference": {"checkpoint": str(checkpoint), "metadata": reference_metadata, "min_in_domain_base_mass": float(jnp.min(exp.reference_base_mass))},
             "smoke_design": np.asarray(chosen, dtype=np.float64).tolist(),
@@ -1012,21 +1404,25 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             "smoke_metrics": metrics,
         }
         _write_json(output_dir / "result.json", result)
+        _write_json(timing_path, timings)
         return result
 
     from selection import optimize_vortex_designs
 
+    selection_started = begin_phase("stages_1_4_selection")
     sel = optimize_vortex_designs(exp, law_bank, action_bank, starts, output_dir)
+    finish_phase("stages_1_4_selection", selection_started)
     designs = {
         "population": sel["population_eta"], "law": sel["law_eta"],
         "tangent": sel["tangent_eta"], "full": sel["full_eta"],
     }
+    validation_started = begin_phase("validation_and_certification")
     print("[validation] evaluating disjoint observation bank", flush=True)
     validation_rows: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {}
     per_design: dict[str, list[dict[str, Any]]] = {}
     for name, eta in designs.items():
-        rows = exp.evaluate_trials_exact(eta, validation)
+        rows = exp.evaluate_trials_exact(eta, validation, progress_desc=f"validation {name}")
         for row in rows:
             row["design"] = name
         per_design[name] = rows
@@ -1080,7 +1476,12 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
 
     result = {
         "schema_version": 1, "experiment": "vortices_double_gyre", "smoke": False,
-        "config": cfg, "config_hash": fingerprint(cfg),
+        "config": cfg, "config_hash": config_hash,
+        "backends": {
+            "iprojection": exp.iprojection_backend,
+            "full_gradient_poisson": exp.full_gradient_poisson_backend,
+            "full_exact_poisson": exp.full_exact_poisson_backend,
+        },
         "truth": {"signature": truth_signature, "truth_bank": "truth_bank.npz", "min_in_domain_fraction": float(jnp.min(exp.truth_in_domain_fraction))},
         "reference": {"checkpoint": str(checkpoint), "metadata": reference_metadata, "reference_bank": "reference_bank.npz", "min_in_domain_base_mass": float(jnp.min(exp.reference_base_mass))},
         "randomness": {"selection_bank": "selection_bank.npz", "validation_bank": "validation_bank.npz", "law_trials_effective": law_trials, "action_trials_effective": action_trials, "validation_trials_effective": validation_trials},
@@ -1089,12 +1490,17 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         "selection_centers": {name: np.asarray(exp.family.centers(eta), dtype=np.float64).tolist() for name, eta in designs.items()},
         "selection_certificates": certificates,
         "selection_audit": sel.get("audit", {}),
+        "selection_timings_seconds": sel.get("stage_timings_seconds", {}),
         "validation": summaries,
         "contrasts": {"full_vs_law_full_action_reduction": _paired_reduction(
             [r["full_action"] for r in per_design["full"]], [r["full_action"] for r in per_design["law"]]
         )},
     }
+    finish_phase("validation_and_certification", validation_started)
+    timings = timing_payload()
+    result["timings_seconds"] = timings
     _write_json(output_dir / "result.json", result)
+    _write_json(timing_path, timings)
     _write_csv(output_dir / "result.candidate_summary.csv", candidate_rows)
     _write_csv(output_dir / "result.validation_trials.csv", validation_rows)
     _write_json(output_dir / "manifest.json", {
@@ -1104,7 +1510,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             "reference_endpoints": "reference_endpoints.npz", "reference_bank": "reference_bank.npz",
             "selection_bank": "selection_bank.npz", "validation_bank": "validation_bank.npz",
             "result": "result.json", "candidate_summary": "result.candidate_summary.csv",
-            "validation_trials": "result.validation_trials.csv",
+            "validation_trials": "result.validation_trials.csv", "run_timing": "run_timing.json",
         },
     })
     return result

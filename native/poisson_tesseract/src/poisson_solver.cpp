@@ -33,6 +33,101 @@ void matvec(
     }
 }
 
+void build_ic0(
+    const double* q,
+    const double* gauge,
+    double* lower_left,
+    double* lower_up,
+    double* diagonal,
+    int height,
+    int width,
+    double dx,
+    double gauge_strength) {
+    const std::size_t size = static_cast<std::size_t>(height) * width;
+    std::vector<double> operator_diagonal(size);
+    weighted_laplacian_diag(
+        q,
+        gauge,
+        operator_diagonal.data(),
+        height,
+        width,
+        dx,
+        gauge_strength);
+    std::fill(lower_left, lower_left + size, 0.0);
+    std::fill(lower_up, lower_up + size, 0.0);
+    const double inv_dx2 = 1.0 / (dx * dx);
+
+    // Zero-fill incomplete Cholesky of the five-point diffusion stencil.  The
+    // dense gauge rank-one term is represented on the diagonal; omitting its
+    // off-diagonal fill keeps the factor sparse while preserving an SPD
+    // preconditioner for the gauge-regularized M-matrix.
+    for (int i = 0; i < height; ++i) {
+        const std::size_t row = static_cast<std::size_t>(i) * width;
+        for (int j = 0; j < width; ++j) {
+            const std::size_t index = row + j;
+            double pivot = operator_diagonal[index];
+            if (j > 0) {
+                const std::size_t left = index - 1;
+                const double edge = -0.5 * (q[index] + q[left]) * inv_dx2;
+                lower_left[index] = edge / diagonal[left];
+                pivot -= lower_left[index] * lower_left[index];
+            }
+            if (i > 0) {
+                const std::size_t up = index - width;
+                const double edge = -0.5 * (q[index] + q[up]) * inv_dx2;
+                lower_up[index] = edge / diagonal[up];
+                pivot -= lower_up[index] * lower_up[index];
+            }
+            const double floor = std::max(
+                1.0e-24,
+                1.0e-14 * std::max(operator_diagonal[index], 1.0));
+            diagonal[index] = std::sqrt(std::max(pivot, floor));
+        }
+    }
+}
+
+void apply_ic0(
+    const double* residual,
+    double* output,
+    double* workspace,
+    const double* lower_left,
+    const double* lower_up,
+    const double* diagonal,
+    int height,
+    int width) {
+    // Forward substitution: L y = r.
+    for (int i = 0; i < height; ++i) {
+        const std::size_t row = static_cast<std::size_t>(i) * width;
+        for (int j = 0; j < width; ++j) {
+            const std::size_t index = row + j;
+            double value = residual[index];
+            if (j > 0) {
+                value -= lower_left[index] * workspace[index - 1];
+            }
+            if (i > 0) {
+                value -= lower_up[index] * workspace[index - width];
+            }
+            workspace[index] = value / diagonal[index];
+        }
+    }
+
+    // Back substitution: L^T z = y.
+    for (int i = height - 1; i >= 0; --i) {
+        const std::size_t row = static_cast<std::size_t>(i) * width;
+        for (int j = width - 1; j >= 0; --j) {
+            const std::size_t index = row + j;
+            double value = workspace[index];
+            if (j + 1 < width) {
+                value -= lower_left[index + 1] * output[index + 1];
+            }
+            if (i + 1 < height) {
+                value -= lower_up[index + width] * output[index + width];
+            }
+            output[index] = value / diagonal[index];
+        }
+    }
+}
+
 SolveStats pcg_one_system(
     const double* q,
     const double* rhs,
@@ -49,11 +144,23 @@ SolveStats pcg_one_system(
     std::vector<double> z(size);
     std::vector<double> p(size);
     std::vector<double> ap(size);
-    std::vector<double> diag(size);
+    std::vector<double> ic_workspace(size);
+    std::vector<double> ic_lower_left(size);
+    std::vector<double> ic_lower_up(size);
+    std::vector<double> ic_diagonal(size);
 
     std::fill(x, x + size, 0.0);
     std::copy(rhs, rhs + size, r.begin());
-    weighted_laplacian_diag(q, gauge, diag.data(), height, width, dx, gauge_strength);
+    build_ic0(
+        q,
+        gauge,
+        ic_lower_left.data(),
+        ic_lower_up.data(),
+        ic_diagonal.data(),
+        height,
+        width,
+        dx,
+        gauge_strength);
 
     const double rhs_norm = std::sqrt(dot(rhs, rhs, size));
     const double scale = std::max(rhs_norm, std::numeric_limits<double>::min());
@@ -61,9 +168,15 @@ SolveStats pcg_one_system(
         return {0, 0.0, true};
     }
 
-    for (std::size_t i = 0; i < size; ++i) {
-        z[i] = r[i] / std::max(diag[i], 1.0e-10);
-    }
+    apply_ic0(
+        r.data(),
+        z.data(),
+        ic_workspace.data(),
+        ic_lower_left.data(),
+        ic_lower_up.data(),
+        ic_diagonal.data(),
+        height,
+        width);
     p = z;
     double rz = dot(r.data(), z.data(), size);
     SolveStats result{0, 1.0, false};
@@ -87,9 +200,15 @@ SolveStats pcg_one_system(
             break;
         }
 
-        for (std::size_t i = 0; i < size; ++i) {
-            z[i] = r[i] / std::max(diag[i], 1.0e-10);
-        }
+        apply_ic0(
+            r.data(),
+            z.data(),
+            ic_workspace.data(),
+            ic_lower_left.data(),
+            ic_lower_up.data(),
+            ic_diagonal.data(),
+            height,
+            width);
         const double next_rz = dot(r.data(), z.data(), size);
         if (!std::isfinite(next_rz)) {
             break;
