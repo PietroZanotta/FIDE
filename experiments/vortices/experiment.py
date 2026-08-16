@@ -179,6 +179,40 @@ def _mean_se(values: list[float]) -> dict[str, float | int]:
     return {"mean": float(np.mean(x)), "se": se, "n": int(len(x))}
 
 
+def _empirical_coordinate_support_gaps(
+    features: np.ndarray,
+    base_weights: np.ndarray,
+    targets: np.ndarray,
+) -> np.ndarray:
+    """Return a cheap necessary feasibility certificate for moment targets.
+
+    Every coordinate of a moment produced by non-negative reweighting must lie
+    between the smallest and largest active particle feature. The gap is positive
+    inside that coordinate box and negative outside it. This is not a complete
+    convex-hull test, but a negative value is an exact infeasibility certificate.
+    """
+    phi = np.asarray(features, dtype=np.float64)
+    base = np.asarray(base_weights, dtype=np.float64)
+    target = np.asarray(targets, dtype=np.float64)
+    if target.ndim == 2:
+        target = target[None, ...]
+    if phi.ndim != 3 or base.shape != phi.shape[:2]:
+        raise ValueError("expected features [time, particle, moment] and matching weights")
+    if target.ndim != 3 or target.shape[1:] != (phi.shape[0], phi.shape[2]):
+        raise ValueError("expected targets [batch, time, moment]")
+
+    lower = np.empty((phi.shape[0], phi.shape[2]), dtype=np.float64)
+    upper = np.empty_like(lower)
+    for t_idx in range(phi.shape[0]):
+        active = base[t_idx] > 0.0
+        if not np.any(active):
+            raise ValueError(f"reference weights have empty support at time index {t_idx}")
+        lower[t_idx] = np.min(phi[t_idx, active], axis=0)
+        upper[t_idx] = np.max(phi[t_idx, active], axis=0)
+    margins = np.minimum(target - lower[None, ...], upper[None, ...] - target)
+    return np.min(margins, axis=(1, 2))
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1167,19 +1201,24 @@ class VortexExperiment:
         accept_tol = float(projection_cfg.get("solver_accept_tol", 2.0e-6))
         failed = ~np.isfinite(lam).all(axis=-1)
         failed |= ~np.isfinite(weights).all(axis=-1)
+        failed |= ~np.isfinite(residual).all(axis=-1)
+        failed |= ~np.isfinite(covariance).all(axis=(-2, -1))
+        failed |= ~np.isfinite(ess_fraction)
         failed |= np.linalg.norm(residual, axis=-1) > accept_tol
         base_weights = np.asarray(self.reference_weights, dtype=np.float64)
         batch = len(trial_indices)
-        projection_valid = np.ones(batch, dtype=bool)
-        support_gap = np.full(batch, np.inf, dtype=np.float64)
+        support_tol = float(projection_cfg.get("support_certificate_tol", 1.0e-10))
+        support_gap = _empirical_coordinate_support_gaps(
+            phi_ref_np, base_weights, targets
+        )
+        projection_valid = support_gap >= -support_tol
         fallback_count = np.zeros(batch, dtype=np.int32)
 
         # A negative support gap is an exact separating-hyperplane certificate:
         # max_x <d, phi(x)> < <d, target>, so no empirical reweighting can match
-        # the target.  The native dual iterate supplies a particularly effective
-        # direction for this check and avoids sending provably infeasible spline
-        # targets through thousands of redundant scalar optimizer iterations.
-        support_tol = float(projection_cfg.get("support_certificate_tol", 1.0e-10))
+        # the target. Coordinate bounds catch simple spline overshoot even if a
+        # clipped native dual iterate is a poor certificate direction; the dual
+        # check below additionally detects non-coordinate hull violations.
         finite_residual_tol = float(
             self.cfg["validity"].get("max_finite_calibration_resid", 1.0e-3)
         )
@@ -1194,10 +1233,7 @@ class VortexExperiment:
                     - targets[b, t_idx] @ direction
                 )
                 support_gap[b] = min(support_gap[b], gap)
-                # A slightly exterior target can still satisfy the experiment's
-                # declared finite calibration tolerance.  Reject only when the
-                # unit-direction lower bound proves that tolerance unattainable.
-                if gap < -(finite_residual_tol + support_tol):
+                if gap < -support_tol:
                     projection_valid[b] = False
 
         # Only uncertified systems need the robust SciPy fallback.  Work on the
@@ -1229,7 +1265,9 @@ class VortexExperiment:
             residual[b, t_idx] = state.residual
             covariance[b, t_idx] = state.covariance
             ess_fraction[b, t_idx] = state.ess_fraction
-            if state.residual_norm > finite_residual_tol:
+            # Exact action scoring needs an actual projection, not merely a
+            # nearby target within the looser experiment-level reporting gate.
+            if state.residual_norm > accept_tol:
                 projection_valid[b] = False
 
         max_resid = np.max(np.linalg.norm(residual, axis=-1), axis=1)
@@ -1300,7 +1338,7 @@ class VortexExperiment:
             )
             cov_floor = float(
                 self.cfg.get("particle_mfsi", {}).get(
-                    "exact_covariance_min_eig", 1.0e-12
+                    "exact_covariance_min_eig", 1.0e-8
                 )
             )
             lambda_dot = np.empty_like(rhs)
@@ -1368,7 +1406,7 @@ class VortexExperiment:
         if compute_full:
             valid &= min_cov_eig > float(
                 self.cfg.get("particle_mfsi", {}).get(
-                    "exact_covariance_min_eig", 1.0e-12
+                    "exact_covariance_min_eig", 1.0e-8
                 )
             )
             poisson_gate = self.cfg["validity"].get("max_poisson_relative_residual")
@@ -1397,7 +1435,7 @@ class VortexExperiment:
                     if valid[local]
                     else (
                         "target_outside_empirical_moment_hull"
-                        if support_gap[local] < -(finite_residual_tol + support_tol)
+                        if support_gap[local] < -support_tol
                         else "calibration_ess_identifiability_or_numerical_gate"
                     )
                 ),
@@ -1482,12 +1520,25 @@ class VortexExperiment:
         grad_np = grad_ref_np if (compute_tangent or compute_full) else None
         rec_c = np.asarray(rec.c)
         rec_cd = np.asarray(rec.c_dot)
+        projection_cfg = self.cfg.get("projection", {})
+        support_tol = float(projection_cfg.get("support_certificate_tol", 1.0e-10))
+        support_gap = float(
+            _empirical_coordinate_support_gaps(
+                phi_ref_np,
+                np.asarray(self.reference_weights, dtype=np.float64),
+                rec_c,
+            )[0]
+        )
         lam = np.zeros(self.family.n_sensors, dtype=np.float64)
         law_vals, tan_vals, full_vals = [], [], []
         full_q_rows, full_h_rows = [], []
         max_resid, min_ess, max_poisson = 0.0, np.inf, 0.0
         max_compat, min_cov_eig = 0.0, np.inf
-        valid = float(np.min(np.asarray(self.reference_base_mass))) >= float(self.cfg["validity"].get("min_in_domain_base_mass", 0.995))
+        valid = (
+            float(np.min(np.asarray(self.reference_base_mass)))
+            >= float(self.cfg["validity"].get("min_in_domain_base_mass", 0.995))
+            and support_gap >= -support_tol
+        )
         for t_idx in range(len(self.times)):
             st = self._exact_tilt(phi_ref_np[t_idx], np.asarray(self.reference_weights[t_idx]), rec_c[t_idx], lam)
             lam = st.lam
@@ -1520,7 +1571,7 @@ class VortexExperiment:
                 eig_min = float(np.min(np.linalg.eigvalsh(0.5 * (cov + cov.T))))
                 min_cov_eig = min(min_cov_eig, eig_min)
                 rhs = rec_cd[t_idx] - mean_m - cov_phi_g
-                floor = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_min_eig", 1.0e-12))
+                floor = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_min_eig", 1.0e-8))
                 if eig_min <= floor:
                     valid = False
                     lam_dot = np.linalg.lstsq(cov, rhs, rcond=None)[0]
@@ -1557,7 +1608,7 @@ class VortexExperiment:
 
         valid = bool(
             valid
-            and max_resid <= float(self.cfg["validity"].get("max_finite_calibration_resid", 1.0e-3))
+            and max_resid <= float(projection_cfg.get("solver_accept_tol", 2.0e-6))
             and min_ess >= float(self.cfg["validity"].get("min_ess_fraction", 0.03))
         )
         if compute_tangent:
@@ -1575,7 +1626,15 @@ class VortexExperiment:
             gap = lbv = float("nan")
         out = {
             "trial": int(trial), "valid": valid,
-            "invalid_reason": None if valid else "calibration_ess_identifiability_or_numerical_gate",
+            "invalid_reason": (
+                None
+                if valid
+                else (
+                    "target_outside_empirical_moment_hull"
+                    if support_gap < -support_tol
+                    else "calibration_ess_identifiability_or_numerical_gate"
+                )
+            ),
             "law_risk": law, "tangent_action": tangent, "full_action": full,
             "max_calibration_residual": float(max_resid), "min_ess_fraction": float(min_ess),
             "max_poisson_relative_residual": float(max_poisson) if compute_full else float("nan"),
