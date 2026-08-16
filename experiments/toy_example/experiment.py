@@ -59,9 +59,13 @@ from mfsi.raster import RasterConfig, rasterize_projected_particles
 from mfsi.reference import MLPReferenceFlow, save_npz_checkpoint, velocity_mlp
 
 try:
-    from mfsi.poisson import PoissonConfig, solve_weighted_poisson
+    from mfsi.poisson import PoissonConfig, solve_weighted_poisson, weighted_laplacian
 except ImportError:  # compatibility with the earlier name used in the cleanup
-    from mfsi.poisson import WeightedPoissonConfig as PoissonConfig, solve_weighted_poisson
+    from mfsi.poisson import (
+        WeightedPoissonConfig as PoissonConfig,
+        solve_weighted_poisson,
+        weighted_laplacian,
+    )
 
 
 Array = jax.Array
@@ -677,6 +681,44 @@ class ToyExperiment:
             )),
             gauge_strength=float(pois_cfg.get("gauge_strength", 1.0)),
         )
+        self.full_gradient_poisson_backend = str(
+            opt_cfg.get("full_gradient_poisson_backend", "jax")
+        )
+        if self.full_gradient_poisson_backend not in {"jax", "tesseract_cpp"}:
+            raise ValueError(
+                "optimization.full_gradient_poisson_backend must be 'jax' or "
+                f"'tesseract_cpp'; got {self.full_gradient_poisson_backend!r}"
+            )
+        native_revision = "not-applicable"
+        if self.full_gradient_poisson_backend == "tesseract_cpp":
+            from mfsi.poisson_tesseract import (
+                NATIVE_SOLVER_REVISION,
+                TesseractPoissonUnavailable,
+                is_tesseract_poisson_available,
+            )
+
+            if not is_tesseract_poisson_available():
+                raise TesseractPoissonUnavailable(
+                    "The toy stage-4 proxy explicitly requests tesseract_cpp, but "
+                    "Tesseract-JAX or the native extension is unavailable."
+                )
+            native_revision = NATIVE_SOLVER_REVISION
+        self.full_gradient_cache_signature = hashlib.sha256(
+            json.dumps(
+                {
+                    "full_gradient_poisson_backend": self.full_gradient_poisson_backend,
+                    "native_solver_revision": native_revision,
+                    "gradient_grid_n": int(self.full_gradient_grid.n),
+                    "gradient_trials": int(opt_cfg.get("full_gradient_trials", 4)),
+                    "gradient_time_indices": np.asarray(
+                        self.full_gradient_time_idx, dtype=np.int32
+                    ).tolist(),
+                    "gradient_cg_tol": float(self.poisson_gradient_cfg.cg_tol),
+                    "gradient_cg_maxiter": int(self.poisson_gradient_cfg.cg_maxiter),
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
 
         self.mmd_kernel = gaussian_mmd_kernel(
             self.grid.n,
@@ -1604,6 +1646,100 @@ class ToyExperiment:
         valid = self._validity(max_resid, min_ess, rec.projection_distance)
         return jnp.where(valid, action, action + 1.0e5)
 
+    def _one_trial_full_action_gradient_systems(
+        self,
+        phi_grid: Array,
+        phi_nodes: Array,
+        grad_nodes: Array,
+        bank: TrialBank,
+        trial: int | Array,
+    ) -> tuple[Array, Array, Array]:
+        """Collect one trial's q/h systems while retaining lambda warm starts."""
+        rec = self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, trial)
+        lam = jnp.zeros(phi_nodes.shape[-1], dtype=jnp.float64)
+        q_rows = []
+        h_rows = []
+        max_resid = jnp.asarray(0.0, dtype=jnp.float64)
+        min_ess = jnp.asarray(jnp.inf, dtype=jnp.float64)
+
+        for t_idx in np.asarray(self.full_gradient_time_idx, dtype=np.int32).tolist():
+            projection, forcing = self._particle_forcing_only(
+                phi=phi_nodes[t_idx],
+                grad_phi=grad_nodes[t_idx],
+                velocity=self.reference_velocity[t_idx],
+                base_weights=self.reference_weights[t_idx],
+                target=rec.c[t_idx],
+                target_dot=rec.c_dot[t_idx],
+                lam0=lam,
+            )
+            lam = projection.lam
+            max_resid = jnp.maximum(max_resid, jnp.linalg.norm(projection.residual))
+            min_ess = jnp.minimum(min_ess, projection.ess_fraction)
+            ras = rasterize_projected_particles(
+                self.reference_nodes[t_idx],
+                projection.weights,
+                forcing,
+                self.full_gradient_grid,
+                self.raster_cfg,
+            )
+            q_rows.append(ras.q)
+            h_rows.append(ras.h)
+
+        valid = self._validity(max_resid, min_ess, rec.projection_distance)
+        return jnp.stack(q_rows), jnp.stack(h_rows), valid
+
+    def _full_action_gradient_tesseract(
+        self,
+        phi_grid: Array,
+        phi_nodes: Array,
+        grad_nodes: Array,
+        bank: TrialBank,
+    ) -> Array:
+        """Solve every trial/time system with one explicit batched native call."""
+        from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract
+
+        q_batch, h_batch, valid = self._full_action_gradient_system_batch(
+            phi_grid, phi_nodes, grad_nodes, bank
+        )
+
+        # This is the only native/Tesseract call in one proxy objective evaluation.
+        psi_batch = solve_weighted_poisson_batch_tesseract(
+            q_batch, h_batch, self.poisson_gradient_cfg
+        )
+        physical_actions = jax.vmap(
+            lambda psi, q: self.poisson_gradient_cfg.cell_area
+            * jnp.sum(
+                psi
+                * weighted_laplacian(psi, q, self.poisson_gradient_cfg.dx)
+            )
+        )(psi_batch, q_batch)
+        actions_by_trial = physical_actions.reshape(
+            (int(bank.masses.shape[0]), len(self.full_gradient_time_idx))
+        )
+        actions_by_trial = jnp.sum(
+            actions_by_trial * self.full_gradient_time_w[None, :], axis=1
+        )
+        return jnp.mean(jnp.where(valid, actions_by_trial, actions_by_trial + 1.0e5))
+
+    def _full_action_gradient_system_batch(
+        self,
+        phi_grid: Array,
+        phi_nodes: Array,
+        grad_nodes: Array,
+        bank: TrialBank,
+    ) -> tuple[Array, Array, Array]:
+        """Return systems in trial-major, selected-time-minor order."""
+        trial_rows = [
+            self._one_trial_full_action_gradient_systems(
+                phi_grid, phi_nodes, grad_nodes, bank, trial
+            )
+            for trial in range(int(bank.masses.shape[0]))
+        ]
+        q_batch = jnp.concatenate([row[0] for row in trial_rows], axis=0)
+        h_batch = jnp.concatenate([row[1] for row in trial_rows], axis=0)
+        valid = jnp.stack([row[2] for row in trial_rows])
+        return q_batch, h_batch, valid
+
     def full_action_gradient(self, eta: Array, bank: TrialBank) -> Array:
         """Multi-fidelity full-action objective for stage 4 optimization only.
 
@@ -1614,6 +1750,10 @@ class ToyExperiment:
         """
         eta = self.family.canonicalize(eta)
         phi_grid, phi_nodes, grad_nodes = self._geometry(eta)
+        if self.full_gradient_poisson_backend == "tesseract_cpp":
+            return self._full_action_gradient_tesseract(
+                phi_grid, phi_nodes, grad_nodes, bank
+            )
         # The optimizer already vmaps across starts. Keep the tiny CRN prefix as a
         # static loop to avoid a large nested-vmap CG graph and excessive GPU memory.
         values = [
@@ -2585,7 +2725,8 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         f"grid={exp.full_gradient_grid.n}x{exp.full_gradient_grid.n}, "
         f"{full_distinct_starts.shape[0]} distinct starts screened, {full_start_count} optimized, "
         f"steps={full_cfg.steps}, CG tol={exp.poisson_gradient_cfg.cg_tol:g}, "
-        f"maxiter={exp.poisson_gradient_cfg.cg_maxiter})",
+        f"maxiter={exp.poisson_gradient_cfg.cg_maxiter}, "
+        f"backend={exp.full_gradient_poisson_backend})",
         flush=True,
     )
     full_proxy_anchor = max(
@@ -2841,6 +2982,17 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             ),
         },
         "full_proxy_agreement": full_proxy_agreement,
+        "full_gradient_proxy": {
+            "poisson_backend": exp.full_gradient_poisson_backend,
+            "cache_signature": exp.full_gradient_cache_signature,
+            "grid_n": int(exp.full_gradient_grid.n),
+            "trials": int(grad_action_bank.masses.shape[0]),
+            "time_indices": np.asarray(
+                exp.full_gradient_time_idx, dtype=np.int32
+            ).tolist(),
+            "cg_tol": float(exp.poisson_gradient_cfg.cg_tol),
+            "cg_maxiter": int(exp.poisson_gradient_cfg.cg_maxiter),
+        },
         "full_search_funnel": full_search_funnel,
         "selection_audit": {
             "tangent": [

@@ -1,0 +1,18 @@
+name: "mfsi-poisson-cpp"
+version: "1.0.0"
+description: "Batched C++17/OpenMP weighted-Poisson solve with an implicit VJP"
+
+build_config:
+  target_platform: "native"
+  extra_packages:
+    - build-essential
+    - cmake
+  package_data:
+    - [src, src]
+    - [CMakeLists.txt, CMakeLists.txt]
+  custom_build_steps:
+    - |
+      RUN python -m pip install pybind11 && \
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && \
+          cmake --build build -j
+

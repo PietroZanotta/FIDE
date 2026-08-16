@@ -9,5 +9,17 @@ description = "Small JAX-first core for measurement-conditioned flow experiments
 requires-python = ">=3.11"
 dependencies = ["jax>=0.4", "numpy>=1.26"]
 
+[project.optional-dependencies]
+tesseract-cpp = [
+    "cmake>=3.20",
+    "pybind11>=2.12",
+    "tesseract-core[runtime]>=1.11,<1.12",
+    "tesseract-jax>=0.2.3",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

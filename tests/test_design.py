@@ -8,7 +8,7 @@ from mfsi.measurements import GaussianSensor2D
 def test_random_starts_are_separated():
     starts = random_projective_starts(jax.random.PRNGKey(0), 8, min_sep_rad=0.3)
     d = starts[:, 1] - starts[:, 0]
-    sep = jnp.minimum(d, jnp.pi - d)
+    sep = jnp.minimum(d, 2.0 * jnp.pi - d)
     assert jnp.all(sep >= 0.3)
 
 
