@@ -31,6 +31,7 @@ void solve_batch(
     const double* q_operator,
     const double* rhs,
     const double* gauge,
+    const double* initial_guess,
     double* psi,
     SolveStats* stats,
     int batch,
@@ -74,4 +75,3 @@ void linearized_rhs_batch(
     double gauge_strength);
 
 }  // namespace mfsi_poisson
-

@@ -97,6 +97,44 @@ def test_native_solve_residual_and_physical_action_match_jax():
     assert np.linalg.norm(got_action - expected_action) / np.linalg.norm(expected_action) < 1.0e-8
 
 
+def test_native_exact_solution_is_a_zero_iteration_warm_start():
+    _, q, rhs, gauge = _systems(112, (3, 19, 17))
+    cold = _native_solve(q, rhs, gauge, dx=0.13, tol=1.0e-9, maxiter=500)
+    warm = native.solve_batch(q, rhs, gauge, 0.13, 1.0, 1.0e-9, 500, cold["psi"])
+
+    assert np.all(warm["converged"])
+    assert np.all(np.asarray(warm["iterations"]) == 0)
+    np.testing.assert_allclose(warm["psi"], cold["psi"], rtol=0.0, atol=0.0)
+
+
+def test_native_ic0_converges_on_sparse_high_contrast_density():
+    ny, nx = 32, 64
+    yy, xx = np.meshgrid(
+        np.linspace(0.0, 1.0, ny),
+        np.linspace(0.0, 2.0, nx),
+        indexing="ij",
+    )
+    q = (
+        np.exp(-((xx - 0.42) ** 2 + (yy - 0.28) ** 2) / 0.006)
+        + 0.7 * np.exp(-((xx - 1.55) ** 2 + (yy - 0.72) ** 2) / 0.012)
+    )
+    q = q / np.sum(q)
+    h = np.sin(2.3 * np.pi * xx) * np.cos(1.7 * np.pi * yy)
+    h = h - np.sum(q * h) / np.sum(q)
+    q = np.ascontiguousarray(q[None, ...])
+    h = np.ascontiguousarray(h[None, ...])
+    q_operator = np.ascontiguousarray(q + 2.0e-5 * np.max(q))
+    rhs = np.ascontiguousarray(-(q * h))
+    gauge = np.ascontiguousarray(q / np.linalg.norm(q, axis=(1, 2), keepdims=True))
+
+    result = native.solve_batch(
+        q_operator, rhs, gauge, 2.0 / (nx - 1), 1.0, 1.0e-7, 520
+    )
+    assert bool(result["converged"][0])
+    assert float(result["relative_residual"][0]) <= 1.1e-7
+    assert int(result["iterations"][0]) < 520
+
+
 def test_batched_tesseract_weighted_poisson_diagnostics_match_jax():
     pytest.importorskip("tesseract_jax")
     from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract

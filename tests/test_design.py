@@ -1,7 +1,12 @@
 import jax
 import jax.numpy as jnp
 
-from mfsi.design import OptimizerConfig, lexicographic_optimize, random_projective_starts
+from mfsi.design import (
+    OptimizerConfig,
+    lexicographic_optimize,
+    optimize_multistart_candidates,
+    random_projective_starts,
+)
 from mfsi.measurements import GaussianSensor2D
 
 
@@ -30,3 +35,17 @@ def test_lexicographic_gradient_path():
     )
     assert out["law"].feasible
     assert out["conditioned"].feasible
+
+
+def test_multistart_projects_every_adam_iterate():
+    starts = jnp.asarray([[0.0]], dtype=jnp.float64)
+    cfg = OptimizerConfig(steps=20, learning_rate=0.2)
+    rows = optimize_multistart_candidates(
+        lambda eta: -eta[0],
+        starts,
+        cfg,
+        project_iterate=lambda eta: jnp.clip(eta, -0.1, 0.1),
+        vectorize_starts=False,
+    )
+    assert jnp.isfinite(rows[-1].eta).all()
+    assert float(rows[-1].eta[0]) <= 0.1

@@ -71,7 +71,7 @@ def main() -> int:
                 f"R={_num(c.get('R_selection')):<12} required={'+'.join(c.get('required_screens', [])):<5} "
                 f"{'PASS' if c.get('certified') else 'FAIL'}"
             )
-            if name in ("tangent", "full") and not c.get("certified"):
+            if not c.get("certified"):
                 failures.append(f"{name} failed selection certificate")
 
     print("\nIndependent validation")
@@ -82,7 +82,10 @@ def main() -> int:
             f"Atan={_metric(block, 'tangent_action'):<30} A={_metric(block, 'full_action'):<30} "
             f"valid={100.0*float(block.get('valid_fraction', 0.0)):.1f}%"
         )
-        if float(block.get("valid_fraction", 0.0)) < 0.95:
+        # The population design is an exact-moment oracle baseline and is only
+        # certified against L.  Finite/noisy validity is diagnostic for it; the
+        # DG-Obs law and transport designs must pass the finite validation gate.
+        if name != "population" and float(block.get("valid_fraction", 0.0)) < 0.95:
             failures.append(f"{name} validation valid fraction below 0.95")
         lb = block.get("tangent_lower_bound_check", {})
         if _finite(lb.get("max_violation")) and float(lb["max_violation"]) > float(lb.get("tolerance", 1e-6)):

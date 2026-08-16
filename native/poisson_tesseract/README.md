@@ -1,19 +1,18 @@
 # Native stage-4 weighted-Poisson backend
 
-This optional module accelerates both the differentiable toy stage-4 search
-proxy and its authoritative exact action evaluations. The proxy batches every
+This optional module accelerates both the differentiable toy and vortices
+stage-4 search proxies and their authoritative exact action evaluations. The proxy batches every
 CRN-trial/selected-time system into one in-process Tesseract-JAX call. Each
 exact trial similarly packs all full-resolution time systems into one call,
 instead of launching 21 eager JAX solves. The independent systems use a
-C++17/OpenMP matrix-free PCG implementation. The differentiable reverse pass
+C++17/OpenMP matrix-free PCG implementation with an IC(0) preconditioner for
+the five-point diffusion stencil. The differentiable reverse pass
 uses an analytical implicit VJP and another batched PCG solve; it never
 differentiates through iterations.
 
-Authoritative scientific rescoring keeps the full 51x51 grid, all 21 time
-nodes, the complete action bank, and unchanged equations/tolerances. Its exact
-I-projection, forcing, rasterization, physical-action formula, validity rules,
-and candidate auditing remain in JAX/Python; only the independent linear solves
-cross the batched Tesseract boundary.
+Authoritative scientific rescoring keeps the configured full grid, all time
+nodes, the complete action bank, and unchanged equations/validity rules. Only
+the independent linear solves cross the batched Tesseract boundary.
 
 ## Install and build
 
@@ -86,10 +85,11 @@ Do not enable nested OpenMP. Parallelism is naturally limited by the batch size
 
 - Input arrays are float64, rank-3, and copied to C-contiguous NumPy arrays at
   the in-process endpoint boundary when needed.
-- Forward state is recomputed in the VJP. This keeps the implementation simple
-  and avoids unsafe cross-callback caching.
+- The in-process endpoint retains a thread-safe one-entry forward cache for the
+  immediately following VJP/JVP and same-shape warm guesses for iterative solves;
+  cache misses always recompute the required state.
 - A native solve that misses its requested residual tolerance raises with batch
   indices, iterations, and residuals. It never silently returns an invalid
   potential or changes equations.
-- This backend is intentionally scoped to toy stage 4. It does not replace
+- This backend is intentionally scoped to experiment stage 4. It does not replace
   `mfsi.poisson.solve_weighted_poisson` globally.

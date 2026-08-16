@@ -106,6 +106,24 @@ def _geometry_constraints(exp):
     )
 
 
+def _box_projector(exp):
+    """Keep every optimizer iterate inside the declared sensor-center box."""
+    m = exp.cfg["measurement"]
+    margin = float(m.get("boundary_margin", 2.0 * float(m.get("sensor_width", 0.12))))
+    lo = jnp.asarray(
+        [exp.grid.x_min + margin, exp.grid.y_min + margin], dtype=jnp.float64
+    )
+    hi = jnp.asarray(
+        [exp.grid.x_max - margin, exp.grid.y_max - margin], dtype=jnp.float64
+    )
+
+    def project(eta: Array) -> Array:
+        centers = exp.family.centers(eta)
+        return jnp.clip(centers, lo, hi).reshape(-1)
+
+    return project
+
+
 def _local_cloud(exp, centers: list[Array], *, count_per_center: int, scale: float, seed: int) -> list[Array]:
     if count_per_center <= 0:
         return []
@@ -336,6 +354,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     eps_l = float(law_cfg["epsilon_l"])
     eps_r = float(law_cfg["epsilon_r"])
     geometry = _geometry_constraints(exp)
+    project_iterate = _box_projector(exp)
     stage_timings: dict[str, float] = {}
 
     def stage_started(name: str) -> float:
@@ -359,6 +378,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     pop_candidates = optimize_multistart_candidates(
         exp.population_loss, pop_optimizer_starts, pop_cfg, constraints=geometry,
         canonicalize=exp.family.canonicalize,
+        project_iterate=project_iterate,
         vectorize_starts=False,
         progress_callback=_optimizer_progress("stage 1 population"),
     ) if pop_cfg.steps > 0 else []
@@ -371,6 +391,11 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     )
     L_star = float(exp.exact_population_result(population_eta)["value"])
     L_max = L_star + eps_l
+    print(
+        f"[screen] population risk L*={L_star:.8g}; "
+        f"epsilon_L={eps_l:.8g}; L_max={L_max:.8g}",
+        flush=True,
+    )
     stage_finished("stage_1_population", stage_1_started)
 
     # ------------------------------------------------------------------
@@ -391,6 +416,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     law_candidates = optimize_multistart_candidates(
         law_obj, law_optimizer_starts, law_cfg_opt, constraints=law_constraints,
         canonicalize=exp.family.canonicalize,
+        project_iterate=project_iterate,
     
         vectorize_starts=False,
         progress_callback=_optimizer_progress("stage 2 finite law"),
@@ -405,6 +431,11 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     )
     R_star = float(exp.exact_finite_result(law_eta, law_bank)["value"])
     R_max = R_star + eps_r
+    print(
+        f"[screen] finite risk R*={R_star:.8g}; "
+        f"epsilon_R={eps_r:.8g}; R_max={R_max:.8g}",
+        flush=True,
+    )
     stage_finished("stage_2_finite_law", stage_2_started)
 
     # Shared differentiable law constraints for transport stages.
@@ -437,6 +468,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     tan_candidates = optimize_multistart_candidates(
         tangent_obj, tangent_optimizer_starts, tan_cfg, constraints=action_constraints,
         canonicalize=exp.family.canonicalize,
+        project_iterate=project_iterate,
     
         vectorize_starts=False,
         progress_callback=_optimizer_progress("stage 3 tangent"),
@@ -482,6 +514,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     full_candidates = optimize_multistart_candidates(
         full_obj, full_optimizer_starts, full_cfg, constraints=action_constraints,
         canonicalize=exp.family.canonicalize, vectorize_starts=False,
+        project_iterate=project_iterate,
         progress_callback=_optimizer_progress("stage 4 full"),
     ) if full_cfg.steps > 0 else []
     full_pool = _dedupe(exp, list(full_starts) + [r.eta for r in full_candidates])

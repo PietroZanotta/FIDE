@@ -132,6 +132,7 @@ SolveStats pcg_one_system(
     const double* q,
     const double* rhs,
     const double* gauge,
+    const double* initial_guess,
     double* x,
     int height,
     int width,
@@ -149,8 +150,16 @@ SolveStats pcg_one_system(
     std::vector<double> ic_lower_up(size);
     std::vector<double> ic_diagonal(size);
 
-    std::fill(x, x + size, 0.0);
-    std::copy(rhs, rhs + size, r.begin());
+    if (initial_guess == nullptr) {
+        std::fill(x, x + size, 0.0);
+        std::copy(rhs, rhs + size, r.begin());
+    } else {
+        std::copy(initial_guess, initial_guess + size, x);
+        matvec(x, q, gauge, ap.data(), height, width, dx, gauge_strength);
+        for (std::size_t i = 0; i < size; ++i) {
+            r[i] = rhs[i] - ap[i];
+        }
+    }
     build_ic0(
         q,
         gauge,
@@ -165,7 +174,13 @@ SolveStats pcg_one_system(
     const double rhs_norm = std::sqrt(dot(rhs, rhs, size));
     const double scale = std::max(rhs_norm, std::numeric_limits<double>::min());
     if (rhs_norm <= std::numeric_limits<double>::min()) {
+        std::fill(x, x + size, 0.0);
         return {0, 0.0, true};
+    }
+
+    const double initial_relative_residual = std::sqrt(dot(r.data(), r.data(), size)) / scale;
+    if (initial_relative_residual <= tol) {
+        return {0, initial_relative_residual, true};
     }
 
     apply_ic0(
@@ -179,7 +194,7 @@ SolveStats pcg_one_system(
         width);
     p = z;
     double rz = dot(r.data(), z.data(), size);
-    SolveStats result{0, 1.0, false};
+    SolveStats result{0, initial_relative_residual, false};
 
     for (int iteration = 0; iteration < maxiter; ++iteration) {
         matvec(p.data(), q, gauge, ap.data(), height, width, dx, gauge_strength);
@@ -310,6 +325,7 @@ void solve_batch(
     const double* q_operator,
     const double* rhs,
     const double* gauge,
+    const double* initial_guess,
     double* psi,
     SolveStats* stats,
     int batch,
@@ -327,6 +343,7 @@ void solve_batch(
             q_operator + offset,
             rhs + offset,
             gauge + offset,
+            initial_guess == nullptr ? nullptr : initial_guess + offset,
             psi + offset,
             height,
             width,

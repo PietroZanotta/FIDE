@@ -75,11 +75,23 @@ py::dict solve_batch_binding(
     double dx,
     double gauge_strength,
     double tol,
-    int maxiter) {
+    int maxiter,
+    const py::object& initial_guess_object) {
     const Shape3 shape = validate_array(q_operator, "q_operator");
     require_same_shape(shape, validate_array(rhs, "rhs"), "rhs");
     require_same_shape(shape, validate_array(gauge, "gauge"), "gauge");
     validate_numerics(dx, gauge_strength, tol, maxiter);
+
+    const double* initial_guess = nullptr;
+    py::array initial_guess_array;
+    if (!initial_guess_object.is_none()) {
+        initial_guess_array = py::cast<py::array>(initial_guess_object);
+        require_same_shape(
+            shape,
+            validate_array(initial_guess_array, "initial_guess"),
+            "initial_guess");
+        initial_guess = static_cast<const double*>(initial_guess_array.data());
+    }
 
     auto psi = empty_like(shape);
     py::array_t<std::int32_t> iterations(shape.batch);
@@ -93,6 +105,7 @@ py::dict solve_batch_binding(
             static_cast<const double*>(q_operator.data()),
             static_cast<const double*>(rhs.data()),
             static_cast<const double*>(gauge.data()),
+            initial_guess,
             psi.mutable_data(),
             stats.data(),
             shape.batch,
@@ -120,7 +133,7 @@ py::dict solve_batch_binding(
 PYBIND11_MODULE(_poisson_native, module) {
     using namespace pybind11::literals;
     module.doc() = "C++17/OpenMP batched weighted-Poisson solver for the MFSI stage-4 proxy";
-    module.attr("__version__") = "1";
+    module.attr("__version__") = "2";
 
     module.def(
         "solve_batch",
@@ -131,7 +144,8 @@ PYBIND11_MODULE(_poisson_native, module) {
         py::arg("dx"),
         py::arg("gauge_strength"),
         py::arg("tol"),
-        py::arg("maxiter"));
+        py::arg("maxiter"),
+        py::arg("initial_guess") = py::none());
 
     module.def(
         "weighted_laplacian_batch",

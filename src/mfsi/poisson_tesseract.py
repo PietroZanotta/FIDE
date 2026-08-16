@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .poisson import PoissonConfig
 
 Array = jax.Array
-NATIVE_SOLVER_REVISION = "cpp-openmp-v1"
+NATIVE_SOLVER_REVISION = "cpp-openmp-ic0-v2"
 
 
 class TesseractPoissonUnavailable(RuntimeError):

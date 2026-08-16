@@ -561,6 +561,21 @@ class VortexExperiment:
             ),
             trajectory_backend=self.iprojection_backend,
         )
+        # Authoritative batching gets the full Newton budget.  Its outputs are
+        # accepted only after explicit residual/ESS checks and retain the robust
+        # scalar solver as a per-system fallback.
+        self.exact_projector = EmpiricalIProjector(
+            IProjectionConfig(
+                max_steps=int(proj.get("max_steps", 300)),
+                residual_tol=float(proj.get("residual_tol", 1.0e-10)),
+                newton_ridge=float(proj.get("newton_ridge", 1.0e-7)),
+                step_cap=float(proj.get("step_cap", 20.0)),
+                lambda_clip=float(proj.get("lambda_clip", 1000.0)),
+                line_search_steps=int(proj.get("line_search_steps", 8)),
+                implicit_ridge=float(proj.get("implicit_ridge", 0.0)),
+            ),
+            trajectory_backend=self.iprojection_backend,
+        )
         pcfg = cfg.get("particle_mfsi", {})
         self.particle_cfg = ParticleMFSIConfig(
             covariance_ridge=float(pcfg.get("covariance_ridge", 1.0e-7)),
@@ -1034,11 +1049,23 @@ class VortexExperiment:
         valid = self._validity(max_resid, min_ess, max_poisson)
         return jnp.mean(jnp.where(valid, values, values + 1.0e5))
 
-    def _exact_tilt(self, phi: np.ndarray, base: np.ndarray, target: np.ndarray, lam0: np.ndarray):
+    def _exact_tilt(
+        self,
+        phi: np.ndarray,
+        base: np.ndarray,
+        target: np.ndarray,
+        lam0: np.ndarray,
+        *,
+        newton_steps: int | None = None,
+    ):
         p = self.cfg.get("projection", {})
         return robust_empirical_tilt_exact(
             phi, base, target, lam0=lam0,
-            newton_steps=int(p.get("max_steps", 300)),
+            newton_steps=(
+                int(p.get("max_steps", 300))
+                if newton_steps is None
+                else int(newton_steps)
+            ),
             newton_ridge=float(p.get("newton_ridge", 1.0e-7)),
             step_cap=float(p.get("step_cap", 20.0)),
             lambda_clip=float(p.get("lambda_clip", 1000.0)),
@@ -1083,6 +1110,358 @@ class VortexExperiment:
         out = {"valid": valid, "value": value, "max_calibration_residual": max_resid, "min_ess_fraction": min_ess}
         self._exact_cache[key] = out
         return dict(out)
+
+    def _exact_chunk_results(
+        self,
+        eta: Array,
+        bank: ObservationTrialBank,
+        trial_indices: list[int],
+        *,
+        compute_law: bool,
+        compute_tangent: bool,
+        compute_full: bool,
+    ) -> list[dict[str, Any]]:
+        """Authoritative metrics with native batched tilts and robust fallbacks.
+
+        The native solve is accepted only after evaluating the same moment residual
+        and ESS diagnostics used by the robust scalar path.  Failed systems either
+        receive an exact separating-support certificate or are replaced by
+        ``robust_empirical_tilt_exact`` before scientific metrics are formed.  Thus
+        batching changes numerical work, not acceptance semantics.
+        """
+        cache_keys = [
+            (
+                "trial",
+                self._exact_key(eta),
+                id(bank),
+                int(trial),
+                compute_law,
+                compute_tangent,
+                compute_full,
+            )
+            for trial in trial_indices
+        ]
+        if all(key in self._exact_cache for key in cache_keys):
+            return [dict(self._exact_cache[key]) for key in cache_keys]
+
+        phi_truth_np, phi_ref_np, grad_np = self._exact_geometry(eta)
+        chunk_bank = ObservationTrialBank(
+            bank.sample_indices[jnp.asarray(trial_indices, dtype=jnp.int32)],
+            bank.detector_z[jnp.asarray(trial_indices, dtype=jnp.int32)],
+        )
+        rec = self._measurement_reconstruction_batch(
+            jnp.asarray(phi_truth_np), chunk_bank
+        )
+        targets = np.asarray(rec.c, dtype=np.float64)
+        projection = self.exact_projector.project_trajectory(
+            jnp.asarray(phi_ref_np), self.reference_weights, rec.c
+        )
+        lam = np.asarray(projection.lam, dtype=np.float64).copy()
+        weights = np.asarray(projection.weights, dtype=np.float64).copy()
+        moments = np.asarray(projection.moments, dtype=np.float64).copy()
+        residual = np.asarray(projection.residual, dtype=np.float64).copy()
+        covariance = np.asarray(projection.covariance, dtype=np.float64).copy()
+        ess_fraction = np.asarray(projection.ess_fraction, dtype=np.float64).copy()
+
+        projection_cfg = self.cfg.get("projection", {})
+        accept_tol = float(projection_cfg.get("solver_accept_tol", 2.0e-6))
+        failed = ~np.isfinite(lam).all(axis=-1)
+        failed |= ~np.isfinite(weights).all(axis=-1)
+        failed |= np.linalg.norm(residual, axis=-1) > accept_tol
+        base_weights = np.asarray(self.reference_weights, dtype=np.float64)
+        batch = len(trial_indices)
+        projection_valid = np.ones(batch, dtype=bool)
+        support_gap = np.full(batch, np.inf, dtype=np.float64)
+        fallback_count = np.zeros(batch, dtype=np.int32)
+
+        # A negative support gap is an exact separating-hyperplane certificate:
+        # max_x <d, phi(x)> < <d, target>, so no empirical reweighting can match
+        # the target.  The native dual iterate supplies a particularly effective
+        # direction for this check and avoids sending provably infeasible spline
+        # targets through thousands of redundant scalar optimizer iterations.
+        support_tol = float(projection_cfg.get("support_certificate_tol", 1.0e-10))
+        finite_residual_tol = float(
+            self.cfg["validity"].get("max_finite_calibration_resid", 1.0e-3)
+        )
+        for b, t_idx in np.argwhere(failed):
+            direction = lam[b, t_idx]
+            direction_norm = float(np.linalg.norm(direction))
+            if np.isfinite(direction_norm) and direction_norm > 1.0e-14:
+                direction = direction / direction_norm
+                active = base_weights[t_idx] > 0.0
+                gap = float(
+                    np.max(phi_ref_np[t_idx, active] @ direction)
+                    - targets[b, t_idx] @ direction
+                )
+                support_gap[b] = min(support_gap[b], gap)
+                # A slightly exterior target can still satisfy the experiment's
+                # declared finite calibration tolerance.  Reject only when the
+                # unit-direction lower bound proves that tolerance unattainable.
+                if gap < -(finite_residual_tol + support_tol):
+                    projection_valid[b] = False
+
+        # Only uncertified systems need the robust SciPy fallback.  Work on the
+        # largest native residual first so a genuinely invalid trial is rejected
+        # early; a failed fallback makes further solves for that trial irrelevant.
+        failed_rows = sorted(
+            np.argwhere(failed).tolist(),
+            key=lambda bt: float(np.linalg.norm(residual[bt[0], bt[1]])),
+            reverse=True,
+        )
+        for b, t_idx in failed_rows:
+            if not projection_valid[b]:
+                continue
+            warm = lam[b, t_idx]
+            state = self._exact_tilt(
+                phi_ref_np[t_idx],
+                base_weights[t_idx],
+                targets[b, t_idx],
+                warm,
+                # The native exact projector has already exhausted this same
+                # Newton budget.  Go directly to the independent convex-dual
+                # L-BFGS fallback instead of repeating hundreds of host steps.
+                newton_steps=int(projection_cfg.get("fallback_newton_steps", 0)),
+            )
+            fallback_count[b] += 1
+            lam[b, t_idx] = state.lam
+            weights[b, t_idx] = state.weights
+            moments[b, t_idx] = state.moments
+            residual[b, t_idx] = state.residual
+            covariance[b, t_idx] = state.covariance
+            ess_fraction[b, t_idx] = state.ess_fraction
+            if state.residual_norm > finite_residual_tol:
+                projection_valid[b] = False
+
+        max_resid = np.max(np.linalg.norm(residual, axis=-1), axis=1)
+        min_ess = np.min(ess_fraction, axis=1)
+        time_count = len(self.times)
+        tangent_values = np.full((batch, time_count), np.nan, dtype=np.float64)
+        max_compat = np.zeros(batch, dtype=np.float64)
+        min_cov_eig = np.full(batch, np.inf, dtype=np.float64)
+        forcing = np.zeros_like(weights)
+
+        if compute_tangent or compute_full:
+            advective = np.einsum(
+                "tnmd,tnd->tnm",
+                grad_np,
+                np.asarray(self.reference_velocity, dtype=np.float64),
+            )
+            mean_advective = np.einsum("btn,tnm->btm", weights, advective)
+        if compute_tangent:
+            tangent_residual = mean_advective - np.asarray(rec.c_dot, dtype=np.float64)
+            tangent_gram = np.einsum(
+                "btn,tnmd,tnkd->btmk", weights, grad_np, grad_np
+            )
+            ridge = float(
+                self.cfg.get("particle_mfsi", {}).get("exact_tangent_ridge", 0.0)
+            )
+            if ridge:
+                tangent_gram = tangent_gram + ridge * np.eye(self.family.n_sensors)
+            pinv = np.linalg.pinv(
+                tangent_gram,
+                rcond=float(
+                    self.cfg.get("particle_mfsi", {}).get(
+                        "tangent_pinv_rcond", 1.0e-10
+                    )
+                ),
+            )
+            tangent_coeff = np.einsum("btmk,btk->btm", pinv, tangent_residual)
+            compatibility = np.einsum(
+                "btmk,btk->btm", tangent_gram, tangent_coeff
+            ) - tangent_residual
+            max_compat = np.max(np.linalg.norm(compatibility, axis=-1), axis=1)
+            tangent_values = np.einsum(
+                "btm,btm->bt", tangent_residual, tangent_coeff
+            )
+
+        if compute_full:
+            g = np.einsum("tnm,btm->btn", advective, lam)
+            mean_g = np.einsum("btn,btn->bt", weights, g)
+            centered_phi = phi_ref_np[None, :, :, :] - moments[:, :, None, :]
+            cov_phi_g = np.einsum(
+                "btn,btnm,btn->btm",
+                weights,
+                centered_phi,
+                g - mean_g[:, :, None],
+            )
+            cov = covariance.copy()
+            exact_ridge = float(
+                self.cfg.get("particle_mfsi", {}).get("exact_covariance_ridge", 0.0)
+            )
+            if exact_ridge:
+                cov += exact_ridge * np.eye(self.family.n_sensors)
+            eigenvalues = np.linalg.eigvalsh(0.5 * (cov + np.swapaxes(cov, -1, -2)))
+            min_cov_by_time = np.min(eigenvalues, axis=-1)
+            min_cov_eig = np.min(min_cov_by_time, axis=1)
+            rhs = (
+                np.asarray(rec.c_dot, dtype=np.float64)
+                - mean_advective
+                - cov_phi_g
+            )
+            cov_floor = float(
+                self.cfg.get("particle_mfsi", {}).get(
+                    "exact_covariance_min_eig", 1.0e-12
+                )
+            )
+            lambda_dot = np.empty_like(rhs)
+            for b in range(batch):
+                for t_idx in range(time_count):
+                    if min_cov_by_time[b, t_idx] <= cov_floor:
+                        lambda_dot[b, t_idx] = np.linalg.lstsq(
+                            cov[b, t_idx], rhs[b, t_idx], rcond=None
+                        )[0]
+                    else:
+                        lambda_dot[b, t_idx] = np.linalg.solve(
+                            cov[b, t_idx], rhs[b, t_idx]
+                        )
+            forcing = np.einsum("btnm,btm->btn", centered_phi, lambda_dot)
+            forcing += g - mean_g[:, :, None]
+            forcing -= np.einsum("btn,btn->bt", weights, forcing)[:, :, None]
+
+        law_values = np.full((batch, time_count), np.nan, dtype=np.float64)
+        full_values = np.full((batch, time_count), np.nan, dtype=np.float64)
+        max_poisson = np.zeros(batch, dtype=np.float64)
+        if compute_law or compute_full:
+            all_times = jnp.arange(time_count, dtype=jnp.int32)
+            rasters = self._raster_trajectory(
+                jnp.asarray(weights),
+                jnp.asarray(forcing),
+                time_idx=all_times,
+                grid=self.grid,
+            )
+            if compute_law:
+                law_values = np.asarray(
+                    self._law_risk_rows(rasters.mass), dtype=np.float64
+                )
+            if compute_full:
+                actions, poisson_residuals = self._poisson_batch(
+                    rasters.q,
+                    rasters.h,
+                    cfg=self.poisson_cfg,
+                    backend=self.full_exact_poisson_backend,
+                )
+                full_values = np.asarray(actions, dtype=np.float64)
+                max_poisson = np.max(
+                    np.asarray(poisson_residuals, dtype=np.float64), axis=1
+                )
+
+        time_w = np.asarray(self.time_w, dtype=np.float64)
+        law = np.sum(law_values * time_w[None, :], axis=1) if compute_law else np.full(batch, np.nan)
+        tangent = np.sum(tangent_values * time_w[None, :], axis=1) if compute_tangent else np.full(batch, np.nan)
+        full = np.sum(full_values * time_w[None, :], axis=1) if compute_full else np.full(batch, np.nan)
+        valid = (
+            projection_valid
+            & np.isfinite(max_resid)
+            & (max_resid <= float(self.cfg["validity"].get("max_finite_calibration_resid", 1.0e-3)))
+            & (min_ess >= float(self.cfg["validity"].get("min_ess_fraction", 0.03)))
+            & (
+                float(np.min(np.asarray(self.reference_base_mass)))
+                >= float(self.cfg["validity"].get("min_in_domain_base_mass", 0.995))
+            )
+        )
+        if compute_tangent:
+            valid &= max_compat <= float(
+                self.cfg.get("particle_mfsi", {}).get(
+                    "max_tangent_compatibility_residual", 1.0e-7
+                )
+            )
+        if compute_full:
+            valid &= min_cov_eig > float(
+                self.cfg.get("particle_mfsi", {}).get(
+                    "exact_covariance_min_eig", 1.0e-12
+                )
+            )
+            poisson_gate = self.cfg["validity"].get("max_poisson_relative_residual")
+            if poisson_gate is not None:
+                valid &= max_poisson <= float(poisson_gate)
+
+        rec_rss = np.asarray(rec.residual_sum_squares, dtype=np.float64)
+        rec_roughness = np.asarray(rec.roughness, dtype=np.float64)
+        rows: list[dict[str, Any]] = []
+        for local, trial in enumerate(trial_indices):
+            gap = (
+                full[local] - tangent[local]
+                if compute_tangent and compute_full
+                else float("nan")
+            )
+            lower_bound_violation = (
+                max(tangent[local] - full[local], 0.0)
+                if np.isfinite(gap)
+                else float("nan")
+            )
+            row = {
+                "trial": int(trial),
+                "valid": bool(valid[local]),
+                "invalid_reason": (
+                    None
+                    if valid[local]
+                    else (
+                        "target_outside_empirical_moment_hull"
+                        if support_gap[local] < -(finite_residual_tol + support_tol)
+                        else "calibration_ess_identifiability_or_numerical_gate"
+                    )
+                ),
+                "law_risk": float(law[local]) if valid[local] else float("nan"),
+                "tangent_action": float(tangent[local]) if valid[local] else float("nan"),
+                "full_action": float(full[local]) if valid[local] else float("nan"),
+                "max_calibration_residual": float(max_resid[local]),
+                "min_ess_fraction": float(min_ess[local]),
+                "max_poisson_relative_residual": float(max_poisson[local]) if compute_full else float("nan"),
+                "max_tangent_compatibility_residual": float(max_compat[local]) if compute_tangent else float("nan"),
+                "min_covariance_eigenvalue": float(min_cov_eig[local]) if compute_full else float("nan"),
+                "spline_residual_sum_squares": float(rec_rss[local]),
+                "spline_roughness": float(rec_roughness[local]),
+                "tangent_full_gap": float(gap) if valid[local] else float("nan"),
+                "tangent_lower_bound_violation": float(lower_bound_violation) if valid[local] else float("nan"),
+                "native_projection_failed_systems": int(np.sum(failed[local])),
+                "robust_projection_fallback_systems": int(fallback_count[local]),
+                "min_empirical_hull_support_gap": (
+                    float(support_gap[local])
+                    if np.isfinite(support_gap[local])
+                    else float("nan")
+                ),
+            }
+            self._exact_cache[cache_keys[local]] = row
+            rows.append(dict(row))
+        return rows
+
+    def _evaluate_exact_batched(
+        self,
+        eta: Array,
+        bank: ObservationTrialBank,
+        *,
+        compute_law: bool,
+        compute_tangent: bool,
+        compute_full: bool,
+        trial_count: int | None = None,
+        progress_desc: str | None = None,
+        stop_on_invalid: bool = False,
+    ) -> list[dict[str, Any]]:
+        count = int(bank.sample_indices.shape[0])
+        if trial_count is not None:
+            count = min(count, int(trial_count))
+        chunk_size = max(
+            1,
+            int(self.cfg.get("optimization", {}).get("exact_batch_trials", 4)),
+        )
+        chunks = [list(range(start, min(start + chunk_size, count))) for start in range(0, count, chunk_size)]
+        iterator = chunks
+        if progress_desc is not None:
+            iterator = _progress_iter(chunks, desc=progress_desc, total=len(chunks))
+        rows: list[dict[str, Any]] = []
+        for indices in iterator:
+            chunk_rows = self._exact_chunk_results(
+                eta,
+                bank,
+                indices,
+                compute_law=compute_law,
+                compute_tangent=compute_tangent,
+                compute_full=compute_full,
+            )
+            rows.extend(chunk_rows)
+            if stop_on_invalid and any(not row["valid"] for row in chunk_rows):
+                break
+        return rows
 
     def _exact_trial_result(
         self,
@@ -1210,18 +1589,39 @@ class VortexExperiment:
         return dict(out)
 
     def exact_finite_result(self, eta: Array, bank: ObservationTrialBank) -> dict[str, Any]:
-        rows = [self._exact_trial_result(eta, bank, r, compute_law=True, compute_tangent=False, compute_full=False) for r in range(int(bank.sample_indices.shape[0]))]
+        rows = self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=True,
+            compute_tangent=False,
+            compute_full=False,
+            stop_on_invalid=True,
+        )
         valid = bool(all(r["valid"] and np.isfinite(r["law_risk"]) for r in rows))
         return {"valid": valid, "value": float(np.mean([r["law_risk"] for r in rows])) if valid else float("inf"), "rows": rows}
 
     def exact_tangent_result(self, eta: Array, bank: ObservationTrialBank) -> dict[str, Any]:
-        rows = [self._exact_trial_result(eta, bank, r, compute_law=False, compute_tangent=True, compute_full=False) for r in range(int(bank.sample_indices.shape[0]))]
+        rows = self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=False,
+            compute_tangent=True,
+            compute_full=False,
+            stop_on_invalid=True,
+        )
         valid = bool(all(r["valid"] and np.isfinite(r["tangent_action"]) for r in rows))
         return {"valid": valid, "value": float(np.mean([r["tangent_action"] for r in rows])) if valid else float("inf"), "rows": rows}
 
     def exact_full_result(self, eta: Array, bank: ObservationTrialBank, *, trial_count: int | None = None) -> dict[str, Any]:
-        count = int(bank.sample_indices.shape[0]) if trial_count is None else min(int(trial_count), int(bank.sample_indices.shape[0]))
-        rows = [self._exact_trial_result(eta, bank, r, compute_law=False, compute_tangent=False, compute_full=True) for r in range(count)]
+        rows = self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=False,
+            compute_tangent=False,
+            compute_full=True,
+            trial_count=trial_count,
+            stop_on_invalid=True,
+        )
         valid = bool(all(r["valid"] and np.isfinite(r["full_action"]) for r in rows))
         return {"valid": valid, "value": float(np.mean([r["full_action"] for r in rows])) if valid else float("inf"), "rows": rows}
 
@@ -1233,14 +1633,16 @@ class VortexExperiment:
         progress_desc: str | None = None,
     ) -> list[dict[str, Any]]:
         centers = np.asarray(self.family.centers(self.family.canonicalize(eta)), dtype=np.float64).tolist()
-        out = []
-        trials = range(int(bank.sample_indices.shape[0]))
-        if progress_desc is not None:
-            trials = _progress_iter(trials, desc=progress_desc, total=int(bank.sample_indices.shape[0]))
-        for r in trials:
-            row = self._exact_trial_result(eta, bank, r, compute_law=True, compute_tangent=True, compute_full=True)
+        out = self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=True,
+            compute_tangent=True,
+            compute_full=True,
+            progress_desc=progress_desc,
+        )
+        for row in out:
             row["centers"] = centers
-            out.append(row)
         return out
 
 

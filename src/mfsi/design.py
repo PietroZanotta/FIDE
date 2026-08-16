@@ -95,7 +95,12 @@ def _penalized(
     return objective
 
 
-def _adam_single(objective: Objective, eta0: Array, cfg: OptimizerConfig) -> Array:
+def _adam_single(
+    objective: Objective,
+    eta0: Array,
+    cfg: OptimizerConfig,
+    project_iterate: Callable[[Array], Array] | None = None,
+) -> Array:
     """JAX-loop Adam for one start."""
     eta0 = jnp.asarray(eta0, dtype=jnp.float64)
     value_and_grad = jax.value_and_grad(objective)
@@ -104,12 +109,26 @@ def _adam_single(objective: Objective, eta0: Array, cfg: OptimizerConfig) -> Arr
         eta, m, v = state
         _, grad = value_and_grad(eta)
         t = i + 1
-        m = cfg.beta1 * m + (1.0 - cfg.beta1) * grad
-        v = cfg.beta2 * v + (1.0 - cfg.beta2) * (grad * grad)
-        mhat = m / (1.0 - cfg.beta1**t)
-        vhat = v / (1.0 - cfg.beta2**t)
-        eta = eta - cfg.learning_rate * mhat / (jnp.sqrt(vhat) + cfg.eps)
-        return eta, m, v
+        next_m = cfg.beta1 * m + (1.0 - cfg.beta1) * grad
+        next_v = cfg.beta2 * v + (1.0 - cfg.beta2) * (grad * grad)
+        mhat = next_m / (1.0 - cfg.beta1**t)
+        vhat = next_v / (1.0 - cfg.beta2**t)
+        candidate = eta - cfg.learning_rate * mhat / (jnp.sqrt(vhat) + cfg.eps)
+        if project_iterate is not None:
+            candidate = project_iterate(candidate)
+        finite = (
+            jnp.all(jnp.isfinite(candidate))
+            & jnp.all(jnp.isfinite(next_m))
+            & jnp.all(jnp.isfinite(next_v))
+        )
+        # A failed numerical step is a rejected optimizer proposal, not a reason
+        # to feed NaN geometry into a downstream native scientific solver.
+        return jax.lax.cond(
+            finite,
+            lambda _: (candidate, next_m, next_v),
+            lambda _: (eta, m, v),
+            operand=None,
+        )
 
     eta, _, _ = jax.lax.fori_loop(
         0,
@@ -127,6 +146,7 @@ def optimize_multistart_candidates(
     *,
     constraints: Sequence[Constraint] = (),
     canonicalize: Callable[[Array], Array] | None = None,
+    project_iterate: Callable[[Array], Array] | None = None,
     vectorize_starts: bool = True,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[OptimizeResult]:
@@ -144,7 +164,9 @@ def optimize_multistart_candidates(
     # law/tangent stages, but allow sequential execution with one shared compiled
     # graph for memory-bounded objectives.
     if vectorize_starts:
-        optimize_batch = jax.jit(jax.vmap(lambda eta0: _adam_single(objective, eta0, cfg)))
+        optimize_batch = jax.jit(
+            jax.vmap(lambda eta0: _adam_single(objective, eta0, cfg, project_iterate))
+        )
         optimized = optimize_batch(starts)
         # Synchronize before reporting completion: JAX dispatch is asynchronous on
         # accelerators, so merely constructing ``optimized`` is not a useful timing
@@ -153,7 +175,9 @@ def optimize_multistart_candidates(
             jax.block_until_ready(optimized)
             progress_callback(int(starts.shape[0]), int(starts.shape[0]))
     else:
-        optimize_one = jax.jit(lambda eta0: _adam_single(objective, eta0, cfg))
+        optimize_one = jax.jit(
+            lambda eta0: _adam_single(objective, eta0, cfg, project_iterate)
+        )
         optimized_rows = []
         total = int(starts.shape[0])
         for i in range(total):
