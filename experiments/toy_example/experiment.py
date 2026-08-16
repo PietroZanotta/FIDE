@@ -5,8 +5,10 @@ from functools import partial
 import hashlib
 import json
 import math
+import os
 from dataclasses import asdict
 from pathlib import Path
+import time
 from typing import Any, NamedTuple
 
 import jax
@@ -33,6 +35,7 @@ from mfsi.design import (
 )
 from mfsi.feasibility import (
     common_beta_support_polytope_2d,
+    prepare_polytope_2d,
     project_metric_polytope_2d,
     unit_directions_2d,
 )
@@ -70,6 +73,63 @@ except ImportError:  # compatibility with the earlier name used in the cleanup
 
 
 Array = jax.Array
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(float(seconds), 0.0)
+    if seconds < 60.0:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(round(seconds)), 60)
+    if minutes < 60:
+        return f"{minutes}m{secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m{secs:02d}s"
+
+
+def _progress_iter(items, *, desc: str, total: int | None = None):
+    """Log-friendly tqdm-like iterator with elapsed time and ETA.
+
+    Regular lines remain readable in redirected run logs, unlike terminal-only
+    carriage-return bars. Updates are limited to roughly ten per loop (or every
+    15 seconds for slow work units).
+    """
+    if total is None:
+        total = len(items)
+    total = int(total)
+    started = time.perf_counter()
+    last_report = started
+    completed = 0
+    stride = max(1, total // 10) if total else 1
+    print(f"[progress] {desc}: 0/{total}", flush=True)
+    try:
+        for completed, item in enumerate(items, start=1):
+            yield item
+            now = time.perf_counter()
+            if (
+                completed == 1
+                or completed == total
+                or completed % stride == 0
+                or now - last_report >= 15.0
+            ):
+                elapsed = now - started
+                rate = completed / max(elapsed, 1.0e-12)
+                eta = (total - completed) / max(rate, 1.0e-12)
+                percent = 100.0 * completed / max(total, 1)
+                print(
+                    f"[progress] {desc}: {completed}/{total} ({percent:5.1f}%) "
+                    f"elapsed={_format_duration(elapsed)} "
+                    f"eta={_format_duration(eta)} rate={rate:.2f}/s",
+                    flush=True,
+                )
+                last_report = now
+    finally:
+        if completed < total:
+            elapsed = time.perf_counter() - started
+            print(
+                f"[progress] {desc}: stopped after {completed}/{total} "
+                f"elapsed={_format_duration(elapsed)}",
+                flush=True,
+            )
 
 
 @partial(
@@ -865,19 +925,22 @@ class ToyExperiment:
         y = jnp.where(endpoint[:, None], exact, y)
         return y, V, exact[0], exact[-1]
 
-    def _reconstruct_from_geometry(
+    def _prepare_reconstruction_polytope(
         self,
         phi_grid: Array,
         phi_nodes: Array,
         bank: TrialBank,
-        trial: int | Array,
-    ) -> Reconstruction:
-        """Reconstruct one trial while reusing eta-dependent sensor geometry."""
-        y, V, c0, c1 = self._measurement_data(phi_grid, bank, trial)
-        fit = fit_quadratic_bridge_gls(
-            self.times[self.acq_idx], y, V, c0, c1, self.times, self.moment_cfg
-        )
+    ):
+        """Build the trial-invariant toy bridge polytope once per sensor design.
 
+        Every toy population member has the same laws at t=0 and t=1; alpha only
+        changes the interior path.  Consequently c0/c1 and the support polytope
+        are shared by all CRN trials.  Building its 96-direction supports and
+        4,560 vertex candidates inside every trial duplicated a large reverse-mode
+        graph in stages 1--4.
+        """
+        c0 = bank.masses[0, 0] @ phi_grid
+        c1 = bank.masses[0, -1] @ phi_grid
         A, b, endpoint_violation = common_beta_support_polytope_2d(
             directions=self.support_directions,
             times=self.times,
@@ -888,11 +951,50 @@ class ToyExperiment:
             particle_mask_by_time=self.reference_in_domain,
             margin=self.feasibility_margin,
         )
+        tol = float(
+            self.cfg.get("feasibility", {}).get(
+                "feasibility_tol",
+                self.cfg.get("feasibility", {}).get("tol", 1.0e-9),
+            )
+        )
+        return prepare_polytope_2d(A, b, tol=tol), endpoint_violation
+
+    def _reconstruct_from_geometry(
+        self,
+        phi_grid: Array,
+        phi_nodes: Array,
+        bank: TrialBank,
+        trial: int | Array,
+        *,
+        reconstruction_polytope=None,
+        endpoint_violation: Array | None = None,
+    ) -> Reconstruction:
+        """Reconstruct one trial while reusing eta-dependent sensor geometry."""
+        y, V, c0, c1 = self._measurement_data(phi_grid, bank, trial)
+        fit = fit_quadratic_bridge_gls(
+            self.times[self.acq_idx], y, V, c0, c1, self.times, self.moment_cfg
+        )
+
+        if reconstruction_polytope is None:
+            A, b, endpoint_violation = common_beta_support_polytope_2d(
+                directions=self.support_directions,
+                times=self.times,
+                c0=c0,
+                c1=c1,
+                physical_features=phi_grid,
+                particle_features_by_time=phi_nodes,
+                particle_mask_by_time=self.reference_in_domain,
+                margin=self.feasibility_margin,
+            )
+            reconstruction_polytope = prepare_polytope_2d(
+                A,
+                b,
+                tol=float(self.cfg.get("feasibility", {}).get("feasibility_tol", self.cfg.get("feasibility", {}).get("tol", 1e-9))),
+            )
         proj = project_metric_polytope_2d(
             fit.beta,
             fit.information,
-            A,
-            b,
+            polytope=reconstruction_polytope,
             tol=float(self.cfg.get("feasibility", {}).get("feasibility_tol", self.cfg.get("feasibility", {}).get("tol", 1e-9))),
         )
         c, c_dot = evaluate_quadratic_bridge(proj.beta, c0, c1, self.times)
@@ -903,7 +1005,7 @@ class ToyExperiment:
             beta_unconstrained=fit.beta,
             projection_distance=proj.distance,
             max_unconstrained_violation=proj.max_unconstrained_violation,
-            endpoint_feasibility_violation=endpoint_violation,
+            endpoint_feasibility_violation=jnp.asarray(endpoint_violation),
         )
 
     def _reconstruct(self, eta: Array, bank: TrialBank, trial: int) -> Reconstruction:
@@ -1421,12 +1523,24 @@ class ToyExperiment:
         self._exact_full_result_cache[cache_key] = result
         return result
 
-    def evaluate_trials_exact(self, eta: Array, bank: TrialBank) -> list[dict[str, Any]]:
+    def evaluate_trials_exact(
+        self,
+        eta: Array,
+        bank: TrialBank,
+        *,
+        progress_desc: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Full-fidelity validation rows with exact feasibility and strict validity."""
         eta = self.family.canonicalize(eta)
         eta_deg = _canonical_deg(eta)
         out = []
-        for r in range(int(bank.masses.shape[0])):
+        trial_count = int(bank.masses.shape[0])
+        trial_indices = range(trial_count)
+        if progress_desc is not None:
+            trial_indices = _progress_iter(
+                trial_indices, desc=progress_desc, total=trial_count
+            )
+        for r in trial_indices:
             row = self._exact_trial_result(
                 eta, bank, r, compute_law=True, compute_tangent=True, compute_full=True
             )
@@ -1544,9 +1658,19 @@ class ToyExperiment:
         held_w = self.time_w[self.heldout_idx]
         held_w = held_w / jnp.sum(held_w)
         held_set = set(map(int, np.asarray(self.heldout_idx).tolist()))
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         rows = []
         for trial in range(int(bank.masses.shape[0])):
-            rec = self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, trial)
+            rec = self._reconstruct_from_geometry(
+                phi_grid,
+                phi_nodes,
+                bank,
+                trial,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
+            )
             truth = bank.masses[trial]
             lam = jnp.zeros(phi_nodes.shape[-1], dtype=jnp.float64)
             held_vals = []
@@ -1585,8 +1709,17 @@ class ToyExperiment:
         trial: int | Array,
         *,
         full: bool,
+        reconstruction_polytope=None,
+        endpoint_violation: Array | None = None,
     ) -> TrialMetrics:
-        rec = self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, trial)
+        rec = self._reconstruct_from_geometry(
+            phi_grid,
+            phi_nodes,
+            bank,
+            trial,
+            reconstruction_polytope=reconstruction_polytope,
+            endpoint_violation=endpoint_violation,
+        )
         truth = bank.masses[trial]
 
         law_vals = []
@@ -1707,9 +1840,19 @@ class ToyExperiment:
         grad_nodes: Array,
         bank: TrialBank,
         trial: int | Array,
+        *,
+        reconstruction_polytope=None,
+        endpoint_violation: Array | None = None,
     ) -> Array:
         """Reduced-cost differentiable full action used only by stage-4 Adam."""
-        rec = self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, trial)
+        rec = self._reconstruct_from_geometry(
+            phi_grid,
+            phi_nodes,
+            bank,
+            trial,
+            reconstruction_polytope=reconstruction_polytope,
+            endpoint_violation=endpoint_violation,
+        )
         lam = jnp.zeros(phi_nodes.shape[-1], dtype=jnp.float64)
         actions = []
         max_resid = jnp.asarray(0.0, dtype=jnp.float64)
@@ -1750,9 +1893,19 @@ class ToyExperiment:
         grad_nodes: Array,
         bank: TrialBank,
         trial: int | Array,
+        *,
+        reconstruction_polytope=None,
+        endpoint_violation: Array | None = None,
     ) -> tuple[Array, Array, Array]:
         """Collect one trial's q/h systems while retaining lambda warm starts."""
-        rec = self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, trial)
+        rec = self._reconstruct_from_geometry(
+            phi_grid,
+            phi_nodes,
+            bank,
+            trial,
+            reconstruction_polytope=reconstruction_polytope,
+            endpoint_violation=endpoint_violation,
+        )
         lam = jnp.zeros(phi_nodes.shape[-1], dtype=jnp.float64)
         q_rows = []
         h_rows = []
@@ -1826,9 +1979,18 @@ class ToyExperiment:
         bank: TrialBank,
     ) -> tuple[Array, Array, Array]:
         """Return systems in trial-major, selected-time-minor order."""
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         trial_rows = [
             self._one_trial_full_action_gradient_systems(
-                phi_grid, phi_nodes, grad_nodes, bank, trial
+                phi_grid,
+                phi_nodes,
+                grad_nodes,
+                bank,
+                trial,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
             )
             for trial in range(int(bank.masses.shape[0]))
         ]
@@ -1853,8 +2015,19 @@ class ToyExperiment:
             )
         # The optimizer already vmaps across starts. Keep the tiny CRN prefix as a
         # static loop to avoid a large nested-vmap CG graph and excessive GPU memory.
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         values = [
-            self._one_trial_full_action_gradient(phi_grid, phi_nodes, grad_nodes, bank, r)
+            self._one_trial_full_action_gradient(
+                phi_grid,
+                phi_nodes,
+                grad_nodes,
+                bank,
+                r,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
+            )
             for r in range(int(bank.masses.shape[0]))
         ]
         return jnp.mean(jnp.stack(values))
@@ -1874,8 +2047,18 @@ class ToyExperiment:
         """
         R = int(bank.masses.shape[0])
         trial_idx = jnp.arange(R, dtype=jnp.int32)
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         rec = jax.vmap(
-            lambda r: self._reconstruct_from_geometry(phi_grid, phi_nodes, bank, r)
+            lambda r: self._reconstruct_from_geometry(
+                phi_grid,
+                phi_nodes,
+                bank,
+                r,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
+            )
         )(trial_idx)
 
         M = int(phi_nodes.shape[-1])
@@ -1945,10 +2128,21 @@ class ToyExperiment:
     def full_action(self, eta: Array, bank: TrialBank) -> Array:
         eta = self.family.canonicalize(eta)
         phi_grid, phi_nodes, grad_nodes = self._geometry(eta)
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         vals = []
         for trial in range(int(bank.masses.shape[0])):
             row = self._one_trial_metrics_from_geometry(
-                eta, phi_grid, phi_nodes, grad_nodes, bank, trial, full=True
+                eta,
+                phi_grid,
+                phi_nodes,
+                grad_nodes,
+                bank,
+                trial,
+                full=True,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
             )
             vals.append(jnp.where(row.valid, row.full_action, row.full_action + 1.0e5))
         return jnp.mean(jnp.stack(vals))
@@ -1958,9 +2152,20 @@ class ToyExperiment:
         eta = self.family.canonicalize(eta)
         eta_deg = _canonical_deg(eta)
         phi_grid, phi_nodes, grad_nodes = self._geometry(eta)
+        reconstruction_polytope, endpoint_violation = (
+            self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
+        )
         for trial in range(int(bank.masses.shape[0])):
             m = self._one_trial_metrics_from_geometry(
-                eta, phi_grid, phi_nodes, grad_nodes, bank, trial, full=full
+                eta,
+                phi_grid,
+                phi_nodes,
+                grad_nodes,
+                bank,
+                trial,
+                full=full,
+                reconstruction_polytope=reconstruction_polytope,
+                endpoint_violation=endpoint_violation,
             )
             rows.append({
                 "trial": int(trial),
@@ -2121,7 +2326,11 @@ def _select_action_design(
         if optimize_start_count is not None and int(starts.shape[0]) > int(optimize_start_count):
             mandatory = [eta for eta in mandatory_starts]
             scored = []
-            for eta_i in starts:
+            for eta_i in _progress_iter(
+                starts,
+                desc=f"{name}: allocating gradient starts",
+                total=int(starts.shape[0]),
+            ):
                 key = _design_key(exp.family, eta_i)
                 if key in mandatory_keys_for_optimization:
                     continue
@@ -2146,6 +2355,24 @@ def _select_action_design(
             starts = jnp.stack(chosen) if chosen else starts[:1]
 
         gradient_start_count = int(starts.shape[0])
+        print(
+            f"[{name}] running Adam: {gradient_start_count} start(s) x "
+            f"{cfg.steps} steps (first call includes JAX compilation)",
+            flush=True,
+        )
+        optimizer_started = time.perf_counter()
+
+        def optimizer_progress(completed: int, total: int) -> None:
+            elapsed = time.perf_counter() - optimizer_started
+            eta_seconds = elapsed * (total - completed) / max(completed, 1)
+            print(
+                f"[progress] {name}: Adam trajectories {completed}/{total} "
+                f"({100.0 * completed / max(total, 1):5.1f}%) "
+                f"elapsed={_format_duration(elapsed)} "
+                f"eta={_format_duration(eta_seconds)}",
+                flush=True,
+            )
+
         candidates = optimize_multistart_candidates(
             objective,
             starts,
@@ -2153,6 +2380,13 @@ def _select_action_design(
             constraints=constraints,
             canonicalize=exp.family.canonicalize,
             vectorize_starts=vectorize_starts,
+            progress_callback=optimizer_progress,
+        )
+        print(
+            f"[{name}] Adam complete in "
+            f"{_format_duration(time.perf_counter() - optimizer_started)}; "
+            f"retained {len(candidates)} seed/optimized candidates",
+            flush=True,
         )
     else:
         gradient_start_count = 0
@@ -2183,7 +2417,9 @@ def _select_action_design(
     # points at the back of the ranking because the fast and exact evaluators are
     # intentionally not identical near feasibility boundaries.
     screened = []
-    for key, eta in pool.items():
+    for key, eta in _progress_iter(
+        pool.items(), desc=f"{name}: proxy screen", total=len(pool)
+    ):
         if float(projective_separation_violation(min_sep)(eta)) > 0.0:
             continue
         if fast_joint_eval is not None:
@@ -2217,7 +2453,9 @@ def _select_action_design(
     law_valid_rows: list[dict[str, Any]] = []
     exact_law_audited_count = 0
     mandatory_audited = len(initial_rows)
-    for _, eta, _, proxy in audit_order:
+    for _, eta, _, proxy in _progress_iter(
+        audit_order, desc=f"{name}: exact law audit", total=len(audit_order)
+    ):
         if exact_law_audited_count >= mandatory_audited and len(law_valid_rows) >= target_valid:
             break
         exact_law_audited_count += 1
@@ -2239,7 +2477,11 @@ def _select_action_design(
 
     if exact_prescreen_result is not None:
         pre_rows = []
-        for row in law_valid_rows:
+        for row in _progress_iter(
+            law_valid_rows,
+            desc=f"{name}: exact action prescreen",
+            total=len(law_valid_rows),
+        ):
             rec = exact_prescreen_result(row["eta"])
             if rec["valid"] and np.isfinite(rec["value"]):
                 rr = dict(row)
@@ -2276,7 +2518,9 @@ def _select_action_design(
             finalists = base
 
     rows: list[dict[str, Any]] = []
-    for row in finalists:
+    for row in _progress_iter(
+        finalists, desc=f"{name}: exact finalist evaluation", total=len(finalists)
+    ):
         rec = exact_result(row["eta"])
         rr = dict(row)
         rr["objective"] = float(rec["value"])
@@ -2324,6 +2568,7 @@ def _local_design_cloud(family, centers: Array, *, count_per_center: int, radius
     return _dedupe_designs(family, jnp.stack(out)) if out else jnp.zeros((0, centers.shape[-1]), dtype=jnp.float64)
 
 def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False) -> dict[str, Any]:
+    run_started = time.perf_counter()
     # Normalize the validity schema once, before hashing/caching or constructing
     # JAX objectives. These are the learned-reference reference-run scientific
     # validity gates; Poisson residual remains diagnostic unless explicitly gated.
@@ -2342,6 +2587,48 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    config_hash = _config_hash(cfg)
+    timing_path = output_dir / "run_timing.json"
+    previous_phases: dict[str, float] = {}
+    if timing_path.exists():
+        try:
+            previous_timing = json.loads(timing_path.read_text(encoding="utf-8"))
+            if previous_timing.get("config_hash") == config_hash:
+                previous_phases = {
+                    str(k): float(v)
+                    for k, v in previous_timing.get("phases_seconds", {}).items()
+                }
+                print(
+                    "[timing] previous compatible run took "
+                    f"{_format_duration(float(previous_timing['total_seconds']))}",
+                    flush=True,
+                )
+        except (OSError, ValueError, TypeError, KeyError):
+            print("[timing] ignoring unreadable prior run_timing.json", flush=True)
+
+    phase_timings: dict[str, float] = {}
+
+    def begin_phase(name: str) -> float:
+        expected = previous_phases.get(name)
+        suffix = (
+            f"; previous compatible run={_format_duration(expected)}"
+            if expected is not None
+            else ""
+        )
+        print(f"[timing] starting {name}{suffix}", flush=True)
+        return time.perf_counter()
+
+    def finish_phase(name: str, started: float) -> None:
+        elapsed = time.perf_counter() - started
+        phase_timings[name] = elapsed
+        print(
+            f"[timing] finished {name} in {_format_duration(elapsed)}; "
+            f"run elapsed={_format_duration(time.perf_counter() - run_started)}",
+            flush=True,
+        )
+
+    setup_started = begin_phase("setup_and_cached_inputs")
 
     # ------------------------------------------------------------------
     # Frozen reference: reuse only when checkpoint metadata matches the current
@@ -2543,7 +2830,18 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         int(cfg["optimization"]["start_count"]),
         min_sep_rad=math.radians(float(cfg["measurement"]["min_sep_deg"])),
     )
+    print(
+        "[run] workload: "
+        f"jax_devices={[str(d) for d in jax.devices()]} "
+        f"OMP_NUM_THREADS={os.environ.get('OMP_NUM_THREADS', 'unset')} "
+        f"reference_particles={exp.reference_nodes.shape[1]} "
+        f"time_nodes={len(exp.times)} selection_trials={selection_trials} "
+        f"validation_trials={validation_trials}",
+        flush=True,
+    )
+    finish_phase("setup_and_cached_inputs", setup_started)
     if smoke:
+        smoke_started = begin_phase("smoke_exact_path")
         # Smoke mode must return a genuinely valid exact scientific row, not merely
         # "not crash" with NaN sentinels.  The configured optimizer starts are a
         # deliberately small set and may all be infeasible, so perform a broader
@@ -2590,7 +2888,11 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             "for one exact-valid probe",
             flush=True,
         )
-        for i, candidate in enumerate(candidates):
+        for i, candidate in _progress_iter(
+            enumerate(candidates),
+            desc="smoke: exact feasibility probes",
+            total=len(candidates),
+        ):
             try:
                 exp._exact_polytope(candidate)
             except ExactFeasibilityError as exc:
@@ -2667,19 +2969,29 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
                 "inspect/rebuild the frozen reference bank before trusting a proper run."
             )
 
-        metrics = exp.evaluate_trials_exact(eta, smoke_bank)[0]
+        metrics = exp.evaluate_trials_exact(
+            eta, smoke_bank, progress_desc="smoke: full exact evaluation"
+        )[0]
         if not bool(metrics["valid"]):
             raise RuntimeError(
                 "Internal smoke inconsistency: the exact-valid precheck passed but the "
                 "full exact smoke evaluation failed. This should be investigated rather "
                 "than emitted as NaN output."
             )
+        finish_phase("smoke_exact_path", smoke_started)
+        timing_payload = {
+            "schema_version": 1,
+            "config_hash": config_hash,
+            "total_seconds": float(time.perf_counter() - run_started),
+            "phases_seconds": phase_timings,
+        }
         result = {
             "schema_version": 2,
             "experiment": "toy_example",
             "smoke": True,
             "config": cfg,
-            "config_hash": _config_hash(cfg),
+            "config_hash": config_hash,
+            "timings_seconds": timing_payload,
             "reference": {
                 "checkpoint": str(checkpoint),
                 "metadata": reference_metadata,
@@ -2708,6 +3020,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             },
         }
         write_json(output_dir / "result.json", result)
+        write_json(timing_path, timing_payload)
         _write_csv(output_dir / "result.candidate_summary.csv", [{
             "design": "smoke_probe",
             "theta1_deg": result["smoke_design_deg"][0],
@@ -2720,6 +3033,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     # ------------------------------------------------------------------
     # 1/4 and 2/4: accelerated law stages.
     # ------------------------------------------------------------------
+    law_stages_started = begin_phase("stages_1_2_law")
     law_selection = optimize_population_and_law(
         exp=exp,
         selection_bank=law_bank,
@@ -2737,10 +3051,12 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     epsilon_r = float(law_selection.get("epsilon_r", R_max - R_star))
     fast = law_selection["fast_evaluator"]
     gradient_fast = law_selection.get("gradient_evaluator", fast)
+    finish_phase("stages_1_2_law", law_stages_started)
 
     # ------------------------------------------------------------------
     # 3/4 tangent action. Full scientific evaluator, but fast law constraints.
     # ------------------------------------------------------------------
+    tangent_stage_started = begin_phase("stage_3_tangent")
     tangent_local = _local_design_cloud(
         exp.family,
         jnp.stack([law_eta, population_eta]),
@@ -2791,6 +3107,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         min_exact_law_valid=int(cfg["optimization"].get("tangent_min_exact_law_valid", 4)),
         min_exact_finalists=int(cfg["optimization"].get("tangent_min_exact_finalists", 4)),
     )
+    finish_phase("stage_3_tangent", tangent_stage_started)
 
     # ------------------------------------------------------------------
     # 4/4 full weighted-Poisson action.  Keep the differentiable inverse-design
@@ -2798,6 +3115,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     # discretization of the same full MFSI action.  Exact common-CRN full action
     # on the scientific grid decides the winner.
     # ------------------------------------------------------------------
+    full_stage_started = begin_phase("stage_4_full")
     opt4 = cfg["optimization"]
     local = _local_design_cloud(
         exp.family,
@@ -2866,6 +3184,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         min_exact_law_valid=int(opt4.get("full_min_exact_law_valid", 10)),
         min_exact_finalists=int(opt4.get("full_min_exact_finalists", 8)),
     )
+    finish_phase("stage_4_full", full_stage_started)
 
     # Audit whether the multi-fidelity stage-4 objective preserves the ranking of
     # the scientific full action on exactly audited finalists.  This is diagnostic
@@ -2937,12 +3256,19 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     # ------------------------------------------------------------------
     # Fresh disjoint validation.
     # ------------------------------------------------------------------
+    validation_started = begin_phase("validation_and_certification")
     print("[validation] evaluating disjoint CRN bank", flush=True)
     validation_rows: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {}
     per_design_rows: dict[str, list[dict[str, Any]]] = {}
     for name, eta in designs.items():
-        rows = exp.evaluate_trials_exact(eta, validation)
+        print(
+            f"[validation] design={name} eta_deg={_canonical_deg(eta)}",
+            flush=True,
+        )
+        rows = exp.evaluate_trials_exact(
+            eta, validation, progress_desc=f"validation {name}"
+        )
         for row in rows:
             row["design"] = name
         per_design_rows[name] = rows
@@ -3026,12 +3352,21 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             "certified": bool(certified),
         }
 
+    finish_phase("validation_and_certification", validation_started)
+    timing_payload = {
+        "schema_version": 1,
+        "config_hash": config_hash,
+        "total_seconds": float(time.perf_counter() - run_started),
+        "phases_seconds": phase_timings,
+    }
+
     result = {
         "schema_version": 3,
         "experiment": "toy_example",
         "smoke": False,
         "config": cfg,
-        "config_hash": _config_hash(cfg),
+        "config_hash": config_hash,
+        "timings_seconds": timing_payload,
         "reference": {
             "checkpoint": str(checkpoint),
             "metadata": reference_metadata,
@@ -3130,6 +3465,7 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     }
 
     write_json(output_dir / "result.json", result)
+    write_json(timing_path, timing_payload)
     _write_csv(output_dir / "result.candidate_summary.csv", candidate_rows)
     _write_csv(output_dir / "result.full_proxy_vs_full.csv", full_proxy_rows)
     _write_csv(output_dir / "result.validation_trials.csv", validation_rows)
@@ -3146,7 +3482,17 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             "candidate_summary": "result.candidate_summary.csv",
             "full_proxy_vs_full": "result.full_proxy_vs_full.csv",
             "validation_trials": "result.validation_trials.csv",
+            "run_timing": "run_timing.json",
         },
     }
     write_json(output_dir / "manifest.json", manifest)
+    print(
+        "[timing] phase summary: "
+        + ", ".join(
+            f"{name}={_format_duration(seconds)}"
+            for name, seconds in phase_timings.items()
+        )
+        + f"; total={_format_duration(timing_payload['total_seconds'])}",
+        flush=True,
+    )
     return result

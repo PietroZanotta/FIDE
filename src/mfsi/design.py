@@ -128,6 +128,7 @@ def optimize_multistart_candidates(
     constraints: Sequence[Constraint] = (),
     canonicalize: Callable[[Array], Array] | None = None,
     vectorize_starts: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[OptimizeResult]:
     """Optimize every start and return all seed/optimized candidates.
 
@@ -145,9 +146,23 @@ def optimize_multistart_candidates(
     if vectorize_starts:
         optimize_batch = jax.jit(jax.vmap(lambda eta0: _adam_single(objective, eta0, cfg)))
         optimized = optimize_batch(starts)
+        # Synchronize before reporting completion: JAX dispatch is asynchronous on
+        # accelerators, so merely constructing ``optimized`` is not a useful timing
+        # boundary for callers.
+        if progress_callback is not None:
+            jax.block_until_ready(optimized)
+            progress_callback(int(starts.shape[0]), int(starts.shape[0]))
     else:
         optimize_one = jax.jit(lambda eta0: _adam_single(objective, eta0, cfg))
-        optimized = jnp.stack([optimize_one(starts[i]) for i in range(int(starts.shape[0]))])
+        optimized_rows = []
+        total = int(starts.shape[0])
+        for i in range(total):
+            optimized_eta = optimize_one(starts[i])
+            if progress_callback is not None:
+                jax.block_until_ready(optimized_eta)
+                progress_callback(i + 1, total)
+            optimized_rows.append(optimized_eta)
+        optimized = jnp.stack(optimized_rows)
 
     primary_eval = jax.jit(primary)
     out: list[OptimizeResult] = []
