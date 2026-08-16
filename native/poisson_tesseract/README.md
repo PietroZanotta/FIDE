@@ -1,15 +1,19 @@
 # Native stage-4 weighted-Poisson backend
 
-This optional module accelerates only the differentiable toy stage-4 search
-proxy. It batches every CRN-trial/selected-time system into one in-process
-Tesseract-JAX call and solves the independent systems with a C++17/OpenMP
-matrix-free PCG implementation. Its reverse pass uses an analytical implicit
-VJP and another batched PCG solve; it never differentiates through iterations.
+This optional module accelerates both the differentiable toy stage-4 search
+proxy and its authoritative exact action evaluations. The proxy batches every
+CRN-trial/selected-time system into one in-process Tesseract-JAX call. Each
+exact trial similarly packs all full-resolution time systems into one call,
+instead of launching 21 eager JAX solves. The independent systems use a
+C++17/OpenMP matrix-free PCG implementation. The differentiable reverse pass
+uses an analytical implicit VJP and another batched PCG solve; it never
+differentiates through iterations.
 
-The authoritative scientific full-action rescoring remains on the existing JAX
-implementation at the full 51x51 grid, all 21 time nodes, and the complete
-action bank. The I-projection, forcing, rasterization, physical action, validity
-rules, optimization, and exact candidate auditing also remain in JAX/Python.
+Authoritative scientific rescoring keeps the full 51x51 grid, all 21 time
+nodes, the complete action bank, and unchanged equations/tolerances. Its exact
+I-projection, forcing, rasterization, physical-action formula, validity rules,
+and candidate auditing remain in JAX/Python; only the independent linear solves
+cross the batched Tesseract boundary.
 
 ## Install and build
 
@@ -34,7 +38,10 @@ does not use `-ffast-math`, CUDA, or an external sparse/PDE library.
 Set the toy configuration key:
 
 ```json
-"full_gradient_poisson_backend": "tesseract_cpp"
+{
+  "full_gradient_poisson_backend": "tesseract_cpp",
+  "full_exact_poisson_backend": "tesseract_cpp"
+}
 ```
 
 Use `"jax"` to disable the accelerator. The code default is `"jax"` when the
@@ -84,5 +91,5 @@ Do not enable nested OpenMP. Parallelism is naturally limited by the batch size
 - A native solve that misses its requested residual tolerance raises with batch
   indices, iterations, and residuals. It never silently returns an invalid
   potential or changes equations.
-- This backend is intentionally scoped to the toy stage-4 proxy. It does not
-  replace `mfsi.poisson.solve_weighted_poisson`.
+- This backend is intentionally scoped to toy stage 4. It does not replace
+  `mfsi.poisson.solve_weighted_poisson` globally.

@@ -134,7 +134,9 @@ def main() -> None:
     cfg_jax = copy.deepcopy(cfg)
     cfg_native = copy.deepcopy(cfg)
     cfg_jax["optimization"]["full_gradient_poisson_backend"] = "jax"
+    cfg_jax["optimization"]["full_exact_poisson_backend"] = "jax"
     cfg_native["optimization"]["full_gradient_poisson_backend"] = "tesseract_cpp"
+    cfg_native["optimization"]["full_exact_poisson_backend"] = "tesseract_cpp"
     exp_jax = ToyExperiment(
         cfg_jax,
         reference,
@@ -299,12 +301,55 @@ def main() -> None:
     full_native_seconds = _median_jax(full_native, (eta,), repetitions)
 
     exact_audit_seconds = None
+    exact_native_audit_seconds = None
+    exact_steady_jax_seconds = None
+    exact_steady_native_seconds = None
+    exact_value_absolute = None
     if args.include_exact_audit:
         start = time.perf_counter()
-        audit = exp_jax.exact_full_result(eta, bank, trial_count=1)
+        audit = exp_jax._exact_trial_result(
+            eta, bank, 0, compute_law=False, compute_tangent=False, compute_full=True
+        )
         exact_audit_seconds = time.perf_counter() - start
-        if not audit["valid"]:
+        start = time.perf_counter()
+        native_audit = exp_native._exact_trial_result(
+            eta, bank, 0, compute_law=False, compute_tangent=False, compute_full=True
+        )
+        exact_native_audit_seconds = time.perf_counter() - start
+        if not audit["valid"] or not native_audit["valid"]:
             raise RuntimeError(f"Exact benchmark audit was invalid: {audit}")
+        exact_value_absolute = abs(
+            float(audit["full_action"]) - float(native_audit["full_action"])
+        )
+
+        # Trial zero includes one-time tracing/compilation. Distinct later trials
+        # are representative of the hundreds of uncached rows in stage 4.
+        steady_trials = range(1, min(int(bank.masses.shape[0]), repetitions + 1))
+        jax_exact_times = []
+        native_exact_times = []
+        for trial in steady_trials:
+            start = time.perf_counter()
+            exp_jax._exact_trial_result(
+                eta,
+                bank,
+                trial,
+                compute_law=False,
+                compute_tangent=False,
+                compute_full=True,
+            )
+            jax_exact_times.append(time.perf_counter() - start)
+            start = time.perf_counter()
+            exp_native._exact_trial_result(
+                eta,
+                bank,
+                trial,
+                compute_law=False,
+                compute_tangent=False,
+                compute_full=True,
+            )
+            native_exact_times.append(time.perf_counter() - start)
+        exact_steady_jax_seconds = float(statistics.median(jax_exact_times))
+        exact_steady_native_seconds = float(statistics.median(native_exact_times))
 
     forward_diff = np.asarray(jax_psi - native_psi)
     forward_ref = np.asarray(jax_psi)
@@ -350,6 +395,9 @@ def main() -> None:
             "stage4_like_jax_value_gradient_seconds": full_jax_seconds,
             "stage4_like_tesseract_cpp_value_gradient_seconds": full_native_seconds,
             "exact_one_trial_audit_seconds": exact_audit_seconds,
+            "exact_one_trial_native_cold_seconds": exact_native_audit_seconds,
+            "exact_one_trial_jax_steady_seconds": exact_steady_jax_seconds,
+            "exact_one_trial_native_steady_seconds": exact_steady_native_seconds,
         },
         "errors": {
             "forward_absolute_l2": float(np.linalg.norm(forward_diff)),
@@ -371,6 +419,7 @@ def main() -> None:
                 np.linalg.norm(full_grad_diff) / np.linalg.norm(full_grad_ref)
             ),
             "end_to_end_gradient_max_absolute": float(np.max(np.abs(full_grad_diff))),
+            "exact_one_trial_action_absolute": exact_value_absolute,
         },
         "native_forward_iterations": {
             "mean": float(np.mean(forward_stats["iterations"])),
@@ -398,12 +447,20 @@ def main() -> None:
             "max_relative_residual": float(np.max(adjoint_stats["relative_residual"])),
         },
         "stage4_like_speedup": float(speedup),
+        "exact_trial_steady_speedup": (
+            float(exact_steady_jax_seconds / exact_steady_native_seconds)
+            if exact_steady_jax_seconds is not None
+            and exact_steady_native_seconds is not None
+            else None
+        ),
         "decision": (
-            "integrate_and_stop; CUDA unnecessary"
-            if speedup >= 3.0
+            "integrate exact batching; CUDA unnecessary"
+            if exact_steady_jax_seconds is not None
+            and exact_steady_native_seconds is not None
+            and exact_steady_jax_seconds / exact_steady_native_seconds >= 10.0
             else (
-                "keep stable C++ path; CUDA not started"
-                if speedup >= 1.5
+                "integrate proxy acceleration; CUDA unnecessary"
+                if speedup >= 3.0
                 else "speedup below 1.5x; stop and profile/recommend future proxy or CUDA"
             )
         ),

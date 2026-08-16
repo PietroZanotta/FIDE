@@ -97,6 +97,46 @@ def test_native_solve_residual_and_physical_action_match_jax():
     assert np.linalg.norm(got_action - expected_action) / np.linalg.norm(expected_action) < 1.0e-8
 
 
+def test_batched_tesseract_weighted_poisson_diagnostics_match_jax():
+    pytest.importorskip("tesseract_jax")
+    from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract
+
+    # Use the experiment helper here because this is the exact stage-4 batch
+    # boundary: native potentials come back once, then the unchanged physical
+    # action and true-residual definitions are evaluated for the whole batch.
+    toy_dir = ROOT / "experiments" / "toy_example"
+    if str(toy_dir) not in sys.path:
+        sys.path.insert(0, str(toy_dir))
+    from experiment import _batched_poisson_diagnostics
+
+    rng = np.random.default_rng(111)
+    q = jnp.asarray(0.4 + rng.random((4, 17, 17)), dtype=jnp.float64)
+    h = jnp.asarray(rng.normal(size=q.shape), dtype=jnp.float64)
+    cfg = PoissonConfig(
+        dx=0.3,
+        operator_floor_rel=2.0e-5,
+        cg_tol=1.0e-10,
+        cg_maxiter=700,
+    )
+    psi = solve_weighted_poisson_batch_tesseract(q, h, cfg)
+    actions, residuals = _batched_poisson_diagnostics(
+        psi,
+        q,
+        h,
+        dx=cfg.dx,
+        operator_floor_rel=cfg.operator_floor_rel,
+        gauge_strength=cfg.gauge_strength,
+    )
+    reference = [solve_weighted_poisson(q[i], h[i], cfg) for i in range(q.shape[0])]
+    expected_actions = np.asarray([float(row.action) for row in reference])
+    expected_residuals = np.asarray([float(row.relative_residual) for row in reference])
+
+    np.testing.assert_allclose(np.asarray(actions), expected_actions, rtol=1.0e-9, atol=1.0e-9)
+    np.testing.assert_allclose(
+        np.asarray(residuals), expected_residuals, rtol=1.0e-5, atol=1.0e-12
+    )
+
+
 @pytest.mark.parametrize("field", ["q_operator", "rhs", "gauge"])
 def test_native_vjp_centered_finite_difference(field: str):
     rng, q, rhs, gauge = _systems(12, (2, 8, 7))

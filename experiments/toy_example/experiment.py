@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from functools import partial
 import hashlib
 import json
 import math
@@ -69,6 +70,49 @@ except ImportError:  # compatibility with the earlier name used in the cleanup
 
 
 Array = jax.Array
+
+
+@partial(
+    jax.jit,
+    static_argnames=("dx", "operator_floor_rel", "gauge_strength"),
+)
+def _batched_poisson_diagnostics(
+    psi: Array,
+    q: Array,
+    h: Array,
+    *,
+    dx: float,
+    operator_floor_rel: float,
+    gauge_strength: float,
+) -> tuple[Array, Array]:
+    """Physical actions and true residuals for an explicit Poisson batch."""
+    q_floor = operator_floor_rel * jnp.max(q, axis=(-2, -1), keepdims=True)
+    q_operator = q + q_floor
+    rhs = -(q * h)
+    flat_q = q.reshape((q.shape[0], -1))
+    gauge = flat_q / jnp.maximum(
+        jnp.linalg.norm(flat_q, axis=-1, keepdims=True), 1.0e-300
+    )
+    gauge = gauge.reshape(q.shape)
+
+    operator_psi = jax.vmap(lambda p, qo: weighted_laplacian(p, qo, dx))(
+        psi, q_operator
+    )
+    gauge_projection = jnp.sum(gauge * psi, axis=(-2, -1), keepdims=True)
+    residual = operator_psi + gauge_strength * gauge * gauge_projection - rhs
+    relative_residual = jnp.linalg.norm(
+        residual.reshape((residual.shape[0], -1)), axis=-1
+    ) / jnp.maximum(
+        jnp.linalg.norm(rhs.reshape((rhs.shape[0], -1)), axis=-1), 1.0e-14
+    )
+
+    physical_operator_psi = jax.vmap(
+        lambda p, q_one: weighted_laplacian(p, q_one, dx)
+    )(psi, q)
+    actions = (dx * dx) * jnp.sum(
+        psi * physical_operator_psi, axis=(-2, -1)
+    )
+    return actions, relative_residual
 
 
 # -----------------------------------------------------------------------------
@@ -703,6 +747,31 @@ class ToyExperiment:
                     "Tesseract-JAX or the native extension is unavailable."
                 )
             native_revision = NATIVE_SOLVER_REVISION
+        self.full_exact_poisson_backend = str(
+            opt_cfg.get(
+                "full_exact_poisson_backend", self.full_gradient_poisson_backend
+            )
+        )
+        if self.full_exact_poisson_backend not in {"jax", "tesseract_cpp"}:
+            raise ValueError(
+                "optimization.full_exact_poisson_backend must be 'jax' or "
+                f"'tesseract_cpp'; got {self.full_exact_poisson_backend!r}"
+            )
+        if (
+            self.full_exact_poisson_backend == "tesseract_cpp"
+            and self.full_gradient_poisson_backend != "tesseract_cpp"
+        ):
+            from mfsi.poisson_tesseract import (
+                TesseractPoissonUnavailable,
+                is_tesseract_poisson_available,
+            )
+
+            if not is_tesseract_poisson_available():
+                raise TesseractPoissonUnavailable(
+                    "The toy exact stage-4 evaluator explicitly requests "
+                    "tesseract_cpp, but Tesseract-JAX or the native extension is "
+                    "unavailable."
+                )
         self.full_gradient_cache_signature = hashlib.sha256(
             json.dumps(
                 {
@@ -1133,6 +1202,8 @@ class ToyExperiment:
         law_vals: list[float] = []
         tangent_vals: list[float] = []
         full_vals: list[float] = []
+        full_q_rows: list[Array] = []
+        full_h_rows: list[Array] = []
         lam = np.zeros(2, dtype=np.float64)
         max_resid = 0.0
         min_ess = np.inf
@@ -1225,9 +1296,35 @@ class ToyExperiment:
                     self.mmd_kernel,
                 )))
             if compute_full:
-                pois = solve_weighted_poisson(ras.q, ras.h, self.poisson_cfg)
-                full_vals.append(float(pois.action))
-                max_poisson = max(max_poisson, float(pois.relative_residual))
+                if self.full_exact_poisson_backend == "tesseract_cpp":
+                    full_q_rows.append(ras.q)
+                    full_h_rows.append(ras.h)
+                else:
+                    pois = solve_weighted_poisson(ras.q, ras.h, self.poisson_cfg)
+                    full_vals.append(float(pois.action))
+                    max_poisson = max(max_poisson, float(pois.relative_residual))
+
+        if compute_full and self.full_exact_poisson_backend == "tesseract_cpp":
+            # The exact tilt remains sequential in time so its multiplier warm
+            # starts and all scientific validity checks are unchanged. Once q/h
+            # are known, the independent systems belong in one native call.
+            from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract
+
+            q_batch = jnp.stack(full_q_rows)
+            h_batch = jnp.stack(full_h_rows)
+            psi_batch = solve_weighted_poisson_batch_tesseract(
+                q_batch, h_batch, self.poisson_cfg
+            )
+            actions, residuals = _batched_poisson_diagnostics(
+                psi_batch,
+                q_batch,
+                h_batch,
+                dx=float(self.poisson_cfg.dx),
+                operator_floor_rel=float(self.poisson_cfg.operator_floor_rel),
+                gauge_strength=float(self.poisson_cfg.gauge_strength),
+            )
+            full_vals = np.asarray(actions, dtype=np.float64).tolist()
+            max_poisson = float(np.max(np.asarray(residuals, dtype=np.float64)))
 
         all_valid = bool(
             all_valid
@@ -2236,6 +2333,12 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
     cfg["validity"].setdefault("max_finite_calibration_resid", 1.0e-3)
     cfg["validity"].setdefault("min_ess_fraction", 0.03)
     cfg["validity"].setdefault("min_in_domain_base_mass", 0.995)
+    cfg["optimization"] = dict(cfg.get("optimization", {}))
+    if smoke and cfg["optimization"].get("full_exact_poisson_backend") == "tesseract_cpp":
+        # Smoke deliberately caps the scientific CG solve at 30 iterations. Keep
+        # its historical wiring check on JAX rather than weakening the native
+        # backend's strict convergence contract for production runs.
+        cfg["optimization"]["full_exact_poisson_backend"] = "jax"
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2726,7 +2829,8 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         f"{full_distinct_starts.shape[0]} distinct starts screened, {full_start_count} optimized, "
         f"steps={full_cfg.steps}, CG tol={exp.poisson_gradient_cfg.cg_tol:g}, "
         f"maxiter={exp.poisson_gradient_cfg.cg_maxiter}, "
-        f"backend={exp.full_gradient_poisson_backend})",
+        f"proxy_backend={exp.full_gradient_poisson_backend}, "
+        f"exact_backend={exp.full_exact_poisson_backend})",
         flush=True,
     )
     full_proxy_anchor = max(
@@ -2992,6 +3096,14 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
             ).tolist(),
             "cg_tol": float(exp.poisson_gradient_cfg.cg_tol),
             "cg_maxiter": int(exp.poisson_gradient_cfg.cg_maxiter),
+        },
+        "full_exact_evaluator": {
+            "poisson_backend": exp.full_exact_poisson_backend,
+            "grid_n": int(exp.grid.n),
+            "time_n": int(len(exp.times)),
+            "time_batch_per_trial": int(len(exp.times)),
+            "cg_tol": float(exp.poisson_cfg.cg_tol),
+            "cg_maxiter": int(exp.poisson_cfg.cg_maxiter),
         },
         "full_search_funnel": full_search_funnel,
         "selection_audit": {
