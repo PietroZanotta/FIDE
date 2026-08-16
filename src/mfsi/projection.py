@@ -35,6 +35,17 @@ class IProjectionState(NamedTuple):
     ess_fraction: Array
 
 
+class IProjectionTrajectoryState(NamedTuple):
+    """Batched states with leading shape `[trial,time]`."""
+
+    lam: Array
+    weights: Array
+    moments: Array
+    residual: Array
+    covariance: Array
+    ess_fraction: Array
+
+
 def normalized_weights(phi: Array, log_base_weights: Array, lam: Array) -> Array:
     logits = log_base_weights + phi @ lam
     return jax.nn.softmax(logits)
@@ -163,8 +174,16 @@ def make_i_projection_solver(cfg: IProjectionConfig):
 
 
 class EmpiricalIProjector:
-    def __init__(self, cfg: IProjectionConfig = IProjectionConfig()):
+    def __init__(
+        self,
+        cfg: IProjectionConfig = IProjectionConfig(),
+        *,
+        trajectory_backend: str = "jax",
+    ):
+        if trajectory_backend not in {"jax", "tesseract_cpp"}:
+            raise ValueError("trajectory_backend must be 'jax' or 'tesseract_cpp'")
         self.cfg = cfg
+        self.trajectory_backend = trajectory_backend
         self.solve_lambda = make_i_projection_solver(cfg)
 
     def project(
@@ -204,6 +223,77 @@ class EmpiricalIProjector:
             lam=lam,
             weights=weights,
             moments=moments,
+            residual=residual,
+            covariance=covariance,
+            ess_fraction=ess_fraction,
+        )
+
+    def project_trajectory(
+        self,
+        phi: Array,
+        base_weights: Array,
+        targets: Array,
+    ) -> IProjectionTrajectoryState:
+        """Project a complete `[trial,time]` target bank with warm starts.
+
+        `phi` is `[T,N,M]`, base weights are `[T,N]`, and targets are
+        `[B,T,M]`. The warm start links numerical work through time but is
+        deliberately absent from the mathematical VJP.
+        """
+        phi = jnp.asarray(phi, dtype=jnp.float64)
+        base_weights = jnp.asarray(base_weights, dtype=jnp.float64)
+        targets = jnp.asarray(targets, dtype=jnp.float64)
+        if phi.ndim != 3 or base_weights.shape != phi.shape[:2]:
+            raise ValueError("phi/base_weights must have shapes [T,N,M]/[T,N]")
+        if targets.ndim != 3 or targets.shape[1] != phi.shape[0] or targets.shape[2] != phi.shape[2]:
+            raise ValueError("targets must have shape [B,T,M]")
+
+        base_weights = base_weights / jnp.maximum(
+            jnp.sum(base_weights, axis=-1, keepdims=True), 1.0e-300
+        )
+        log_base = jnp.where(base_weights > 0.0, jnp.log(base_weights), -jnp.inf)
+
+        if self.trajectory_backend == "tesseract_cpp":
+            from .projection_tesseract import solve_i_projection_trajectory_tesseract
+
+            lam = solve_i_projection_trajectory_tesseract(
+                phi, log_base, targets, self.cfg
+            )
+        else:
+            batch = int(targets.shape[0])
+            moments = int(targets.shape[-1])
+
+            def step(lam0, xs):
+                phi_t, base_t, target_t = xs
+                states = jax.vmap(
+                    lambda target, warm: self.project(
+                        phi_t, base_t, target, lam0=warm
+                    )
+                )(target_t, lam0)
+                return states.lam, states.lam
+
+            _, lam_time_major = jax.lax.scan(
+                step,
+                jnp.zeros((batch, moments), dtype=jnp.float64),
+                (phi, base_weights, jnp.swapaxes(targets, 0, 1)),
+            )
+            lam = jnp.swapaxes(lam_time_major, 0, 1)
+
+        logits = log_base[None, :, :] + jnp.einsum("tnm,btm->btn", phi, lam)
+        weights = jax.nn.softmax(logits, axis=-1)
+        projected_moments = jnp.einsum("btn,tnm->btm", weights, phi)
+        centered = phi[None, :, :, :] - projected_moments[:, :, None, :]
+        covariance = jnp.einsum(
+            "btn,btni,btnj->btij", weights, centered, centered
+        )
+        residual = projected_moments - targets
+        ess_projected = 1.0 / jnp.maximum(jnp.sum(weights**2, axis=-1), 1.0e-300)
+        ess_base = 1.0 / jnp.maximum(jnp.sum(base_weights**2, axis=-1), 1.0e-300)
+        ess_fraction = ess_projected / ess_base[None, :]
+        return IProjectionTrajectoryState(
+            lam=lam,
+            weights=weights,
+            moments=projected_moments,
             residual=residual,
             covariance=covariance,
             ess_fraction=ess_fraction,

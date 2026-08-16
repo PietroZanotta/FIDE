@@ -202,23 +202,18 @@ class FastToyLawEvaluator:
         validity_tol: float,
     ) -> Array:
         """Calibrate every time node, score only requested nodes, return [B]."""
+        projection = self.projector.project_trajectory(
+            phi_ref, self.reference_base_weights, targets
+        )
         B = int(targets.shape[0])
-        M = int(targets.shape[-1])
-        lam0 = jnp.zeros((B, M), dtype=jnp.float64)
         loss0 = jnp.zeros((B,), dtype=jnp.float64)
-        max_resid0 = jnp.zeros((B,), dtype=jnp.float64)
-        min_ess0 = jnp.full((B,), jnp.inf, dtype=jnp.float64)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
 
         # Scan by time rather than by trial.  Every trial at a fixed time shares
         # phi_t/base_t/cell indices, which is the GPU-friendly batching direction.
-        def step(carry, xs):
-            lam, loss, max_resid, min_ess = carry
-            phi_t, base_t, target_t, cell_t, kp_t, pself_t, do_score, w_t = xs
-            lam, weights, resid, ess = self._project_batch_one_time(
-                phi_t, base_t, target_t, lam
-            )
-            max_resid = jnp.maximum(max_resid, resid)
-            min_ess = jnp.minimum(min_ess, ess)
+        def step(loss, xs):
+            weights, cell_t, kp_t, pself_t, do_score, w_t = xs
 
             def score(_):
                 qmass = jax.vmap(self._raster_mass_one, in_axes=(0, None))(weights, cell_t)
@@ -226,21 +221,17 @@ class FastToyLawEvaluator:
                 return loss + w_t * mmd
 
             loss = jax.lax.cond(do_score, score, lambda _: loss, operand=None)
-            return (lam, loss, max_resid, min_ess), None
+            return loss, None
 
         xs = (
-            phi_ref,
-            self.reference_base_weights,
-            jnp.swapaxes(targets, 0, 1),
+            jnp.swapaxes(projection.weights, 0, 1),
             self.reference_cell_idx,
             jnp.swapaxes(truth_k, 0, 1),
             jnp.swapaxes(truth_self, 0, 1),
             score_mask,
             score_weights,
         )
-        (_, loss, max_resid, min_ess), _ = jax.lax.scan(
-            step, (lam0, loss0, max_resid0, min_ess0), xs
-        )
+        loss, _ = jax.lax.scan(step, loss0, xs)
         valid = (
             (max_resid <= float(validity_tol))
             & (min_ess >= float(self.cfg.min_ess_fraction))

@@ -225,6 +225,9 @@ def optimize_population_and_law(
     # cached R_star and the *current* epsilon_r below.
     stage12_cfg = copy.deepcopy(cfg)
     stage12_cfg.setdefault("law", {})["epsilon_r"] = "<downstream-only>"
+    # Numerical backend choice does not change the law objective and must not
+    # invalidate an already certified population/Law cache.
+    stage12_cfg.setdefault("projection", {}).pop("trajectory_backend", None)
     # Tangent/full optimizer fidelity and action/validation Monte Carlo counts are
     # downstream of the population/Law solution and must not invalidate stage 1/2
     # during Pareto or proxy-convergence sweeps.

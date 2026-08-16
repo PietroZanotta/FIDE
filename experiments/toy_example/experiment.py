@@ -729,7 +729,8 @@ class ToyExperiment:
                 lambda_clip=float(proj_cfg.get("lambda_clip", 1000.0)),
                 line_search_steps=int(proj_cfg.get("search_line_search_steps", proj_cfg.get("line_search_steps", 8))),
                 implicit_ridge=float(proj_cfg.get("implicit_ridge", 0.0)),
-            )
+            ),
+            trajectory_backend=str(proj_cfg.get("trajectory_backend", "jax")),
         )
         self.moment_cfg = QuadraticBridgeConfig(
             ridge_rel=float(mom_cfg.get("ridge_rel", 1e-12)),
@@ -1833,6 +1834,46 @@ class ToyExperiment:
         forcing = forcing - jnp.sum(w * forcing)
         return projection, forcing
 
+    def _particle_forcing_trajectory(
+        self,
+        *,
+        phi: Array,
+        grad_phi: Array,
+        velocity: Array,
+        base_weights: Array,
+        targets: Array,
+        targets_dot: Array,
+    ):
+        """Batched `[trial,time]` projection and particle forcing."""
+        projection = self.projector.project_trajectory(phi, base_weights, targets)
+        weights = projection.weights
+        advective = jnp.einsum("tnmd,tnd->tnm", grad_phi, velocity)
+        mean_advective = jnp.einsum("btn,tnm->btm", weights, advective)
+        g = jnp.einsum("tnm,btm->btn", advective, projection.lam)
+        mean_g = jnp.sum(weights * g, axis=-1)
+        centered_phi = phi[None, :, :, :] - projection.moments[:, :, None, :]
+        cov_phi_g = jnp.sum(
+            weights[..., None]
+            * centered_phi
+            * (g - mean_g[..., None])[..., None],
+            axis=2,
+        )
+        eye = jnp.eye(phi.shape[-1], dtype=jnp.float64)
+        covariance = projection.covariance + float(
+            self.particle_cfg.covariance_ridge
+        ) * eye
+        lambda_dot = jnp.linalg.solve(
+            covariance,
+            (targets_dot - mean_advective - cov_phi_g)[..., None],
+        )[..., 0]
+        forcing = (
+            jnp.einsum("btnm,btm->btn", centered_phi, lambda_dot)
+            + g
+            - mean_g[..., None]
+        )
+        forcing = forcing - jnp.sum(weights * forcing, axis=-1, keepdims=True)
+        return projection, forcing
+
     def _one_trial_full_action_gradient(
         self,
         phi_grid: Array,
@@ -1982,21 +2023,40 @@ class ToyExperiment:
         reconstruction_polytope, endpoint_violation = (
             self._prepare_reconstruction_polytope(phi_grid, phi_nodes, bank)
         )
-        trial_rows = [
-            self._one_trial_full_action_gradient_systems(
+        trial_idx = jnp.arange(int(bank.masses.shape[0]), dtype=jnp.int32)
+        rec = jax.vmap(
+            lambda trial: self._reconstruct_from_geometry(
                 phi_grid,
                 phi_nodes,
-                grad_nodes,
                 bank,
                 trial,
                 reconstruction_polytope=reconstruction_polytope,
                 endpoint_violation=endpoint_violation,
             )
-            for trial in range(int(bank.masses.shape[0]))
-        ]
-        q_batch = jnp.concatenate([row[0] for row in trial_rows], axis=0)
-        h_batch = jnp.concatenate([row[1] for row in trial_rows], axis=0)
-        valid = jnp.stack([row[2] for row in trial_rows])
+        )(trial_idx)
+        time_idx = self.full_gradient_time_idx
+        projection, forcing = self._particle_forcing_trajectory(
+            phi=phi_nodes[time_idx],
+            grad_phi=grad_nodes[time_idx],
+            velocity=self.reference_velocity[time_idx],
+            base_weights=self.reference_weights[time_idx],
+            targets=rec.c[:, time_idx],
+            targets_dot=rec.c_dot[:, time_idx],
+        )
+
+        def raster_trial(weights, forcing_values):
+            return jax.vmap(
+                lambda nodes, w, f: rasterize_projected_particles(
+                    nodes, w, f, self.full_gradient_grid, self.raster_cfg
+                )
+            )(self.reference_nodes[time_idx], weights, forcing_values)
+
+        rasters = jax.vmap(raster_trial)(projection.weights, forcing)
+        q_batch = rasters.q.reshape((-1, self.full_gradient_grid.n, self.full_gradient_grid.n))
+        h_batch = rasters.h.reshape((-1, self.full_gradient_grid.n, self.full_gradient_grid.n))
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
+        valid = self._validity(max_resid, min_ess, rec.projection_distance)
         return q_batch, h_batch, valid
 
     def full_action_gradient(self, eta: Array, bank: TrialBank) -> Array:
@@ -2062,52 +2122,28 @@ class ToyExperiment:
         )(trial_idx)
 
         M = int(phi_nodes.shape[-1])
-        lam0 = jnp.zeros((R, M), dtype=jnp.float64)
-        action0 = jnp.zeros((R,), dtype=jnp.float64)
-        max_resid0 = jnp.zeros((R,), dtype=jnp.float64)
-        min_ess0 = jnp.full((R,), jnp.inf, dtype=jnp.float64)
         eye = jnp.eye(M, dtype=jnp.float64)
-
-        def step(carry, xs):
-            lam, action, max_resid, min_ess = carry
-            phi_t, grad_t, velocity_t, base_t, target_t, target_dot_t, w_t = xs
-
-            def one(lam_i, target_i, target_dot_i):
-                proj = self.projector.project(phi_t, base_t, target_i, lam0=lam_i)
-                m = jnp.einsum("nmd,nd->nm", grad_t, velocity_t)
-                mean_m = jnp.sum(proj.weights[:, None] * m, axis=0)
-                r = mean_m - target_dot_i
-                G = jnp.einsum(
-                    "n,nmd,nkd->mk", proj.weights, grad_t, grad_t
-                ) + float(self.particle_cfg.tangent_ridge) * eye
-                tangent = r @ jnp.linalg.solve(G, r)
-                return (
-                    proj.lam,
-                    tangent,
-                    jnp.linalg.norm(proj.residual),
-                    proj.ess_fraction,
-                )
-
-            lam, tangent, resid, ess = jax.vmap(one)(lam, target_t, target_dot_t)
-            return (
-                lam,
-                action + w_t * tangent,
-                jnp.maximum(max_resid, resid),
-                jnp.minimum(min_ess, ess),
-            ), None
-
-        xs = (
-            phi_nodes,
-            grad_nodes,
-            self.reference_velocity,
-            self.reference_weights,
-            jnp.swapaxes(rec.c, 0, 1),
-            jnp.swapaxes(rec.c_dot, 0, 1),
-            self.time_w,
+        projection = self.projector.project_trajectory(
+            phi_nodes, self.reference_weights, rec.c
         )
-        (_, action, max_resid, min_ess), _ = jax.lax.scan(
-            step, (lam0, action0, max_resid0, min_ess0), xs
+        advective = jnp.einsum(
+            "tnmd,tnd->tnm", grad_nodes, self.reference_velocity
         )
+        mean_advective = jnp.einsum(
+            "btn,tnm->btm", projection.weights, advective
+        )
+        tangent_residual = mean_advective - rec.c_dot
+        gram = jnp.einsum(
+            "btn,tnmd,tnkd->btmk", projection.weights, grad_nodes, grad_nodes
+        ) + float(self.particle_cfg.tangent_ridge) * eye
+        tangent = jnp.einsum(
+            "btm,btm->bt",
+            tangent_residual,
+            jnp.linalg.solve(gram, tangent_residual[..., None])[..., 0],
+        )
+        action = jnp.sum(tangent * self.time_w[None, :], axis=1)
+        max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
+        min_ess = jnp.min(projection.ess_fraction, axis=1)
         valid = self._validity(max_resid, min_ess, rec.projection_distance)
         valid = valid & (
             rec.endpoint_feasibility_violation
