@@ -280,7 +280,7 @@ def _audit_action(
     audit_limit: int,
     finalist_count: int,
     mandatory: list[Array] | None = None,
-) -> tuple[Array, list[dict[str, Any]]]:
+) -> tuple[Array, list[dict[str, Any]], list[dict[str, Any]]]:
     mandatory_keys = {_key(exp, e) for e in (mandatory or [])}
     ordered = [r for r in ranked if _key(exp, r[2]) in mandatory_keys] + [r for r in ranked if _key(exp, r[2]) not in mandatory_keys]
     law_valid = []
@@ -338,16 +338,24 @@ def _audit_action(
     if not valid:
         raise RuntimeError(f"no scientifically valid {name} finalist")
     best = min(valid, key=lambda r: r["objective"])
-    return jnp.asarray(best["eta"], dtype=jnp.float64), rows
+    return jnp.asarray(best["eta"], dtype=jnp.float64), rows, law_valid
 
 
-def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_dir: Path) -> dict[str, Any]:
+def optimize_vortex_designs(
+    exp,
+    law_bank,
+    action_bank,
+    starts: Array,
+    output_dir: Path,
+    *,
+    _anchor_seed_eta: Array | None = None,
+    _anchor_refinement_pass: int = 0,
+) -> dict[str, Any]:
     """Four-stage information/transport selection with authoritative exact rescoring.
 
     Search uses differentiable empirical projections; every selected design is decided
     by the robust non-differentiated I-projection and full declared action/risk banks.
     """
-    del output_dir  # reserved for future per-stage cache files; scientific outputs live in experiment.py
     cfg = exp.cfg
     law_cfg = cfg["law"]
     opt = cfg["optimization"]
@@ -409,7 +417,18 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     law_constraints = geometry + ((population_slack, 0.0),)
     law_obj = lambda eta: exp.finite_risk(eta, law_grad_bank)
     law_cfg_opt = _opt_cfg(cfg, "law")
-    law_starts = jnp.stack(_dedupe(exp, [population_eta] + list(starts)))
+    configured_seed = opt.get("law_anchor_seed_eta")
+    fixed_anchor = opt.get("fixed_law_anchor")
+    seed_values = []
+    if configured_seed is not None:
+        seed_values.append(jnp.asarray(configured_seed, dtype=jnp.float64))
+    if fixed_anchor is not None:
+        seed_values.append(jnp.asarray(fixed_anchor["eta"], dtype=jnp.float64))
+    if _anchor_seed_eta is not None:
+        seed_values.append(jnp.asarray(_anchor_seed_eta, dtype=jnp.float64))
+    law_starts = jnp.stack(
+        _dedupe(exp, [population_eta] + seed_values + list(starts))
+    )
     law_optimizer_starts = _optimizer_starts(law_starts, cfg, "law")
     print("[2/4] optimizing sparse/noisy cubic-spline law risk R", flush=True)
     stage_2_started = stage_started("stage_2_finite_law")
@@ -427,9 +446,34 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         exp, law_ranked, law_bank, L_max=L_max,
         limit=int(opt.get("law_exact_audit_candidates", 20)),
         min_valid=int(opt.get("law_min_exact_valid", 6)),
-        mandatory=[population_eta],
+        mandatory=[population_eta] + seed_values,
     )
-    R_star = float(exp.exact_finite_result(law_eta, law_bank)["value"])
+    if fixed_anchor is not None:
+        fixed_eta = jnp.asarray(fixed_anchor["eta"], dtype=jnp.float64)
+        fixed_population = exp.exact_population_result(fixed_eta)
+        fixed_finite = exp.exact_finite_result(fixed_eta, law_bank)
+        if (
+            not fixed_population["valid"]
+            or float(fixed_population["value"]) > L_max + 1.0e-12
+            or not fixed_finite["valid"]
+        ):
+            raise RuntimeError("fixed Pareto Law anchor is no longer exact-valid")
+        declared = float(fixed_anchor["R_star"])
+        measured = float(fixed_finite["value"])
+        anchor_tol = float(opt.get("law_anchor_consistency_tol", 1.0e-10))
+        if abs(measured - declared) > anchor_tol:
+            raise RuntimeError(
+                "fixed Pareto Law anchor changed under exact evaluation: "
+                f"declared={declared:.12g}, measured={measured:.12g}"
+            )
+        law_eta = fixed_eta
+        R_star = measured
+        print(
+            f"[screen] using frozen Pareto Law anchor R*={R_star:.8g}",
+            flush=True,
+        )
+    else:
+        R_star = float(exp.exact_finite_result(law_eta, law_bank)["value"])
     R_max = R_star + eps_r
     print(
         f"[screen] finite risk R*={R_star:.8g}; "
@@ -475,7 +519,7 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     ) if tan_cfg.steps > 0 else []
     tan_pool = _dedupe(exp, list(tangent_starts) + [r.eta for r in tan_candidates])
     tan_ranked = _rank_pool(exp, tan_pool, tangent_obj_raw, action_constraints)
-    tangent_eta, tangent_rows = _audit_action(
+    tangent_eta, tangent_rows, tangent_law_screen = _audit_action(
         "tangent", exp, tan_ranked, law_bank, action_bank,
         L_max=L_max, R_max=R_max,
         exact_action=lambda eta: exp.exact_tangent_result(eta, action_bank),
@@ -494,8 +538,20 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
         count_per_center=int(opt.get("full_local_starts", 12)),
         scale=float(opt.get("full_local_scale", 0.06)), seed=int(cfg["seed"]) + 501,
     )
+    pareto_incumbent = opt.get("pareto_incumbent_full_eta")
+    incumbent_values = (
+        [jnp.asarray(pareto_incumbent, dtype=jnp.float64)]
+        if pareto_incumbent is not None
+        else []
+    )
     full_starts = jnp.stack(
-        _dedupe(exp, [law_eta, tangent_eta, population_eta] + local_full + list(starts))
+        _dedupe(
+            exp,
+            [law_eta, tangent_eta, population_eta]
+            + incumbent_values
+            + local_full
+            + list(starts),
+        )
     )
     full_optimizer_starts = _optimizer_starts(full_starts, cfg, "full")
     full_raw = lambda eta: exp.full_action_gradient(eta, grad_full_bank)
@@ -520,21 +576,67 @@ def optimize_vortex_designs(exp, law_bank, action_bank, starts: Array, output_di
     full_pool = _dedupe(exp, list(full_starts) + [r.eta for r in full_candidates])
     full_ranked = _rank_pool(exp, full_pool, full_raw, action_constraints)
     prescreen_trials = int(opt.get("full_prescreen_trials", min(4, int(action_bank.sample_indices.shape[0]))))
-    full_eta, full_rows = _audit_action(
+    full_eta, full_rows, full_law_screen = _audit_action(
         "full", exp, full_ranked, law_bank, action_bank,
         L_max=L_max, R_max=R_max,
         exact_action=lambda eta: exp.exact_full_result(eta, action_bank),
         exact_prescreen=lambda eta: exp.exact_full_result(eta, action_bank, trial_count=prescreen_trials),
         audit_limit=int(opt.get("full_exact_audit_candidates", 30)),
         finalist_count=int(opt.get("full_exact_rescore_candidates", 10)),
-        mandatory=[law_eta, tangent_eta, population_eta],
+        mandatory=[law_eta, tangent_eta, population_eta] + incumbent_values,
     )
     stage_finished("stage_4_full", stage_4_started)
+
+    # R* anchors nested epsilon-constraint sets. If a later stage finds a lower
+    # exact finite-law risk under the same L screen, Stage 2 was only a local
+    # result and publishing the curve would be methodologically wrong. Refine
+    # the complete selection from that discovery, or reject a frozen sweep
+    # anchor rather than silently producing negative "excess risk" values.
+    discovered: list[tuple[float, Array]] = []
+    for row in law_rows + tangent_law_screen + full_law_screen:
+        if not row.get("valid", True):
+            continue
+        exact_r = float(row["exact_R"])
+        exact_l = float(row["exact_L"])
+        if np.isfinite(exact_r) and exact_l <= L_max + 1.0e-12:
+            discovered.append((exact_r, row["eta"]))
+    best_discovered_r, best_discovered_eta = min(
+        discovered + [(R_star, law_eta)], key=lambda item: item[0]
+    )
+    anchor_tol = float(opt.get("law_anchor_consistency_tol", 1.0e-10))
+    if best_discovered_r < R_star - anchor_tol:
+        message = (
+            "a later transport-stage candidate beat the claimed Law anchor: "
+            f"R*={R_star:.12g}, discovered_R={best_discovered_r:.12g}"
+        )
+        if fixed_anchor is not None:
+            raise RuntimeError(message + "; frozen Pareto anchor is invalid")
+        max_passes = int(opt.get("law_anchor_refinement_passes", 2))
+        if _anchor_refinement_pass >= max_passes:
+            raise RuntimeError(
+                message
+                + f" after {max_passes} anchor-refinement passes; increase the "
+                "Law search budget instead of publishing this sweep"
+            )
+        print(f"[anchor] {message}; restarting selection from that design", flush=True)
+        refined_starts = jnp.stack(
+            _dedupe(exp, [best_discovered_eta, law_eta] + list(starts))
+        )
+        return optimize_vortex_designs(
+            exp,
+            law_bank,
+            action_bank,
+            refined_starts,
+            output_dir,
+            _anchor_seed_eta=jnp.asarray(best_discovered_eta, dtype=jnp.float64),
+            _anchor_refinement_pass=_anchor_refinement_pass + 1,
+        )
 
     return {
         "population_eta": population_eta, "law_eta": law_eta,
         "tangent_eta": tangent_eta, "full_eta": full_eta,
         "L_star": L_star, "L_max": L_max, "R_star": R_star, "R_max": R_max,
+        "anchor_refinement_passes": int(_anchor_refinement_pass),
         "stage_timings_seconds": stage_timings,
         "audit": {
             "population": population_rows, "law": law_rows,

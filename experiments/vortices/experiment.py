@@ -1947,6 +1947,11 @@ def run_experiment(cfg: dict[str, Any], output_dir: Path, *, smoke: bool = False
         "reference": {"checkpoint": str(checkpoint), "metadata": reference_metadata, "reference_bank": "reference_bank.npz", "min_in_domain_base_mass": float(jnp.min(exp.reference_base_mass))},
         "randomness": {"selection_bank": "selection_bank.npz", "validation_bank": "validation_bank.npz", "law_trials_effective": law_trials, "action_trials_effective": action_trials, "validation_trials_effective": validation_trials},
         "law_screens": {"L_star": L_star, "L_max": L_max, "R_star": R_star, "R_max": R_max, "epsilon_l": L_max - L_star, "epsilon_r": R_max - R_star},
+        "law_anchor": {
+            "anchor_refinement_passes": int(sel.get("anchor_refinement_passes", 0)),
+            "frozen_for_pareto": bool(cfg.get("optimization", {}).get("fixed_law_anchor")),
+            "transport_archive_consistent": True,
+        },
         "selection": {name + "_optimum": np.asarray(eta, dtype=np.float64).tolist() for name, eta in designs.items()},
         "selection_centers": {name: np.asarray(exp.family.centers(eta), dtype=np.float64).tolist() for name, eta in designs.items()},
         "selection_certificates": certificates,

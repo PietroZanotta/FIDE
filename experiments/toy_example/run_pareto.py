@@ -23,6 +23,7 @@ if str(SRC_DIR) not in sys.path: sys.path.insert(0, str(SRC_DIR))
 if str(SCRIPT_DIR) not in sys.path: sys.path.insert(0, str(SCRIPT_DIR))
 
 from mfsi.config import load_config
+from mfsi.cache import fingerprint
 from experiment import run_experiment
 
 
@@ -37,6 +38,18 @@ def parse_args() -> argparse.Namespace:
 
 def _tag(eps: float) -> str:
     return f"epsR_{eps:.7f}".replace(".","p").replace("-","m")
+
+
+def _run_config_hash(cfg: dict[str, Any]) -> str:
+    """Mirror run_experiment's pre-hash default normalization."""
+    normalized=json.loads(json.dumps(cfg))
+    validity=normalized.setdefault("validity",{})
+    validity.setdefault("max_population_calibration_resid",1.0e-5)
+    validity.setdefault("max_finite_calibration_resid",1.0e-3)
+    validity.setdefault("min_ess_fraction",0.03)
+    validity.setdefault("min_in_domain_base_mass",0.995)
+    normalized.setdefault("optimization",{})
+    return fingerprint(normalized)
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -123,20 +136,28 @@ def main() -> None:
     rows=[]; stage12_source: Path|None=None
     for i,eps in enumerate(eps_values):
         point=args.output/_tag(eps); point.mkdir(parents=True,exist_ok=True)
-        if not (point/"result.json").exists() or args.force:
-            if args.force and (point/"result.json").exists():
+        cfg=json.loads(json.dumps(base_cfg)); cfg["law"]["epsilon_r"]=eps
+        result_path=point/"result.json"
+        cached=None
+        if result_path.exists() and not args.force:
+            candidate=json.loads(result_path.read_text(encoding="utf-8"))
+            if candidate.get("config_hash")==_run_config_hash(cfg):
+                cached=candidate
+            else:
+                print(f"[pareto] stale config -> rerunning {point}",flush=True)
+        if cached is None:
+            if args.force and result_path.exists():
                 for name in ("result.json","result.candidate_summary.csv","result.full_proxy_vs_full.csv","result.validation_trials.csv","manifest.json"):
                     try: (point/name).unlink()
                     except FileNotFoundError: pass
             _seed_artifacts(args.source_run,point,include_stage12=False)
             if stage12_source is not None: _seed_artifacts(stage12_source,point,include_stage12=True)
-            cfg=json.loads(json.dumps(base_cfg)); cfg["law"]["epsilon_r"]=eps
             print("="*78,flush=True); print(f"[pareto] epsilon_R={eps:g} -> {point}",flush=True)
             result=run_experiment(cfg,point,smoke=False)
             if stage12_source is None: stage12_source=point
         else:
-            print(f"[pareto] reusing {point/'result.json'}",flush=True)
-            result=json.loads((point/"result.json").read_text(encoding="utf-8"))
+            print(f"[pareto] reusing compatible {result_path}",flush=True)
+            result=cached
             if stage12_source is None: stage12_source=point
         rows.append(_row(result,eps,point)); _save(rows,args.output)
         r=rows[-1]
