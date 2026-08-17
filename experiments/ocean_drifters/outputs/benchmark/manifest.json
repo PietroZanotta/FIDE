@@ -1,0 +1,110 @@
+{
+  "config_hash": "c0204a049d04f7d97e56a459f29bd6941b4d97f4bc70e50146155d7539782ac5",
+  "experiment": "noaa_ocean_drifters",
+  "files": {
+    "cache/risk.npz": {
+      "bytes": 2008193,
+      "sha256": "457ffb71fa317661afb9960dcc3f2b15383cd7e90162df115331fb734ad4b8e6"
+    },
+    "numerical_admissibility_manifest.json": {
+      "bytes": 11414,
+      "sha256": "a939c537f7f3c0b283a05a90cfbdbe1a7c563bd7612bca796d8568df6836ef24"
+    },
+    "result.json": {
+      "bytes": 18580,
+      "sha256": "73ced51452889a2af8e7d225cd9308bcbfe263c1a82527bf3d2540d239a270e2"
+    },
+    "result.layout_risk.csv": {
+      "bytes": 123496,
+      "sha256": "cb49627f97053e8a0a1012e12c3f2ff6b44b1e27a866c678b81ca8d667f2b4c2"
+    },
+    "result.risk_by_time.csv": {
+      "bytes": 465023,
+      "sha256": "8ec5c12d216723c4dec2849f78b501a2682d6d73c3497f3238b5c739b1d20bf9"
+    }
+  },
+  "provenance": {
+    "artifacts": {
+      "adaptive_case_summary": {
+        "path": "experiments/ocean_drifters/analysis/tables/adaptive_iprojection_27case_summary.csv",
+        "sha256": "ff425daf75a4eb9374936a35a8f029fa6d16fbe9343047970d3206b16a042fb6"
+      },
+      "cohort_manifest": {
+        "path": "experiments/ocean_drifters/processed/cohort_manifest.json",
+        "sha256": "c1ccb41a0f7bc962975c6baa10247784e99e6ef56f102dec13dcf9916b0ec909"
+      },
+      "dense_moments": {
+        "path": "experiments/ocean_drifters/processed/phase2f_dense_moments.npz",
+        "sha256": "26529a43ae3158c251b9135a6a77282d3a4ec1f7e11f3341518a4b04a659b523"
+      },
+      "development_cohort": {
+        "path": "experiments/ocean_drifters/processed/development_270.npz",
+        "sha256": "0843c8d78573780239381f5a9aefb7e689de4156032d45d00b5e5345149a0645"
+      },
+      "numerical_admissibility_summary": {
+        "path": "experiments/ocean_drifters/analysis/tables/phase2f_numerical_admissibility_summary.json",
+        "sha256": "b149a83a6f49337a4b7a403758ab4108cec85b01894952eb1aabbed958a688df"
+      },
+      "numerical_admissibility_table": {
+        "path": "experiments/ocean_drifters/analysis/tables/numerical_admissible_layouts.csv",
+        "sha256": "f075b6b6fe5c7c73e7417efb4f9e3c4ee43d925253c6f29a0d064afceb5219cc"
+      },
+      "projection_diagnostics_table": {
+        "path": "experiments/ocean_drifters/analysis/tables/validation_risk.csv",
+        "sha256": "c3b18d8edca9a7fe6609329e983a5ab98895b57bd3b5aae8816ffd57d4a6a862"
+      },
+      "reference_checkpoint": {
+        "path": "experiments/ocean_drifters/models/reference_flow_domain_preserving/reference.npz",
+        "sha256": "a8d5ffca1b0939604fc94920accede8a3d1eac52ff44e47f81f3f547028a91b2"
+      },
+      "risk_freeze": {
+        "path": "experiments/ocean_drifters/analysis/tables/phase2f_risk_freeze.json",
+        "sha256": "785354c8970318b4f25d1ac77f79d97645f97c21ce7306840b8a307b5c6d44a9"
+      },
+      "risk_projection_embeddings": {
+        "path": "experiments/ocean_drifters/processed/iprojection_grid_validation_risk.npz",
+        "sha256": "bb1dc725fd0e3212c603e3c227258c97663baac4b0c32a4c6dc7a12968309915"
+      },
+      "sensor_bank": {
+        "path": "experiments/ocean_drifters/processed/sensor_bank.npz",
+        "sha256": "14dd3f4556143d6566c0f924c214bd4c3f843305db973128f00d20ee28e52af4"
+      }
+    },
+    "config_hash": "c0204a049d04f7d97e56a459f29bd6941b4d97f4bc70e50146155d7539782ac5",
+    "final_test_accessed": false,
+    "git_commit": "b1bb49a6cedce97ae77e6e310de45f89dd6a665c",
+    "git_dirty": true,
+    "grid_resolution": [
+      512,
+      272
+    ],
+    "mmd": {
+      "bandwidth_km": 570.471357024878,
+      "bootstrap_replicates": 500,
+      "bootstrap_seed": 20264824,
+      "bootstrap_unit": "validation_drifter_id",
+      "confidence_level": 0.95,
+      "frozen_additive_epsilon": 0.005066745357925032,
+      "metric": "gaussian_rbf_random_fourier_mmd2",
+      "rff_features": 128,
+      "time_weighting": "uniform"
+    },
+    "seed": 20260823,
+    "solver": {
+      "acceptance_tol": 2e-07,
+      "backend": "tesseract_cpp",
+      "grid_resolution": [
+        512,
+        272
+      ],
+      "lambda_clip": 1000000000000.0,
+      "line_search_steps": 18,
+      "max_steps": 4000,
+      "newton_ridge": 1e-18,
+      "residual_tol": 1e-09,
+      "step_cap": 100000000.0
+    },
+    "split_manifest_sha256": "7e87d57641899aa0d4f61279f46820d37efa6154dd2c3d8b28600a374fee5d08"
+  },
+  "schema_version": 1
+}

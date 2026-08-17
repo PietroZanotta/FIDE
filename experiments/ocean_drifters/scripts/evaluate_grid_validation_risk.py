@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
+from scipy.special import logsumexp
 from scipy.stats import spearmanr
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -35,7 +36,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 def load_config(path: str | Path | None) -> dict[str, Any]:
-    source = Path(path) if path else SCRIPT_DIR.parent / "configs/grid_validation_law_risk.json"
+    source = Path(path) if path else SCRIPT_DIR.parent / "configs/mfsi_phase2f.json"
     with source.open(encoding="utf-8") as handle:
         cfg = json.load(handle)
     cfg["_config_path"] = str(source.resolve())
@@ -78,6 +79,7 @@ def main() -> None:
         design_ids = np.asarray(data["design_id"]).astype(str)
         styles = np.asarray(data["style"]).astype(str)
         sigma = float(data["sigma_km"])
+    risk_cfg = cfg["validation_risk"]
     with np.load(resolve(cfg["frozen_rff_source"]), allow_pickle=False) as data:
         evaluation_indices = np.asarray(data["evaluation_indices"], dtype=int)
         evaluation_days = np.asarray(data["evaluation_days"], dtype=np.float64)
@@ -87,11 +89,11 @@ def main() -> None:
         old_risks = np.asarray(data["risks"], dtype=np.float64)
         old_feasible = np.asarray(data["feasible"], dtype=bool)
         old_best = int(data["best_design_index"])
-    if omega.shape[1] != int(cfg["rff_features"]):
-        raise RuntimeError("frozen RFF feature count differs from the predeclared grid-risk config")
+    if omega.shape[1] != 128:
+        raise RuntimeError("the previously frozen RFF feature count changed")
 
     projection_rows = read_csv(resolve(cfg["full_projection_table"]))
-    design_rows = read_csv(resolve(cfg["full_design_table"]))
+    design_rows = read_csv(table_dir / "numerical_admissible_layouts.csv")
     expected = len(centers) * len(evaluation_indices)
     if len(projection_rows) != expected:
         raise RuntimeError(f"expected {expected} full-grid projections, found {len(projection_rows)}")
@@ -113,19 +115,45 @@ def main() -> None:
         condition[design, time_index] = float(row["covariance_condition_regularized"])
         residual[design, time_index] = float(row["verified_l2_residual"])
         iterations[design, time_index] = int(row["iterations"])
+    adaptive_rows = read_csv(table_dir / "adaptive_iprojection_27case_summary.csv")
+    adaptive_key_to_cache: dict[tuple[int, int], Path] = {}
+    for row in adaptive_rows:
+        if row["resolved"] != "True":
+            continue
+        design = int(row["design_index"])
+        time_index = source_to_position[int(row["source_time_index"])]
+        cache = ROOT / row["cache_path"]
+        with np.load(cache, allow_pickle=False) as data:
+            lam = np.asarray(data["lambda_value"], dtype=np.float64)
+        final_level = max(
+            (
+                level for level in read_csv(table_dir / "adaptive_iprojection_27cases.csv")
+                if int(level["design_index"]) == design
+                and int(level["source_time_index"]) == int(row["source_time_index"])
+            ),
+            key=lambda level: int(level["refinement_level"]),
+        )
+        lambdas[design, time_index] = lam
+        usable[design, time_index] = True
+        kl[design, time_index] = float(final_level["kl_divergence"])
+        log10_ess[design, time_index] = float(final_level["log10_intrinsic_ess"])
+        condition[design, time_index] = float(final_level["covariance_condition_regularized"])
+        residual[design, time_index] = float(final_level["verified_l2_residual"])
+        iterations[design, time_index] = int(final_level["iterations"])
+        adaptive_key_to_cache[(design, time_index)] = cache
     eligible = usable.all(axis=1)
     declared_eligible = {
-        int(row["design_index"]): row["fully_usable"] == "True" for row in design_rows
+        int(row["design_index"]): row["numerically_admissible"] == "True" for row in design_rows
     }
     if len(declared_eligible) != len(centers) or any(
         declared_eligible[i] != bool(eligible[i]) for i in range(len(centers))
     ):
         raise RuntimeError("full-bank per-design eligibility is inconsistent with projection rows")
     eligible_indices = np.flatnonzero(eligible)
-    if len(eligible_indices) != 485:
-        raise RuntimeError(f"expected 485 fully usable layouts, found {len(eligible_indices)}")
+    if len(eligible_indices) != 512:
+        raise RuntimeError(f"expected the frozen 512 admissible layouts, found {len(eligible_indices)}")
 
-    nx, ny = (int(value) for value in cfg["grid_resolution"])
+    nx, ny = (int(value) for value in risk_cfg["grid_resolution"])
     expected_grid = tuple(int(value) for value in grid_cfg["full_bank"]["resolution"])
     if (nx, ny) != expected_grid:
         raise RuntimeError("risk grid differs from the accepted full-sweep grid")
@@ -144,7 +172,7 @@ def main() -> None:
         (len(centers), len(evaluation_indices), omega.shape[1]), np.nan, dtype=np.float32
     )
     base_embedding = np.empty((len(evaluation_indices), omega.shape[1]), dtype=np.float64)
-    batch_size = int(cfg["projection_embedding_batch_size"])
+    batch_size = int(risk_cfg["projection_embedding_batch_size"])
     started = time.perf_counter()
     for time_index, source_index in enumerate(evaluation_indices):
         cache = cache_dir / (
@@ -154,8 +182,12 @@ def main() -> None:
             log_base = np.asarray(data["log_base_mass"], dtype=np.float64)
         base_weights = np.exp(log_base)
         base_embedding[time_index] = base_weights @ grid_rff.astype(np.float64)
-        for start in range(0, len(eligible_indices), batch_size):
-            selected = eligible_indices[start:start + batch_size]
+        regular_indices = np.asarray([
+            design for design in eligible_indices
+            if (int(design), time_index) not in adaptive_key_to_cache
+        ], dtype=int)
+        for start in range(0, len(regular_indices), batch_size):
+            selected = regular_indices[start:start + batch_size]
             delta = points[None, :, None, :] - centers[selected, None, :, :]
             phi = np.exp(-0.5 * np.sum(delta * delta, axis=-1) / sigma**2)
             logits = log_base[None] + np.einsum(
@@ -166,9 +198,28 @@ def main() -> None:
             weights /= weights.sum(axis=1, keepdims=True)
             embedding = jnp.asarray(weights, dtype=jnp.float32) @ grid_rff_device
             projected_embedding[selected, time_index] = np.asarray(embedding)
+        for design in eligible_indices:
+            adaptive_cache = adaptive_key_to_cache.get((int(design), time_index))
+            if adaptive_cache is None:
+                continue
+            with np.load(adaptive_cache, allow_pickle=False) as data:
+                adaptive_points = np.asarray(data["points_km"], dtype=np.float64)
+                adaptive_log_base = np.asarray(data["log_base_mass"], dtype=np.float64)
+                adaptive_lambda = np.asarray(data["lambda_value"], dtype=np.float64)
+            adaptive_phi = np.exp(
+                -0.5 * np.sum(
+                    (adaptive_points[:, None, :] - centers[design][None]) ** 2, axis=-1
+                ) / sigma**2
+            )
+            adaptive_logits = adaptive_log_base + adaptive_phi @ adaptive_lambda
+            adaptive_logits -= logsumexp(adaptive_logits)
+            adaptive_rff = rff_map(adaptive_points, omega, phase, dtype=np.float32)
+            projected_embedding[design, time_index] = (
+                np.exp(adaptive_logits).astype(np.float32) @ adaptive_rff
+            )
         print(
             f"[grid law risk] day {evaluation_days[time_index]:g}: "
-            f"485 embeddings complete; elapsed={time.perf_counter()-started:.1f}s",
+            f"512 embeddings complete; elapsed={time.perf_counter()-started:.1f}s",
             flush=True,
         )
 
@@ -188,7 +239,7 @@ def main() -> None:
         int(cfg["seed"]) + int(phase2["law_risk"]["bootstrap_seed_offset"])
     )
     bootstrap_indices = bootstrap_rng.integers(
-        0, len(validation), size=(int(cfg["bootstrap_replicates"]), len(validation))
+        0, len(validation), size=(int(risk_cfg["bootstrap_replicates"]), len(validation))
     )
     bootstrap_embedding = validation_rff_by_id[bootstrap_indices].mean(axis=1, dtype=np.float64)
     projected_sq = np.sum(
@@ -204,17 +255,36 @@ def main() -> None:
         projected_sq[:, None, :] + bootstrap_sq[None] - 2.0 * cross, axis=-1
     )
     bootstrap_risk = np.full(
-        (len(centers), int(cfg["bootstrap_replicates"])), np.nan, dtype=np.float64
+        (len(centers), int(risk_cfg["bootstrap_replicates"])), np.nan, dtype=np.float64
     )
     bootstrap_risk[eligible_indices] = bootstrap_risk_eligible
 
     best = int(eligible_indices[np.argmin(risks[eligible_indices])])
     order = eligible_indices[np.argsort(risks[eligible_indices])]
     best_se = float(np.std(bootstrap_risk[best], ddof=1))
-    epsilon_values = sorted({
-        max(float(cfg["minimum_reported_epsilon"]), multiplier * best_se)
-        for multiplier in cfg["epsilon_multipliers_of_best_bootstrap_se"]
-    })
+    confidence = float(risk_cfg["confidence_level"])
+    alpha = 1.0 - confidence
+    paired_rows: list[dict] = []
+    statistically_indistinguishable_gaps: list[float] = []
+    for design in eligible_indices:
+        paired = bootstrap_risk[design] - bootstrap_risk[best]
+        lower, upper = np.quantile(paired, [0.5 * alpha, 1.0 - 0.5 * alpha])
+        gap = float(risks[design] - risks[best])
+        indistinguishable = bool(lower <= 0.0 <= upper)
+        if indistinguishable:
+            statistically_indistinguishable_gaps.append(gap)
+        paired_rows.append({
+            "design_index": int(design), "design_id": design_ids[design],
+            "point_risk_difference_from_best": gap,
+            "bootstrap_mean_paired_difference": float(np.mean(paired)),
+            "bootstrap_se_paired_difference": float(np.std(paired, ddof=1)),
+            "paired_percentile_ci_lower": float(lower),
+            "paired_percentile_ci_upper": float(upper),
+            "paired_ci_includes_zero": indistinguishable,
+            "probability_lower_risk_than_point_best": float(np.mean(paired < 0.0)),
+        })
+    primary_epsilon = max(best_se, max(statistically_indistinguishable_gaps, default=0.0))
+    epsilon_values = sorted({0.5 * primary_epsilon, best_se, primary_epsilon})
     epsilon_rows: list[dict] = []
     for epsilon in epsilon_values:
         near = eligible_indices[risks[eligible_indices] <= risks[best] + epsilon]
@@ -227,13 +297,16 @@ def main() -> None:
                 (set_distance(centers[best], centers[index]) for index in near), default=0.0
             ),
         })
-    widest = epsilon_values[-1]
-    near = eligible_indices[risks[eligible_indices] <= risks[best] + widest]
+    near = eligible_indices[risks[eligible_indices] <= risks[best] + primary_epsilon]
     alternative = int(max(near, key=lambda index: set_distance(centers[best], centers[index])))
     poor = int(eligible_indices[np.argmax(risks[eligible_indices])])
 
     summary_rows: list[dict] = []
     for design in range(len(centers)):
+        risk_ci = (
+            np.quantile(bootstrap_risk[design], [0.5 * alpha, 1.0 - 0.5 * alpha])
+            if eligible[design] else np.asarray([math.nan, math.nan])
+        )
         row = {
             "rank_among_eligible": (
                 int(np.flatnonzero(order == design)[0]) + 1 if eligible[design] else ""
@@ -245,6 +318,8 @@ def main() -> None:
             "bootstrap_risk_se": (
                 float(np.std(bootstrap_risk[design], ddof=1)) if eligible[design] else math.nan
             ),
+            "bootstrap_risk_ci_lower": float(risk_ci[0]),
+            "bootstrap_risk_ci_upper": float(risk_ci[1]),
             "minimum_log10_intrinsic_ess": float(np.nanmin(log10_ess[design])),
             "median_log10_intrinsic_ess": float(np.nanmedian(log10_ess[design])),
             "worst_covariance_condition_regularized": float(np.nanmax(condition[design])),
@@ -259,10 +334,11 @@ def main() -> None:
             row[f"s{sensor}_y_km"] = y
         summary_rows.append(row)
     write_csv(
-        table_dir / "grid_sensor_bank_risk.csv",
+        table_dir / "validation_risk.csv",
         sorted(summary_rows, key=lambda row: (not row["fully_grid_usable"], row["validation_mmd_risk"])),
     )
-    write_csv(table_dir / "grid_epsilon_candidates.csv", epsilon_rows)
+    write_csv(table_dir / "validation_risk_paired_best.csv", paired_rows)
+    write_csv(table_dir / "risk_epsilon_candidates.csv", epsilon_rows)
     time_rows: list[dict] = []
     for design in range(len(centers)):
         for time_index, day in enumerate(evaluation_days):
@@ -272,7 +348,7 @@ def main() -> None:
                 "fully_grid_usable": bool(eligible[design]),
                 "validation_mmd2": risk_by_time[design, time_index],
             })
-    write_csv(table_dir / "grid_risk_by_time.csv", time_rows)
+    write_csv(table_dir / "validation_risk_by_time.csv", time_rows)
 
     primary_ranks = np.argsort(np.argsort(risks[eligible_indices]))
     primary_top = set(order[:20].tolist())
@@ -288,7 +364,57 @@ def main() -> None:
             "bootstrap_best_design_id": design_ids[int(replicate_order[0])],
             "primary_best_rank_in_bootstrap": int(np.flatnonzero(replicate_order == best)[0]) + 1,
         })
-    write_csv(table_dir / "grid_risk_bootstrap_stability.csv", stability_rows)
+    write_csv(table_dir / "validation_risk_bootstrap_stability.csv", stability_rows)
+
+    bootstrap_rank = np.empty_like(bootstrap_risk_eligible, dtype=np.int32)
+    for replicate in range(bootstrap_risk_eligible.shape[1]):
+        bootstrap_rank[np.argsort(bootstrap_risk_eligible[:, replicate]), replicate] = np.arange(
+            1, len(eligible_indices) + 1
+        )
+    bootstrap_rows: list[dict] = []
+    for local, design in enumerate(eligible_indices):
+        for replicate in range(bootstrap_risk_eligible.shape[1]):
+            bootstrap_rows.append({
+                "design_index": int(design), "design_id": design_ids[design],
+                "replicate": replicate,
+                "validation_risk": float(bootstrap_risk_eligible[local, replicate]),
+                "rank": int(bootstrap_rank[local, replicate]),
+            })
+    write_csv(table_dir / "validation_risk_bootstrap.csv", bootstrap_rows)
+
+    leading = order[:int(risk_cfg["leading_pairwise_count"])]
+    pairwise_rows: list[dict] = []
+    for left_position, left in enumerate(leading):
+        for right in leading[left_position + 1:]:
+            paired = bootstrap_risk[left] - bootstrap_risk[right]
+            lower, upper = np.quantile(paired, [0.5 * alpha, 1.0 - 0.5 * alpha])
+            pairwise_rows.append({
+                "left_design_id": design_ids[left], "right_design_id": design_ids[right],
+                "point_risk_difference": float(risks[left] - risks[right]),
+                "bootstrap_mean_paired_difference": float(np.mean(paired)),
+                "bootstrap_se_paired_difference": float(np.std(paired, ddof=1)),
+                "paired_percentile_ci_lower": float(lower),
+                "paired_percentile_ci_upper": float(upper),
+                "probability_left_lower_risk": float(np.mean(paired < 0.0)),
+            })
+    write_csv(table_dir / "validation_risk_leading_pairwise.csv", pairwise_rows)
+
+    near_rows = []
+    for design in near:
+        bootstrap_values = bootstrap_risk[design]
+        lower, upper = np.quantile(bootstrap_values, [0.5 * alpha, 1.0 - 0.5 * alpha])
+        row = {
+            "design_index": int(design), "design_id": design_ids[design],
+            "style": styles[design], "validation_risk": float(risks[design]),
+            "risk_ci_lower": float(lower), "risk_ci_upper": float(upper),
+            "risk_difference_from_best": float(risks[design] - risks[best]),
+            "geometry_distance_from_best_km": set_distance(centers[best], centers[design]),
+        }
+        for sensor, (x, y) in enumerate(centers[design], start=1):
+            row[f"s{sensor}_x_km"] = x
+            row[f"s{sensor}_y_km"] = y
+        near_rows.append(row)
+    write_csv(table_dir / "near_optimal_set.csv", near_rows)
 
     np.savez_compressed(
         processed / "iprojection_grid_validation_risk.npz",
@@ -317,11 +443,15 @@ def main() -> None:
         "validation_id_count": len(validation),
         "kernel_bandwidth_km": bandwidth,
         "rff_features": omega.shape[1],
-        "time_weighting": cfg["time_weighting"],
+        "time_weighting": risk_cfg["time_weighting"],
         "baseline_continuous_reference_risk": float(base_risk_by_time.mean()),
         "best_design_index": best, "best_design_id": design_ids[best],
         "best_validation_risk": float(risks[best]),
         "best_bootstrap_risk_se": best_se,
+        "primary_additive_epsilon": primary_epsilon,
+        "primary_epsilon_rule": risk_cfg["primary_epsilon_rule"],
+        "near_optimal_design_count": len(near),
+        "near_optimal_design_ids": [design_ids[index] for index in near],
         "near_alternative_index": alternative,
         "near_alternative_id": design_ids[alternative],
         "near_alternative_risk": float(risks[alternative]),
@@ -346,7 +476,7 @@ def main() -> None:
         "full_projection_table_sha256": sha256(resolve(cfg["full_projection_table"])),
         "frozen_rff_source_sha256": sha256(resolve(cfg["frozen_rff_source"])),
     }
-    write_json(table_dir / "grid_validation_risk_summary.json", summary)
+    write_json(table_dir / "phase2f_validation_risk_summary.json", summary)
 
     fig, axes = plt.subplots(2, 2, figsize=(11, 8), constrained_layout=True)
     axes[0, 0].hist(risks[eligible], bins=35, color="#4c78a8", alpha=0.85)
@@ -382,6 +512,30 @@ def main() -> None:
     axis.grid(alpha=0.2)
     axis.legend()
     fig.savefig(figure_dir / "selected_risk_by_time.png", dpi=190)
+    plt.close(fig)
+
+    leading_plot = order[:20]
+    leading_point = np.asarray([np.mean(bootstrap_risk[index]) for index in leading_plot])
+    leading_lower = np.asarray([
+        np.quantile(bootstrap_risk[index], 0.5 * alpha) for index in leading_plot
+    ])
+    leading_upper = np.asarray([
+        np.quantile(bootstrap_risk[index], 1.0 - 0.5 * alpha) for index in leading_plot
+    ])
+    fig, axis = plt.subplots(figsize=(10, 6), constrained_layout=True)
+    y = np.arange(len(leading_plot))
+    axis.errorbar(
+        leading_point, y,
+        xerr=np.vstack([leading_point - leading_lower, leading_upper - leading_point]),
+        fmt="o", color="#4c78a8", ecolor="#9ecae9", capsize=2,
+    )
+    axis.set_yticks(y, [design_ids[index] for index in leading_plot])
+    axis.invert_yaxis()
+    axis.axvline(risks[best] + primary_epsilon, color="black", linestyle="--", label="frozen R* + epsilon")
+    axis.set_xlabel("validation RFF-MMD² risk with percentile bootstrap interval")
+    axis.legend()
+    axis.grid(alpha=0.2)
+    fig.savefig(figure_dir / "leading_risk_intervals.png", dpi=190)
     plt.close(fig)
 
     representative = [(best, "best"), (alternative, "near-optimal alternative"), (poor, "poor-risk control")]

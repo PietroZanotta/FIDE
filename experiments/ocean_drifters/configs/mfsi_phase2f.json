@@ -30,6 +30,17 @@
       "lambda_clip": 1000000000000.0,
       "line_search_steps": 18,
       "implicit_ridge": 0.0
+    },
+    "warm_start_trust_region_fallback": {
+      "numerical_revision_reason": "the native zero-start covariance solve can terminate before a meaningful step in near-singular concentrated cases",
+      "algorithm": "scipy least_squares on the four moment residuals with the exact quadrature covariance Jacobian",
+      "initialization": "previous accepted fine-grid multiplier at level zero, then the preceding adaptive-level multiplier",
+      "maximum_function_evaluations": 2000,
+      "early_stop_l2_residual": 1e-8,
+      "lambda_bound": 1000000000000.0,
+      "xtol": 1e-14,
+      "ftol": 1e-14,
+      "gtol": 1e-14
     }
   },
   "validation_risk": {

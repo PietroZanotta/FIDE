@@ -11,6 +11,7 @@ import math
 import multiprocessing as mp
 import os
 from pathlib import Path
+import shutil
 import sys
 import traceback
 from typing import Any
@@ -20,6 +21,7 @@ os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 import jax
 import jax.numpy as jnp
 import numpy as np
+from scipy.optimize import least_squares
 from scipy.special import logsumexp
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -82,6 +84,115 @@ def relative_change(new: float, old: float) -> float:
     return abs(new - old) / max(1.0, abs(new))
 
 
+def summarize_at_lambda(
+    phi: np.ndarray,
+    log_base: np.ndarray,
+    target: np.ndarray,
+    lam: np.ndarray,
+    *,
+    iterations: int,
+    solver_name: str,
+    convergence_tolerance: float,
+    ridge: float,
+) -> dict[str, Any]:
+    log_ratio_raw = phi @ lam
+    log_partition = float(logsumexp(log_base + log_ratio_raw))
+    log_ratio = log_ratio_raw - log_partition
+    weights = np.exp(log_base + log_ratio)
+    achieved = weights @ phi
+    centered = phi - achieved
+    covariance = np.einsum("n,ni,nj->ij", weights, centered, centered)
+    eigenvalues = np.linalg.eigvalsh(covariance)
+    residual = achieved - target
+    residual_l2 = float(np.linalg.norm(residual))
+    log_second_moment = float(logsumexp(log_base + 2.0 * log_ratio))
+    return {
+        "converged": residual_l2 <= convergence_tolerance,
+        "iterations": int(iterations),
+        "reported_residual": residual_l2,
+        "verified_l2_residual": residual_l2,
+        "verified_linf_residual": float(np.max(np.abs(residual))),
+        **{f"lambda_{j}": float(lam[j]) for j in range(4)},
+        "lambda_norm": float(np.linalg.norm(lam)),
+        "kl_divergence": float(weights @ log_ratio),
+        "intrinsic_ess": float(math.exp(-log_second_moment)) if log_second_moment < 710 else 0.0,
+        "log10_intrinsic_ess": float(-log_second_moment / math.log(10.0)),
+        "covariance_min_eigenvalue": float(eigenvalues[0]),
+        "covariance_max_eigenvalue": float(eigenvalues[-1]),
+        "covariance_condition_regularized": float(
+            (eigenvalues[-1] + ridge) / max(eigenvalues[0] + ridge, 1e-300)
+        ),
+        "maximum_quadrature_weight": float(weights.max()),
+        "solver_name": solver_name,
+        "achieved_moments": achieved,
+        "projected_weights": weights,
+    }
+
+
+class _TargetReached(Exception):
+    def __init__(self, value: np.ndarray, residual: np.ndarray, evaluations: int):
+        self.value = value
+        self.residual = residual
+        self.evaluations = evaluations
+
+
+def warm_start_trust_region(
+    phi: np.ndarray,
+    log_base: np.ndarray,
+    target: np.ndarray,
+    initial: np.ndarray,
+    fallback: dict[str, Any],
+    *,
+    acceptance_tolerance: float,
+    ridge: float,
+) -> dict[str, Any]:
+    evaluations = 0
+    early = float(fallback["early_stop_l2_residual"])
+
+    def state(lam: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        log_weight = log_base + phi @ lam
+        log_weight -= logsumexp(log_weight)
+        weights = np.exp(log_weight)
+        moment = weights @ phi
+        centered = phi - moment
+        covariance = np.einsum("n,ni,nj->ij", weights, centered, centered)
+        return moment - target, covariance
+
+    def fun(lam: np.ndarray) -> np.ndarray:
+        nonlocal evaluations
+        evaluations += 1
+        residual, _ = state(lam)
+        if np.linalg.norm(residual) <= early:
+            raise _TargetReached(np.asarray(lam).copy(), residual.copy(), evaluations)
+        return residual
+
+    def jacobian(lam: np.ndarray) -> np.ndarray:
+        return state(lam)[1]
+
+    initial_residual, _ = state(initial)
+    if np.linalg.norm(initial_residual) <= early:
+        chosen = np.asarray(initial).copy()
+    else:
+        try:
+            fit = least_squares(
+                fun, np.asarray(initial, dtype=np.float64), jac=jacobian,
+                bounds=(-float(fallback["lambda_bound"]), float(fallback["lambda_bound"])),
+                max_nfev=int(fallback["maximum_function_evaluations"]),
+                xtol=float(fallback["xtol"]), ftol=float(fallback["ftol"]),
+                gtol=float(fallback["gtol"]), x_scale="jac",
+            )
+            chosen = np.asarray(fit.x, dtype=np.float64)
+            evaluations = int(fit.nfev)
+        except _TargetReached as reached:
+            chosen = reached.value
+            evaluations = reached.evaluations
+    return summarize_at_lambda(
+        phi, log_base, target, chosen, iterations=evaluations,
+        solver_name="warm_start_covariance_trust_region",
+        convergence_tolerance=acceptance_tolerance, ridge=ridge,
+    )
+
+
 def solve_case(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         cfg = load_config(payload["config"])
@@ -138,17 +249,30 @@ def solve_case(payload: dict[str, Any]) -> dict[str, Any]:
         resolved = False
         final_result: dict[str, Any] | None = None
         final_weights: np.ndarray | None = None
+        warm_lambda = np.asarray(payload["initial_lambda"], dtype=np.float64)
 
         for level in range(int(adaptive["maximum_refinement_levels"]) + 1):
             log_raw_mass = log_density + np.log(widths_x * widths_y)
             log_base = log_raw_mass - logsumexp(log_raw_mass)
             phi = gaussian_features_numpy(points, centers, sigma)
-            result = projection_summary(phi, log_base, target, solver)
+            native_result = projection_summary(phi, log_base, target, solver)
+            native_lambda = np.asarray([native_result[f"lambda_{j}"] for j in range(4)])
+            result = summarize_at_lambda(
+                phi, log_base, target, native_lambda,
+                iterations=native_result["iterations"], solver_name="native_zero_start",
+                convergence_tolerance=float(adaptive["moment_residual_tolerance"]),
+                ridge=solver.newton_ridge,
+            )
+            if not result["converged"]:
+                result = warm_start_trust_region(
+                    phi, log_base, target, warm_lambda,
+                    adaptive["warm_start_trust_region_fallback"],
+                    acceptance_tolerance=float(adaptive["moment_residual_tolerance"]),
+                    ridge=solver.newton_ridge,
+                )
             lam = np.asarray([result[f"lambda_{j}"] for j in range(4)])
-            log_weight = log_base + phi @ lam
-            log_weight -= logsumexp(log_weight)
-            weights = np.exp(log_weight)
-            achieved = weights @ phi
+            weights = np.asarray(result["projected_weights"], dtype=np.float64)
+            achieved = np.asarray(result["achieved_moments"], dtype=np.float64)
             accepted = bool(
                 result["converged"]
                 and result["verified_l2_residual"] <= float(adaptive["moment_residual_tolerance"])
@@ -172,13 +296,17 @@ def solve_case(payload: dict[str, Any]) -> dict[str, Any]:
                     and ess_change <= float(adaptive["stability_log10_intrinsic_ess_change"])
                     and moment_change <= float(adaptive["stability_projected_moment_change"])
                 )
+            scalar_result = {
+                key: value for key, value in result.items()
+                if key not in ("achieved_moments", "projected_weights")
+            }
             rows.append({
                 "design_index": design_index, "design_id": design_id,
                 "day": day, "source_time_index": source_index,
                 "refinement_level": level, "quadrature_cell_count": len(points),
                 "minimum_cell_width_x_km": float(widths_x.min()),
                 "minimum_cell_width_y_km": float(widths_y.min()),
-                **result,
+                **scalar_result,
                 "accepted_moment_residual": accepted,
                 "relative_lambda_change_from_previous": lambda_change,
                 "relative_kl_change_from_previous": kl_change,
@@ -187,6 +315,7 @@ def solve_case(payload: dict[str, Any]) -> dict[str, Any]:
                 "stable_under_additional_refinement": stable,
             })
             final_result, final_weights = result, weights
+            warm_lambda = lam
             if stable:
                 resolved = True
                 break
@@ -241,7 +370,7 @@ def solve_case(payload: dict[str, Any]) -> dict[str, Any]:
             rows[-1]["refined_parent_cell_count"] = count
             rows[-1]["refined_projected_mass"] = float(weights[selected].sum())
             previous = {
-                **result, "accepted": accepted, "achieved_moments": achieved,
+                **scalar_result, "accepted": accepted, "achieved_moments": achieved,
             }
 
         if final_result is None or final_weights is None:
@@ -306,7 +435,13 @@ def main() -> None:
         "config": cfg["_config_path"],
         "design_index": int(row["design_index"]),
         "source_time_index": int(row["source_time_index"]),
+        "initial_lambda": [float(row[f"lambda_{j}"]) for j in range(4)],
     } for row in failures]
+    for name in ("adaptive_iprojection_27cases.csv", "adaptive_iprojection_27case_summary.csv"):
+        source = table_dir / name
+        backup = table_dir / name.replace(".csv", "_native_zero_start_revision.csv")
+        if source.exists() and not backup.exists():
+            shutil.copy2(source, backup)
     context = mp.get_context("spawn")
     results: list[dict] = []
     with ProcessPoolExecutor(
