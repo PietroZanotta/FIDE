@@ -1,0 +1,58 @@
+input: experiments/ocean_drifters/data/noaa_gdp/gdp6h_ragged_current.parquet
+output: experiments/ocean_drifters/analysis
+random_seed: 20260817
+horizons_days: [30, 45, 60]
+sampling_interval_hours: 6
+completeness:
+  primary: exact_6_hour
+  near_complete_min_fraction: 0.975
+  near_complete_max_gap_hours: 12
+projection:
+  kind: laea
+  datum: WGS84
+domain_buffer_km: 100
+promising:
+  - [cape_hatteras_B, 45]
+  - [midatlantic_A, 45]
+  - [north_atlantic_A, 45]
+  - [north_atlantic_A, 60]
+seasonality:
+  - [midatlantic_A, 45]
+  - [north_atlantic_A, 45]
+gates:
+  florida_A:
+    bounds: [-82.0, -80.0, 23.5, 25.5]
+    entry_from: any
+    rationale: Florida Straits core, broad enough for the nominal six-hour sampling.
+  florida_B:
+    bounds: [-81.2, -79.4, 25.0, 27.0]
+    entry_from: any
+    rationale: Downstream Florida Straits / initial Gulf Stream corridor.
+  yucatan_A:
+    bounds: [-87.5, -85.0, 20.0, 22.5]
+    entry_from: any
+    rationale: Southern Yucatan Channel / Loop Current inflow gateway.
+  yucatan_B:
+    bounds: [-87.0, -85.2, 21.0, 23.0]
+    entry_from: any
+    rationale: Northern Yucatan Channel alternative box.
+  gulfstream_downstream_A:
+    bounds: [-79.0, -76.5, 29.0, 32.0]
+    entry_from: any
+    rationale: Gulf Stream downstream of Florida before Cape Hatteras.
+  cape_hatteras_A:
+    bounds: [-76.5, -73.5, 33.5, 36.5]
+    entry_from: any
+    rationale: Broad Cape Hatteras separation-region entry box.
+  cape_hatteras_B:
+    bounds: [-75.5, -74.0, 33.0, 38.0]
+    entry_from: west
+    rationale: West-to-east crossing of a narrow longitude ribbon just downstream of Cape Hatteras.
+  midatlantic_A:
+    bounds: [-71.0, -69.0, 35.0, 41.0]
+    entry_from: west
+    rationale: West-to-east crossing of the Gulf Stream extension near 70W.
+  north_atlantic_A:
+    bounds: [-66.0, -64.0, 37.0, 41.0]
+    entry_from: west
+    rationale: West-to-east crossing of the Gulf Stream extension near 65W; the northern edge is trimmed to avoid a separated day-0 cluster.

@@ -1,0 +1,37 @@
+{
+  "name": "noaa_ocean_drifters_reference_support_repair",
+  "seed": 20260819,
+  "base_phase2_config": "experiments/ocean_drifters/configs/mfsi_phase2.json",
+  "endpoint_estimator": {
+    "family": "gaussian_kde_full_covariance",
+    "bandwidth_rule": "scott",
+    "scott_exponent": -0.16666666666666666,
+    "covariance_ridge_relative_trace": 1e-8,
+    "audit_samples": 100000,
+    "loo_density_floor": 1e-300
+  },
+  "flow": {
+    "inherit_architecture_optimizer_schedule": true,
+    "training_seed": 20260819
+  },
+  "reference_bank": {
+    "sizes": [2000, 10000, 50000, 200000],
+    "rollout_chunk_size": 10000,
+    "seed": 20270820
+  },
+  "endpoint_acceptance": {
+    "declared_before_intermediate_audit": true,
+    "maximum_biased_rbf_mmd2_each_endpoint": 0.02,
+    "maximum_mean_error_over_empirical_rms_spread": 0.25,
+    "maximum_relative_covariance_frobenius_error": 0.6,
+    "maximum_generated_endpoint_outside_domain_fraction": 0.01
+  },
+  "support_acceptance": {
+    "same_case_count": 20,
+    "minimum_lp_feasible_cases_at_largest_bank": 18,
+    "minimum_native_healthy_cases_at_largest_bank": 18,
+    "minimum_native_ess_fraction": 0.02,
+    "maximum_native_covariance_condition": 10000000000.0,
+    "minimum_full_bank_valid_fraction_to_continue": 0.8
+  }
+}

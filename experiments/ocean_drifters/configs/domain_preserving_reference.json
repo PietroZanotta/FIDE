@@ -1,0 +1,41 @@
+{
+  "name": "noaa_ocean_drifters_domain_preserving_reference",
+  "seed": 20260821,
+  "base_phase2_config": "experiments/ocean_drifters/configs/mfsi_phase2.json",
+  "conditioned_reference_config": "experiments/ocean_drifters/configs/domain_conditioned_reference.json",
+  "conditioned_training_pool": "experiments/ocean_drifters/processed/endpoint_density_estimator_conditioned/conditioned_training_pool_500000.npz",
+  "conditioned_initial_bank": "experiments/ocean_drifters/models/reference_flow_conditioned_endpoints/reference_bank_eval_200000.npz",
+  "domain_transform": {
+    "family": "coordinatewise_logistic_bijection",
+    "map_epsilon": 1e-6,
+    "bounds_km": [-650.0, 3000.0, -950.0, 1000.0]
+  },
+  "flow": {
+    "training_seed": 20260821,
+    "inherit_architecture_optimizer_bridge_and_integration_settings": true
+  },
+  "reference_bank": {
+    "sizes": [2000, 10000, 50000, 200000],
+    "rollout_chunk_size": 10000,
+    "reuse_conditioned_initial_bank": true
+  },
+  "endpoint_acceptance": {
+    "frozen_from": "experiments/ocean_drifters/configs/reference_support_repair.json",
+    "maximum_biased_rbf_mmd2_each_endpoint": 0.02,
+    "maximum_mean_error_over_empirical_rms_spread": 0.25,
+    "maximum_relative_covariance_frobenius_error": 0.6,
+    "maximum_generated_endpoint_outside_domain_fraction": 0.01
+  },
+  "support_acceptance": {
+    "same_case_count": 20,
+    "minimum_lp_feasible_cases_at_200000": 18,
+    "minimum_native_healthy_cases_at_200000": 18,
+    "minimum_native_ess_fraction": 0.02,
+    "maximum_native_covariance_condition": 10000000000.0,
+    "minimum_full_bank_valid_fraction_to_resume_law_risk": 0.8
+  },
+  "full_bank": {
+    "particle_count": 50000,
+    "workers": 6
+  }
+}

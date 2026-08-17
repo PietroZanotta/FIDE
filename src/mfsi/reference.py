@@ -169,3 +169,94 @@ class MLPReferenceFlow:
             times,
             substeps_per_interval=self.substeps_per_interval,
         )
+
+
+@dataclass(frozen=True)
+class DomainPreservingReferenceFlow:
+    """Latent MLP flow mapped smoothly into a rectangular physical domain.
+
+    The network represents ``dz/dt`` in unconstrained coordinates. Public
+    rollouts and velocities are physical: ``x=T(z)`` and
+    ``dx/dt=J_T(z) dz/dt``.
+    """
+
+    params: Params
+    bounds: Array  # [xmin, xmax, ymin, ymax]
+    map_epsilon: float = 1.0e-6
+    substeps_per_interval: int = 16
+    metadata: Mapping[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        bounds = jnp.asarray(self.bounds, dtype=jnp.float64)
+        if bounds.shape != (4,):
+            raise ValueError("bounds must have shape [4]: xmin,xmax,ymin,ymax")
+        if not (0.0 < float(self.map_epsilon) < 0.5):
+            raise ValueError("map_epsilon must lie strictly between zero and one half")
+
+    @classmethod
+    def from_npz(
+        cls,
+        path: str | Path,
+        *,
+        bounds: Array | None = None,
+        map_epsilon: float | None = None,
+        substeps_per_interval: int = 16,
+    ) -> "DomainPreservingReferenceFlow":
+        params, metadata = load_npz_checkpoint(path)
+        transform = metadata.get("domain_transform", {})
+        resolved_bounds = bounds if bounds is not None else transform.get("bounds_km")
+        if resolved_bounds is None:
+            raise ValueError("domain-preserving checkpoint lacks bounds metadata")
+        resolved_epsilon = map_epsilon if map_epsilon is not None else transform.get("map_epsilon", 1.0e-6)
+        return cls(
+            params=params,
+            bounds=jnp.asarray(resolved_bounds, dtype=jnp.float64),
+            map_epsilon=float(resolved_epsilon),
+            substeps_per_interval=substeps_per_interval,
+            metadata=metadata,
+        )
+
+    @property
+    def lower(self) -> Array:
+        return jnp.asarray([self.bounds[0], self.bounds[2]], dtype=jnp.float64)
+
+    @property
+    def upper(self) -> Array:
+        return jnp.asarray([self.bounds[1], self.bounds[3]], dtype=jnp.float64)
+
+    @property
+    def width(self) -> Array:
+        return self.upper - self.lower
+
+    def to_latent(self, x: Array) -> Array:
+        x = jnp.asarray(x, dtype=jnp.float64)
+        ratio = (x - self.lower) / self.width
+        safe = jnp.clip(ratio, self.map_epsilon, 1.0 - self.map_epsilon)
+        return jnp.log(safe) - jnp.log1p(-safe)
+
+    def to_physical(self, z: Array) -> Array:
+        z = jnp.asarray(z, dtype=jnp.float64)
+        return self.lower + self.width * jax.nn.sigmoid(z)
+
+    def latent_velocity(self, z: Array, t: Array) -> Array:
+        return velocity_mlp(self.params, t, z)
+
+    def physical_velocity_from_latent(self, z: Array, t: Array) -> Array:
+        ratio = jax.nn.sigmoid(jnp.asarray(z, dtype=jnp.float64))
+        jacobian_diagonal = self.width * ratio * (1.0 - ratio)
+        return jacobian_diagonal * self.latent_velocity(z, t)
+
+    def velocity(self, x: Array, t: Array) -> Array:
+        z = self.to_latent(x)
+        return self.physical_velocity_from_latent(z, t)
+
+    def latent_rollout(self, z0: Array, times: Array) -> Array:
+        return rk4_rollout(
+            self.params,
+            z0,
+            times,
+            substeps_per_interval=self.substeps_per_interval,
+        )
+
+    def rollout(self, x0: Array, times: Array) -> Array:
+        return self.to_physical(self.latent_rollout(self.to_latent(x0), times))

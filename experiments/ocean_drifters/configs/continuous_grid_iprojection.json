@@ -1,0 +1,44 @@
+{
+  "name": "noaa_ocean_drifters_continuous_grid_iprojection",
+  "seed": 20260822,
+  "base_phase2_config": "experiments/ocean_drifters/configs/mfsi_phase2.json",
+  "domain_preserving_config": "experiments/ocean_drifters/configs/domain_preserving_reference.json",
+  "reference_checkpoint": "experiments/ocean_drifters/models/reference_flow_domain_preserving/reference.npz",
+  "reference_particle_bank": "experiments/ocean_drifters/models/reference_flow_domain_preserving/reference_bank_eval_200000.npz",
+  "conditioned_endpoint_estimator": "experiments/ocean_drifters/processed/endpoint_density_estimator_conditioned/conditioned_kde_endpoints.npz",
+  "grid": {
+    "resolutions": [[128, 68], [256, 136], [512, 272]],
+    "cell_centered": true,
+    "density_chunk_size": 4096,
+    "flow_rk4_substeps_per_evaluation_interval": 2,
+    "evaluation_stride_source_steps": 10
+  },
+  "density_validation": {
+    "maximum_fine_grid_normalization_error": 0.05,
+    "maximum_mean_error_km": 35.0,
+    "maximum_relative_covariance_error": 0.2,
+    "maximum_sensor_expectation_error": 0.015
+  },
+  "projection_stability": {
+    "moment_residual_tolerance": 2e-7,
+    "maximum_medium_fine_relative_lambda_change": 0.15,
+    "maximum_medium_fine_relative_kl_change": 0.15,
+    "maximum_medium_fine_log10_intrinsic_ess_change": 0.5,
+    "minimum_stable_cases": 18
+  },
+  "high_dynamic_range_retry": {
+    "trigger": "inherited native solve fails while the independent domain-grid LP is feasible",
+    "max_steps": 2000,
+    "residual_tol": 1e-8,
+    "newton_ridge": 1e-15,
+    "step_cap": 1000000.0,
+    "lambda_clip": 1000000000.0,
+    "line_search_steps": 16,
+    "implicit_ridge": 0.0
+  },
+  "full_bank": {
+    "authorized_only_after_20_case_gate": true,
+    "resolution": [512, 272],
+    "workers": 6
+  }
+}

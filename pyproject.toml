@@ -7,9 +7,18 @@ name = "mfsi"
 version = "0.1.0"
 description = "Small JAX-first core for measurement-conditioned flow experiments"
 requires-python = ">=3.11"
-dependencies = ["jax>=0.4", "numpy>=1.26"]
+dependencies = ["jax>=0.4,<0.9", "numpy>=1.26"]
 
 [project.optional-dependencies]
+ocean-drifters = [
+    "cartopy>=0.24",
+    "matplotlib>=3.9",
+    "pandas>=2.2",
+    "pyarrow>=18",
+    "pyproj>=3.7",
+    "pyyaml>=6",
+    "scipy>=1.14",
+]
 tesseract-cpp = [
     "cmake>=3.20",
     "pybind11>=2.12",
