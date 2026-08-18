@@ -14,6 +14,7 @@ from experiments.ocean_drifters.experiment import (
     run_experiment,
 )
 from experiments.ocean_drifters.action import _positive_kernel_reconstruct
+from experiments.ocean_drifters.full_action import _forcing
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,3 +92,35 @@ def test_ocean_tangent_status_reads_canonical_output(tmp_path: Path) -> None:
     assert status["layout_count"] == 2
     assert status["valid_count"] == 1
     assert status["backend"] == "tesseract_cpp"
+
+
+def test_ocean_full_forcing_is_compatible_for_exact_projected_moments() -> None:
+    rng = np.random.default_rng(20260817)
+    weights = rng.random(17)
+    weights /= weights.sum()
+    phi = rng.normal(size=(17, 4))
+    material = rng.normal(size=(17, 4))
+    target = weights @ phi
+    h, mean, relative = _forcing(
+        phi,
+        target,
+        material,
+        weights,
+        rng.normal(size=4),
+        rng.normal(size=4),
+    )
+
+    assert np.isfinite(h).all()
+    assert abs(mean) < 1e-14
+    assert relative < 1e-14
+
+
+def test_poisson_pilot_selection_is_frozen_and_tangent_ready() -> None:
+    cfg = load_config(CONFIG)
+    experiment = OceanDriftersExperiment(cfg)
+    selection_path = ROOT / cfg["action"]["poisson_pilot"]["selection_table"]
+    selection = selection_path.read_text(encoding="utf-8")
+
+    assert selection.count("\n") == cfg["action"]["poisson_pilot"]["layout_count"] + 1
+    assert "design_000216" not in selection
+    assert ",True,False" in selection

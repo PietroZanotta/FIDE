@@ -174,9 +174,23 @@ def _mean_se(values: list[float]) -> dict[str, float | int]:
     x = np.asarray(values, dtype=np.float64)
     x = x[np.isfinite(x)]
     if len(x) == 0:
-        return {"mean": float("nan"), "se": float("nan"), "n": 0}
+        return {
+            "mean": float("nan"),
+            "se": float("nan"),
+            "median": float("nan"),
+            "p95": float("nan"),
+            "max": float("nan"),
+            "n": 0,
+        }
     se = float(np.std(x, ddof=1) / math.sqrt(len(x))) if len(x) > 1 else 0.0
-    return {"mean": float(np.mean(x)), "se": se, "n": int(len(x))}
+    return {
+        "mean": float(np.mean(x)),
+        "se": se,
+        "median": float(np.median(x)),
+        "p95": float(np.quantile(x, 0.95)),
+        "max": float(np.max(x)),
+        "n": int(len(x)),
+    }
 
 
 def _empirical_coordinate_support_gaps(
@@ -211,6 +225,82 @@ def _empirical_coordinate_support_gaps(
         upper[t_idx] = np.max(phi[t_idx, active], axis=0)
     margins = np.minimum(target - lower[None, ...], upper[None, ...] - target)
     return np.min(margins, axis=(1, 2))
+
+
+def _smooth_bound_moment_curve(
+    values: Array,
+    derivatives: Array,
+    lower: float,
+    upper: float,
+    transition_width: float,
+) -> tuple[Array, Array]:
+    """Apply a C2 box projection and its chain-rule derivative to a moment curve.
+
+    The quintic transition ``3s^5 - 8s^4 + 6s^3`` joins a constant bound to the
+    identity with matching value, first derivative, and second derivative. Applying
+    the map to the continuous spline (and its Jacobian to ``c_dot``) prevents the
+    inter-node bound crossings and derivative jumps produced by discrete clipping.
+    """
+    if not np.isfinite(lower) or not np.isfinite(upper) or lower >= upper:
+        raise ValueError("moment feature bounds must be finite and strictly ordered")
+    if (
+        not np.isfinite(transition_width)
+        or transition_width <= 0.0
+        or 2.0 * transition_width >= upper - lower
+    ):
+        raise ValueError("moment bound transition width must be positive and nonoverlapping")
+    values = jnp.asarray(values, dtype=jnp.float64)
+    derivatives = jnp.asarray(derivatives, dtype=jnp.float64)
+    if values.shape != derivatives.shape:
+        raise ValueError("moment values and derivatives must have identical shapes")
+
+    width = float(transition_width)
+
+    def blend(s: Array) -> Array:
+        return s**3 * (6.0 - 8.0 * s + 3.0 * s**2)
+
+    def blend_derivative(s: Array) -> Array:
+        return s**2 * (18.0 - 32.0 * s + 15.0 * s**2)
+
+    lower_s = jnp.clip((values - float(lower)) / width, 0.0, 1.0)
+    upper_s = jnp.clip((float(upper) - values) / width, 0.0, 1.0)
+    lower_transition = float(lower) + width * blend(lower_s)
+    upper_transition = float(upper) - width * blend(upper_s)
+
+    in_lower_transition = (values > float(lower)) & (
+        values < float(lower) + width
+    )
+    in_upper_transition = (values > float(upper) - width) & (
+        values < float(upper)
+    )
+    bounded_values = jnp.where(
+        values <= float(lower),
+        float(lower),
+        jnp.where(
+            in_lower_transition,
+            lower_transition,
+            jnp.where(
+                values >= float(upper),
+                float(upper),
+                jnp.where(in_upper_transition, upper_transition, values),
+            ),
+        ),
+    )
+    derivative_scale = jnp.where(
+        values <= float(lower),
+        0.0,
+        jnp.where(
+            in_lower_transition,
+            blend_derivative(lower_s),
+            jnp.where(
+                values >= float(upper),
+                0.0,
+                jnp.where(in_upper_transition, blend_derivative(upper_s), 1.0),
+            ),
+        ),
+    )
+    bounded_derivatives = derivative_scale * derivatives
+    return bounded_values, bounded_derivatives
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -567,6 +657,35 @@ class VortexExperiment:
         self.reconstructor = AnchoredCubicSplineReconstructor(
             self.times[self.acq_idx], self.times, self.spline_cfg
         )
+        configured_bounds = scfg.get("feature_bounds")
+        self.moment_feature_bounds: tuple[float, float] | None = None
+        self.moment_bound_transition_width: float | None = None
+        if configured_bounds is not None:
+            if not isinstance(configured_bounds, (list, tuple)) or len(configured_bounds) != 2:
+                raise ValueError("moment_reconstruction.feature_bounds must contain [lower, upper]")
+            lower, upper = (float(configured_bounds[0]), float(configured_bounds[1]))
+            if not np.isfinite(lower) or not np.isfinite(upper) or lower >= upper:
+                raise ValueError("moment_reconstruction.feature_bounds must be finite and ordered")
+            margin = float(scfg.get("feature_bound_interior_margin", 0.0))
+            if not np.isfinite(margin) or margin < 0.0 or 2.0 * margin >= upper - lower:
+                raise ValueError(
+                    "moment_reconstruction.feature_bound_interior_margin must fit inside the bounds"
+                )
+            lower, upper = lower + margin, upper - margin
+            self.moment_feature_bounds = (lower, upper)
+            transition_width = float(
+                scfg.get("feature_bound_transition_width", margin)
+            )
+            if (
+                not np.isfinite(transition_width)
+                or transition_width <= 0.0
+                or 2.0 * transition_width >= upper - lower
+            ):
+                raise ValueError(
+                    "moment_reconstruction.feature_bound_transition_width must be "
+                    "positive and nonoverlapping"
+                )
+            self.moment_bound_transition_width = transition_width
 
         proj = cfg["projection"]
         self.iprojection_backend = str(proj.get("trajectory_backend", "jax"))
@@ -758,7 +877,15 @@ class VortexExperiment:
         endpoint = (self.acq_idx == 0) | (self.acq_idx == len(self.times) - 1)
         y = jnp.where(endpoint[:, None], exact, y)
         fit = self.reconstructor.reconstruct(y, exact[0], exact[-1])
-        return Reconstruction(fit.c, fit.c_dot, fit.coefficients, fit.residual_sum_squares, fit.roughness)
+        values, derivatives = fit.c, fit.c_dot
+        if self.moment_feature_bounds is not None:
+            values, derivatives = _smooth_bound_moment_curve(
+                values,
+                derivatives,
+                *self.moment_feature_bounds,
+                float(self.moment_bound_transition_width),
+            )
+        return Reconstruction(values, derivatives, fit.coefficients, fit.residual_sum_squares, fit.roughness)
 
     def _measurement_reconstruction_batch(
         self, phi_truth: Array, bank: ObservationTrialBank

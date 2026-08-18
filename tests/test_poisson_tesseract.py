@@ -15,6 +15,12 @@ from mfsi.poisson import (
     weighted_laplacian,
     weighted_laplacian_diag,
 )
+from mfsi.poisson_log import (
+    LogPoissonConfig,
+    log_face_conductances,
+    solve_divided_log_density_poisson,
+    solve_log_conductance_poisson,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -175,6 +181,80 @@ def test_batched_tesseract_weighted_poisson_diagnostics_match_jax():
     # each other.  Both diagnostics must enforce the same absolute contract.
     assert np.max(np.asarray(residuals)) <= 1.1 * cfg.cg_tol
     assert np.max(expected_residuals) <= 1.1 * cfg.cg_tol
+
+
+def test_native_audit_diagnostics_distinguish_physical_and_stabilized_residuals():
+    from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract_diagnostics
+
+    rng = np.random.default_rng(211)
+    q = 0.5 + rng.random((2, 15, 13))
+    q /= np.sum(q, axis=(1, 2), keepdims=True)
+    h = rng.normal(size=q.shape)
+    h -= np.sum(q * h, axis=(1, 2), keepdims=True)
+    cfg = PoissonConfig(
+        dx=0.2,
+        operator_floor_rel=0.0,
+        cg_tol=1.0e-10,
+        cg_maxiter=700,
+    )
+    result = solve_weighted_poisson_batch_tesseract_diagnostics(q, h, cfg)
+
+    assert np.all(result["converged"])
+    assert np.max(result["stabilized_relative_residual"]) <= 1.1e-10
+    np.testing.assert_allclose(
+        result["physical_relative_residual"],
+        result["stabilized_relative_residual"],
+        rtol=1e-10,
+        atol=1e-14,
+    )
+    assert np.all(result["action"] >= 0.0)
+    assert np.max(np.abs(result["weighted_mean_potential"])) < 1e-10
+
+
+def test_unfloored_log_solvers_recover_constant_density_manufactured_solution():
+    ny, nx, dx = 15, 21, 0.2
+    xx, yy = np.meshgrid(np.arange(nx) * dx, np.arange(ny) * dx)
+    expected = (
+        np.cos(np.pi * (xx + 0.1) / (nx * dx))
+        * np.cos(2.0 * np.pi * (yy + 0.1) / (ny * dx))
+    )
+    log_q = np.full((ny, nx), -np.log(nx * ny))
+    q = np.exp(log_q)
+    operator = np.zeros_like(q)
+    qx = 0.5 * (q[:, :-1] + q[:, 1:]) / dx**2
+    difference = expected[:, :-1] - expected[:, 1:]
+    operator[:, :-1] += qx * difference
+    operator[:, 1:] -= qx * difference
+    qy = 0.5 * (q[:-1, :] + q[1:, :]) / dx**2
+    difference = expected[:-1, :] - expected[1:, :]
+    operator[:-1, :] += qy * difference
+    operator[1:, :] -= qy * difference
+    forcing = -operator / q
+    forcing -= np.sum(q * forcing)
+    config = LogPoissonConfig(dx=dx, direct_maximum_cells=10_000)
+    expected_action = float(np.sum(expected * operator))
+
+    for solve in (solve_log_conductance_poisson, solve_divided_log_density_poisson):
+        result = solve(log_q, forcing, config)
+        assert result["converged"]
+        assert result["physical_residual_valid"]
+        assert result["physical_relative_residual"] < 1e-10
+        got = result["potential"] - np.sum(q * result["potential"])
+        centered_expected = expected - np.sum(q * expected)
+        np.testing.assert_allclose(got, centered_expected, rtol=1e-10, atol=1e-10)
+        np.testing.assert_allclose(result["action"], expected_action, rtol=1e-10)
+
+
+def test_log_conductance_solver_rejects_unrepresentable_positive_coefficients():
+    log_q = np.asarray([[0.0, -2000.0, -4000.0], [0.0, -2000.0, -4000.0]])
+    forcing = np.ones_like(log_q)
+    result = solve_log_conductance_poisson(
+        log_q, forcing, LogPoissonConfig(dx=1.0, direct_maximum_cells=100)
+    )
+
+    assert not result["converged"]
+    assert result["unrepresentable_equilibrated_coefficient_count"] > 0
+    assert "rejected rather than thresholding" in result["solver_error"]
 
 
 @pytest.mark.parametrize("field", ["q_operator", "rhs", "gauge"])

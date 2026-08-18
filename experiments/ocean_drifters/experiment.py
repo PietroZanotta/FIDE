@@ -584,13 +584,20 @@ class OceanDriftersExperiment:
             path = self._resolve(self.cfg["action"]["poisson_pilot_table"])
             if not path.is_file():
                 raise StageNotReadyError(
-                    "the weighted-Poisson pilot has not passed; a full-action sweep is blocked"
+                    "the weighted-Poisson pilot has not been completed"
                 )
             rows = _read_csv(path)
             return {
                 "stage": stage,
-                "pilot_row_count": len(rows),
+                "pilot_layout_count": len(rows),
+                "pilot_backend_valid_count": sum(
+                    row.get("pilot_full_action_valid") == "True" for row in rows
+                ),
+                "production_sweep_authorized": bool(rows) and all(
+                    row.get("pilot_full_action_valid") == "True" for row in rows
+                ),
                 "backend": self.cfg["action"]["poisson_backend"],
+                "full_action_valid": False,
             }
         raise ValueError(f"unknown action stage {stage!r}")
 
@@ -728,8 +735,26 @@ def run_experiment(
             output_dir,
         )
     if stage == "full_action":
-        result[stage] = experiment.action_status(stage)
-    if stage not in {"projection", "risk", "benchmark", "plots", "tangent_action", "full_action"}:
+        try:
+            from .full_action import run_weighted_poisson_pilot
+        except ImportError:  # direct script invocation
+            from full_action import run_weighted_poisson_pilot
+        result[stage] = run_weighted_poisson_pilot(
+            experiment,
+            experiment._resolve("experiments/ocean_drifters/analysis"),
+            output_dir,
+        )
+    if stage == "solver_repair":
+        try:
+            from .solver_repair import run_poisson_solver_repair
+        except ImportError:  # direct script invocation
+            from solver_repair import run_poisson_solver_repair
+        result[stage] = run_poisson_solver_repair(
+            experiment,
+            experiment._resolve("experiments/ocean_drifters/analysis"),
+            output_dir,
+        )
+    if stage not in {"projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "solver_repair"}:
         raise ValueError(f"unknown stage {stage!r}")
     payload = {
         "schema_version": 1,
@@ -739,7 +764,7 @@ def run_experiment(
         **result,
         "statuses": {
             "projection_valid": admissibility["excluded_layout_count"] == 0,
-            "law_risk_valid": "risk" in result or stage in {"plots", "tangent_action", "full_action"},
+            "law_risk_valid": "risk" in result or stage in {"plots", "tangent_action", "full_action", "solver_repair"},
             "multiplier_dynamics_valid": bool(
                 stage == "tangent_action"
                 and result[stage]["multiplier_dynamics_valid_count"] == 68

@@ -1,18 +1,14 @@
 {
-  "config_hash": "94525e5f241d73d4385596499a82feb1618bbaa10623fac48d0251dae6cd93a6",
+  "config_hash": "8c9b2da9bc3ef781c8499e72e0d57db2f13420568a74fa4133e45ea81af14fba",
   "experiment": "noaa_ocean_drifters",
   "files": {
-    "cache/risk.npz": {
-      "bytes": 1733,
-      "sha256": "5de1370268e7c2a459fb921ecc26050683e4db71fba029383acc3ccb815e32df"
-    },
     "numerical_admissibility_manifest.json": {
       "bytes": 11414,
       "sha256": "a939c537f7f3c0b283a05a90cfbdbe1a7c563bd7612bca796d8568df6836ef24"
     },
     "result.json": {
-      "bytes": 1464,
-      "sha256": "3d94e378d534991ea4eb9c8ff7d8c44da7c688a9a97fea6323879c3e62de97a4"
+      "bytes": 18932,
+      "sha256": "28819556fb0448539080db302e864ad839c19d3cd83d705542f84e09c2769465"
     }
   },
   "provenance": {
@@ -78,17 +74,17 @@
         "sha256": "14dd3f4556143d6566c0f924c214bd4c3f843305db973128f00d20ee28e52af4"
       }
     },
-    "config_hash": "94525e5f241d73d4385596499a82feb1618bbaa10623fac48d0251dae6cd93a6",
+    "config_hash": "8c9b2da9bc3ef781c8499e72e0d57db2f13420568a74fa4133e45ea81af14fba",
     "final_test_accessed": false,
     "git_commit": "eadf962fe00ce8c88f0ec034e22e96412216b674",
     "git_dirty": true,
     "grid_resolution": [
-      128,
-      68
+      512,
+      272
     ],
     "mmd": {
       "bandwidth_km": 570.471357024878,
-      "bootstrap_replicates": 16,
+      "bootstrap_replicates": 500,
       "bootstrap_seed": 20264824,
       "bootstrap_unit": "validation_drifter_id",
       "confidence_level": 0.95,
@@ -102,15 +98,15 @@
       "acceptance_tol": 2e-07,
       "backend": "tesseract_cpp",
       "grid_resolution": [
-        128,
-        68
+        512,
+        272
       ],
-      "lambda_clip": 1000000000.0,
-      "line_search_steps": 14,
-      "max_steps": 600,
-      "newton_ridge": 1e-12,
+      "lambda_clip": 1000000000000.0,
+      "line_search_steps": 18,
+      "max_steps": 4000,
+      "newton_ridge": 1e-18,
       "residual_tol": 1e-09,
-      "step_cap": 1000000.0
+      "step_cap": 100000000.0
     },
     "split_manifest_sha256": "7e87d57641899aa0d4f61279f46820d37efa6154dd2c3d8b28600a374fee5d08"
   },

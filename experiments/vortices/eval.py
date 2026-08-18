@@ -31,6 +31,15 @@ def _metric(block: dict[str, Any], key: str) -> str:
     return f"{_num(m['mean'])} ± {_num(m.get('se'))} (SE, n={m.get('n', 0)})"
 
 
+def _tail_ratio(block: dict[str, Any], key: str) -> float:
+    metric = block.get(key, {})
+    median = metric.get("median")
+    maximum = metric.get("max")
+    if not _finite(median) or not _finite(maximum) or float(median) <= 0.0:
+        return float("nan")
+    return float(maximum) / float(median)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("result", nargs="?", type=Path, default=DEFAULT_RESULT)
@@ -75,18 +84,40 @@ def main() -> int:
                 failures.append(f"{name} failed selection certificate")
 
     print("\nIndependent validation")
+    action_tail_limit = float(
+        data.get("config", {})
+        .get("validity", {})
+        .get("max_action_to_median_ratio", 5.0)
+    )
     for name in ("population", "law", "tangent", "full"):
         block = data.get("validation", {}).get(name, {})
+        tangent_tail = _tail_ratio(block, "tangent_action")
+        full_tail = _tail_ratio(block, "full_action")
         print(
             f"  {name:<12} R={_metric(block, 'law_risk'):<30} "
             f"Atan={_metric(block, 'tangent_action'):<30} A={_metric(block, 'full_action'):<30} "
             f"valid={100.0*float(block.get('valid_fraction', 0.0)):.1f}%"
+        )
+        print(
+            f"  {'':<12} action max/median: "
+            f"Atan={_num(tangent_tail)} A={_num(full_tail)} "
+            f"(limit={_num(action_tail_limit)})"
         )
         # The population design is an exact-moment oracle baseline and is only
         # certified against L.  Finite/noisy validity is diagnostic for it; the
         # DG-Obs law and transport designs must pass the finite validation gate.
         if name != "population" and float(block.get("valid_fraction", 0.0)) < 0.95:
             failures.append(f"{name} validation valid fraction below 0.95")
+        if name != "population":
+            for metric_name, ratio in (
+                ("tangent action", tangent_tail),
+                ("full action", full_tail),
+            ):
+                if _finite(ratio) and ratio > action_tail_limit:
+                    failures.append(
+                        f"{name} {metric_name} max/median ratio exceeds "
+                        f"{action_tail_limit:g}"
+                    )
         lb = block.get("tangent_lower_bound_check", {})
         if _finite(lb.get("max_violation")) and float(lb["max_violation"]) > float(lb.get("tolerance", 1e-6)):
             failures.append(f"{name} violated Atan <= A beyond tolerance")

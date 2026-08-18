@@ -95,6 +95,28 @@ def _dedupe(exp, values) -> list[Array]:
     return list(out.values())
 
 
+def _configured_stage_seeds(
+    optimization: dict[str, Any],
+    key: str,
+    *,
+    parameter_count: int,
+) -> list[Array]:
+    """Load deterministic archived layouts used only as re-audited stage seeds."""
+    configured = optimization.get(key, [])
+    if configured is None:
+        return []
+    values = np.asarray(configured, dtype=np.float64)
+    if values.size == 0:
+        return []
+    if values.ndim != 2 or values.shape[1] != int(parameter_count):
+        raise ValueError(
+            f"optimization.{key} must have shape [n, {int(parameter_count)}]"
+        )
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"optimization.{key} must contain only finite values")
+    return [jnp.asarray(value, dtype=jnp.float64) for value in values]
+
+
 def _geometry_constraints(exp):
     m = exp.cfg["measurement"]
     margin = float(m.get("boundary_margin", 2.0 * float(m.get("sensor_width", 0.12))))
@@ -495,13 +517,27 @@ def optimize_vortex_designs(
     # ------------------------------------------------------------------
     # 3/4 tangent action
     # ------------------------------------------------------------------
+    parameter_count = 2 * int(exp.family.n_sensors)
+    tangent_seed_values = _configured_stage_seeds(
+        opt,
+        "tangent_seed_etas",
+        parameter_count=parameter_count,
+    )
     grad_tan_bank = _prefix_bank(action_bank, int(opt.get("tangent_gradient_trials", min(4, int(action_bank.sample_indices.shape[0])))))
     local = _local_cloud(
-        exp, [law_eta, population_eta],
+        exp, [law_eta, population_eta] + tangent_seed_values,
         count_per_center=int(opt.get("tangent_local_starts", 12)),
         scale=float(opt.get("tangent_local_scale", 0.08)), seed=int(cfg["seed"]) + 401,
     )
-    tangent_starts = jnp.stack(_dedupe(exp, [law_eta, population_eta] + local + list(starts)))
+    tangent_starts = jnp.stack(
+        _dedupe(
+            exp,
+            [law_eta, population_eta]
+            + tangent_seed_values
+            + local
+            + list(starts),
+        )
+    )
     tangent_optimizer_starts = _optimizer_starts(tangent_starts, cfg, "tangent")
     tangent_obj_raw = lambda eta: exp.tangent_action_gradient(eta, grad_tan_bank)
     tan_anchor = max(float(tangent_obj_raw(law_eta)), 1.0e-12)
@@ -525,7 +561,7 @@ def optimize_vortex_designs(
         exact_action=lambda eta: exp.exact_tangent_result(eta, action_bank),
         audit_limit=int(opt.get("tangent_exact_audit_candidates", 24)),
         finalist_count=int(opt.get("tangent_exact_rescore_candidates", 8)),
-        mandatory=[law_eta, population_eta],
+        mandatory=[law_eta, population_eta] + tangent_seed_values,
     )
     stage_finished("stage_3_tangent", stage_3_started)
 
@@ -538,6 +574,11 @@ def optimize_vortex_designs(
         count_per_center=int(opt.get("full_local_starts", 12)),
         scale=float(opt.get("full_local_scale", 0.06)), seed=int(cfg["seed"]) + 501,
     )
+    full_seed_values = _configured_stage_seeds(
+        opt,
+        "full_seed_etas",
+        parameter_count=parameter_count,
+    )
     pareto_incumbent = opt.get("pareto_incumbent_full_eta")
     incumbent_values = (
         [jnp.asarray(pareto_incumbent, dtype=jnp.float64)]
@@ -548,6 +589,7 @@ def optimize_vortex_designs(
         _dedupe(
             exp,
             [law_eta, tangent_eta, population_eta]
+            + full_seed_values
             + incumbent_values
             + local_full
             + list(starts),
@@ -583,7 +625,9 @@ def optimize_vortex_designs(
         exact_prescreen=lambda eta: exp.exact_full_result(eta, action_bank, trial_count=prescreen_trials),
         audit_limit=int(opt.get("full_exact_audit_candidates", 30)),
         finalist_count=int(opt.get("full_exact_rescore_candidates", 10)),
-        mandatory=[law_eta, tangent_eta, population_eta] + incumbent_values,
+        mandatory=[law_eta, tangent_eta, population_eta]
+        + full_seed_values
+        + incumbent_values,
     )
     stage_finished("stage_4_full", stage_4_started)
 

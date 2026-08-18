@@ -1,7 +1,12 @@
 {
+  "backends": {
+    "full_exact_poisson": "tesseract_cpp",
+    "full_gradient_poisson": "tesseract_cpp",
+    "iprojection": "tesseract_cpp"
+  },
   "config": {
     "law": {
-      "epsilon_l": 0.002,
+      "epsilon_l": 0.025,
       "epsilon_r": 0.002,
       "mmd_bandwidths": [
         0.05,
@@ -29,30 +34,38 @@
     "name": "vortices_double_gyre",
     "optimization": {
       "constraint_penalty": 10000.0,
+      "exact_batch_trials": 4,
       "feasibility_tol": 1e-06,
       "full_exact_audit_candidates": 30,
+      "full_exact_poisson_backend": "tesseract_cpp",
       "full_exact_rescore_candidates": 8,
-      "full_gradient_cg_maxiter": 40,
+      "full_gradient_cg_maxiter": 360,
       "full_gradient_cg_tol": 1e-06,
       "full_gradient_grid_nx": 16,
       "full_gradient_grid_ny": 8,
+      "full_gradient_poisson_backend": "tesseract_cpp",
       "full_gradient_time_n": 3,
       "full_gradient_trials": 1,
       "full_learning_rate": 0.004,
       "full_local_scale": 0.06,
       "full_local_starts": 10,
       "full_prescreen_trials": 1,
+      "full_start_count": 3,
       "full_steps": 0,
       "invalid_penalty": 1000.0,
+      "law_anchor_consistency_tol": 1e-10,
+      "law_anchor_refinement_passes": 2,
       "law_exact_audit_candidates": 24,
       "law_gradient_trials": 1,
       "law_learning_rate": 0.008,
       "law_min_exact_valid": 8,
+      "law_start_count": 6,
       "law_steps": 0,
       "learning_rate": 0.01,
       "population_exact_audit_candidates": 20,
       "population_learning_rate": 0.01,
       "population_min_exact_valid": 6,
+      "population_start_count": 8,
       "population_steps": 0,
       "smoke_probe_count": 16,
       "start_count": 4,
@@ -63,11 +76,12 @@
       "tangent_learning_rate": 0.006,
       "tangent_local_scale": 0.08,
       "tangent_local_starts": 12,
+      "tangent_start_count": 4,
       "tangent_steps": 0
     },
     "particle_mfsi": {
       "covariance_ridge": 1e-07,
-      "exact_covariance_min_eig": 1e-12,
+      "exact_covariance_min_eig": 1e-08,
       "exact_covariance_ridge": 0.0,
       "exact_tangent_ridge": 0.0,
       "max_tangent_compatibility_residual": 1e-07,
@@ -75,8 +89,8 @@
       "tangent_ridge": 1e-07
     },
     "poisson": {
-      "cg_maxiter": 200,
-      "cg_tol": 1e-08,
+      "cg_maxiter": 520,
+      "cg_tol": 1e-07,
       "gauge_strength": 1.0,
       "grid_nx": 32,
       "grid_ny": 16,
@@ -88,6 +102,7 @@
       "y_min": 0.0
     },
     "projection": {
+      "fallback_newton_steps": 0,
       "implicit_ridge": 0.0,
       "lambda_clip": 1000.0,
       "lbfgs_maxiter": 800,
@@ -96,10 +111,12 @@
       "newton_ridge": 1e-07,
       "retry_clip_multiplier": 2.0,
       "search_line_search_steps": 6,
-      "search_max_steps": 80,
-      "search_residual_tol": 1e-07,
+      "search_max_steps": 60,
+      "search_residual_tol": 1e-06,
       "solver_accept_tol": 2e-06,
-      "step_cap": 20.0
+      "step_cap": 20.0,
+      "support_certificate_tol": 1e-10,
+      "trajectory_backend": "tesseract_cpp"
     },
     "randomness": {
       "action_trials": 1,
@@ -184,7 +201,7 @@
       "tangent_lower_bound_tol": 1e-06
     }
   },
-  "config_hash": "8bcc2a69a1300806ffa2d1a09cb1b4cc195f76a315974d702a57b310e1078b51",
+  "config_hash": "8b0ac1a4c2eea40e83924ed67cd5cba06e3db14e66324fd6df5e290c7c1552cd",
   "experiment": "vortices_double_gyre",
   "reference": {
     "checkpoint": "/home/zanot/projects/tesseract2026/experiments/vortices/outputs/smoke/reference.npz",
@@ -194,24 +211,25 @@
         "noise_std": 0.0,
         "schedule": "linear"
       },
+      "coordinate_system": "box-logit latent flow; physical velocity via chain rule",
       "endpoint_signature": "4f25fa087629921c884c81a5d34486b99be9d63cd62936a918de22e228466876",
       "experiment": "vortices_double_gyre",
       "history": [
         {
-          "conditional_fm_loss": 0.6394732088416402,
-          "grad_norm_preclip": 0.3965048474042482,
+          "conditional_fm_loss": 7.662150678737297,
+          "grad_norm_preclip": 2.294239046675729,
           "learning_rate": 0.001953503690480396,
           "step": 1
         },
         {
-          "conditional_fm_loss": 0.5863175154736817,
-          "grad_norm_preclip": 0.33125272982795856,
+          "conditional_fm_loss": 7.704653697996091,
+          "grad_norm_preclip": 2.4655196994477766,
           "learning_rate": 0.0010500000000000002,
           "step": 5
         },
         {
-          "conditional_fm_loss": 0.5882505103187806,
-          "grad_norm_preclip": 0.34933181778688177,
+          "conditional_fm_loss": 7.67618092617418,
+          "grad_norm_preclip": 2.13379954855773,
           "learning_rate": 0.0001,
           "step": 10
         }
@@ -226,74 +244,96 @@
         "seed": 20260815,
         "steps": 10
       },
-      "training_signature": "04a24586b6a93b82ccf3aae98b6d4d807d85948bfcaa04bfe99da29d5369b75d"
+      "training_signature": "04a24586b6a93b82ccf3aae98b6d4d807d85948bfcaa04bfe99da29d5369b75d",
+      "vortex_reference_box_high": [
+        2.0,
+        1.0
+      ],
+      "vortex_reference_box_low": [
+        0.0,
+        0.0
+      ],
+      "vortex_reference_transform": "box_logit_reference_v1",
+      "vortex_reference_transform_eps": 1e-06
     },
-    "min_in_domain_base_mass": 0.994140625
+    "min_in_domain_base_mass": 1.0
   },
   "schema_version": 1,
   "smoke": true,
   "smoke_centers": [
     [
-      1.0054391187867293,
-      0.45190032164510396
+      0.47678273384495407,
+      0.259795081819971
     ],
     [
-      1.6637738445769186,
-      0.4553394877649872
+      1.513624518748703,
+      0.7296929645741969
     ],
     [
-      0.8846273006975893,
-      0.7418274510919728
+      1.1363654574914235,
+      0.32609322700875043
     ],
     [
-      0.3619336863727898,
-      0.2705334360643854
+      1.7227821104922987,
+      0.4552169238309964
     ]
   ],
   "smoke_design": [
-    1.0054391187867293,
-    0.45190032164510396,
-    1.6637738445769186,
-    0.4553394877649872,
-    0.8846273006975893,
-    0.7418274510919728,
-    0.3619336863727898,
-    0.2705334360643854
+    0.47678273384495407,
+    0.259795081819971,
+    1.513624518748703,
+    0.7296929645741969,
+    1.1363654574914235,
+    0.32609322700875043,
+    1.7227821104922987,
+    0.4552169238309964
   ],
   "smoke_metrics": {
     "centers": [
       [
-        1.0054391187867293,
-        0.45190032164510396
+        0.47678273384495407,
+        0.259795081819971
       ],
       [
-        1.6637738445769186,
-        0.4553394877649872
+        1.513624518748703,
+        0.7296929645741969
       ],
       [
-        0.8846273006975893,
-        0.7418274510919728
+        1.1363654574914235,
+        0.32609322700875043
       ],
       [
-        0.3619336863727898,
-        0.2705334360643854
+        1.7227821104922987,
+        0.4552169238309964
       ]
     ],
-    "full_action": 268580.69805096736,
+    "full_action": 23.895488596280718,
     "invalid_reason": null,
-    "law_risk": 0.12329755406547942,
-    "max_calibration_residual": 0.00031991081276101536,
-    "max_poisson_relative_residual": 6.940761550836484e-05,
-    "max_tangent_compatibility_residual": 3.2071911505610696e-12,
-    "min_covariance_eigenvalue": 6.288219005238526e-09,
-    "min_ess_fraction": 0.2663887403821247,
-    "spline_residual_sum_squares": 0.00036686434965619473,
-    "spline_roughness": 25.663642320641472,
-    "tangent_action": 427.89729974624134,
-    "tangent_full_gap": 268152.80075122113,
+    "law_risk": 0.13761594915673764,
+    "max_calibration_residual": 9.992472534662822e-11,
+    "max_poisson_relative_residual": 8.198999755049861e-08,
+    "max_tangent_compatibility_residual": 8.05419985795132e-16,
+    "min_covariance_eigenvalue": 2.605676088753815e-05,
+    "min_empirical_hull_support_gap": 0.0011504821263222907,
+    "min_ess_fraction": 0.2838219612181445,
+    "native_projection_failed_systems": 0,
+    "robust_projection_fallback_systems": 0,
+    "spline_residual_sum_squares": 0.0001535738057207399,
+    "spline_roughness": 13.34639053145057,
+    "tangent_action": 1.029918980196737,
+    "tangent_full_gap": 22.86556961608398,
     "tangent_lower_bound_violation": 0.0,
     "trial": 0,
     "valid": true
+  },
+  "timings_seconds": {
+    "config_hash": "8b0ac1a4c2eea40e83924ed67cd5cba06e3db14e66324fd6df5e290c7c1552cd",
+    "phases_seconds": {
+      "setup_and_cached_inputs": 4.050232124001923,
+      "smoke_exact_path": 6.615682452000328
+    },
+    "schema_version": 1,
+    "total_seconds": 10.666132326001389
   },
   "truth": {
     "min_in_domain_fraction": 1.0,

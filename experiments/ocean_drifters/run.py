@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--stage",
-        choices=("projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "final_evaluation"),
+        choices=("projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "solver_repair", "final_evaluation"),
         default="benchmark",
     )
     parser.add_argument("--smoke", action="store_true")
