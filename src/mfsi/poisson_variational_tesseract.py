@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 
-VARIATIONAL_SOLVER_REVISION = "cpp-openmp-neumann-cosine-ritz-v1"
+VARIATIONAL_SOLVER_REVISION = "cpp-openmp-long-double-jacobi-neumann-cosine-ritz-v3"
 
 
 class TesseractVariationalPoissonUnavailable(RuntimeError):
@@ -24,8 +24,8 @@ class VariationalPoissonConfig:
     maximum_mode: int = 5
     rank_relative_tolerance: float = 1.0e-12
     weak_relative_tolerance: float = 1.0e-9
-    eigensolver_tolerance: float = 1.0e-13
-    maximum_eigensolver_sweeps: int = 80
+    eigensolver_tolerance: float = 1.0e-20
+    maximum_eigensolver_sweeps: int = 120
 
 
 def _native_root() -> Path:

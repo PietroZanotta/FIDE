@@ -89,7 +89,10 @@ py::dict solve_batch_binding(
     py::array_t<double> objective(shape.batch);
     py::array_t<double> weak_relative_residual(shape.batch);
     py::array_t<double> scaled_weak_relative_residual(shape.batch);
+    py::array_t<double> retained_scaled_weak_relative_residual(shape.batch);
+    py::array_t<double> discarded_scaled_load_relative_residual(shape.batch);
     py::array_t<double> gauge_residual(shape.batch);
+    py::array_t<double> gauge_relative_residual(shape.batch);
     py::array_t<double> compatibility_residual(shape.batch);
     py::array_t<double> compatibility_relative_residual(shape.batch);
     py::array_t<double> energy_load_identity_relative_error(shape.batch);
@@ -123,7 +126,12 @@ py::dict solve_batch_binding(
         objective.mutable_at(b) = stats[b].objective;
         weak_relative_residual.mutable_at(b) = stats[b].weak_relative_residual;
         scaled_weak_relative_residual.mutable_at(b) = stats[b].scaled_weak_relative_residual;
+        retained_scaled_weak_relative_residual.mutable_at(b)
+            = stats[b].retained_scaled_weak_relative_residual;
+        discarded_scaled_load_relative_residual.mutable_at(b)
+            = stats[b].discarded_scaled_load_relative_residual;
         gauge_residual.mutable_at(b) = stats[b].gauge_residual;
+        gauge_relative_residual.mutable_at(b) = stats[b].gauge_relative_residual;
         compatibility_residual.mutable_at(b) = stats[b].compatibility_residual;
         compatibility_relative_residual.mutable_at(b)
             = stats[b].compatibility_relative_residual;
@@ -142,7 +150,12 @@ py::dict solve_batch_binding(
         "objective"_a = std::move(objective),
         "weak_relative_residual"_a = std::move(weak_relative_residual),
         "scaled_weak_relative_residual"_a = std::move(scaled_weak_relative_residual),
+        "retained_scaled_weak_relative_residual"_a
+            = std::move(retained_scaled_weak_relative_residual),
+        "discarded_scaled_load_relative_residual"_a
+            = std::move(discarded_scaled_load_relative_residual),
         "gauge_residual"_a = std::move(gauge_residual),
+        "gauge_relative_residual"_a = std::move(gauge_relative_residual),
         "compatibility_residual"_a = std::move(compatibility_residual),
         "compatibility_relative_residual"_a = std::move(compatibility_relative_residual),
         "energy_load_identity_relative_error"_a
@@ -159,7 +172,7 @@ py::dict solve_batch_binding(
 
 PYBIND11_MODULE(_variational_poisson_native, module) {
     module.doc() = "Weak cosine-Galerkin weighted-Poisson solver";
-    module.attr("__version__") = "1";
+    module.attr("__version__") = "2";
     module.def(
         "solve_batch",
         &solve_batch_binding,

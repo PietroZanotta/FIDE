@@ -10,6 +10,7 @@ probability mass.
 
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
@@ -119,6 +120,28 @@ class PhysicalBank:
             params_json=np.asarray(json.dumps(asdict(self.params), sort_keys=True)),
         )
 
+    def select_times(self, requested: Array) -> "PhysicalBank":
+        """Return an exact configured time subset without rerunning physics."""
+        requested = np.asarray(requested, dtype=np.float64)
+        if requested.ndim != 1 or len(requested) < 2 or np.any(np.diff(requested) <= 0.0):
+            raise ValueError("requested times must be strictly increasing")
+        indices = []
+        for value in requested:
+            matches = np.flatnonzero(
+                np.isclose(self.times, value, atol=1.0e-12, rtol=0.0)
+            )
+            if len(matches) != 1:
+                raise ValueError(f"requested population time {value} is absent from physical bank")
+            indices.append(int(matches[0]))
+        index = np.asarray(indices, dtype=np.int64)
+        return PhysicalBank(
+            self.times[index],
+            self.q1[:, index],
+            self.q2[:, index],
+            self.seeds,
+            self.params,
+        )
+
     @classmethod
     def load(cls, path: str | Path) -> "PhysicalBank":
         with np.load(Path(path), allow_pickle=False) as data:
@@ -131,6 +154,7 @@ def generate_physical_bank(
     *,
     seeds: Array,
     times: Array,
+    workers: int = 1,
 ) -> PhysicalBank:
     """Generate a raw bank from fixed physics and independently seeded initial fields."""
     seeds = np.asarray(seeds, dtype=np.int64)
@@ -140,19 +164,42 @@ def generate_physical_bank(
     step_numbers = np.rint(times / params.dt).astype(np.int64)
     if not np.allclose(step_numbers * params.dt, times, atol=1.0e-12, rtol=0.0):
         raise ValueError("every saved time must be an integer multiple of dt")
+    if int(workers) < 1:
+        raise ValueError("workers must be >= 1")
 
     q1 = np.empty((len(seeds), len(times), params.n, params.n), dtype=np.float64)
     q2 = np.empty_like(q1)
-    for run, seed in enumerate(seeds):
-        sim = ActiveNematic2D(params, seed=int(seed))
-        previous = 0
-        for time_index, step_number in enumerate(step_numbers):
-            if step_number > previous:
-                sim.step(int(step_number - previous))
-            q1[run, time_index] = sim.q1
-            q2[run, time_index] = sim.q2
-            previous = int(step_number)
+    tasks = [(params, int(seed), step_numbers) for seed in seeds]
+    if int(workers) == 1:
+        rows = map(_generate_physical_run, tasks)
+        executor = None
+    else:
+        executor = ProcessPoolExecutor(max_workers=min(int(workers), len(tasks)))
+        rows = executor.map(_generate_physical_run, tasks)
+    try:
+        for run, (run_q1, run_q2) in enumerate(rows):
+            q1[run] = run_q1
+            q2[run] = run_q2
+    finally:
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
     return PhysicalBank(times, q1, q2, seeds, params)
+
+
+def _generate_physical_run(task) -> tuple[Array, Array]:
+    """Top-level worker for deterministic parallel realization generation."""
+    params, seed, step_numbers = task
+    run_q1 = np.empty((len(step_numbers), params.n, params.n), dtype=np.float64)
+    run_q2 = np.empty_like(run_q1)
+    sim = ActiveNematic2D(params, seed=int(seed))
+    previous = 0
+    for time_index, step_number in enumerate(step_numbers):
+        if step_number > previous:
+            sim.step(int(step_number - previous))
+        run_q1[time_index] = sim.q1
+        run_q2[time_index] = sim.q2
+        previous = int(step_number)
+    return run_q1, run_q2
 
 
 @dataclass(frozen=True)

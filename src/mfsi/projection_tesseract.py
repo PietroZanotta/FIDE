@@ -79,6 +79,35 @@ def solve_i_projection_trajectory_tesseract_forward(
     return {name: np.asarray(value) for name, value in result.items()}
 
 
+def solve_soft_i_projection_trajectory_tesseract_forward(
+    phi: np.ndarray,
+    log_base_weights: np.ndarray,
+    targets: np.ndarray,
+    penalties: np.ndarray,
+    cfg: IProjectionConfig,
+) -> dict[str, np.ndarray]:
+    """Solve an uncertainty-penalized projection without changing hard callers.
+
+    The stationary equation is
+    ``E_q[phi] - target + penalty @ lambda = 0``.  This additive endpoint is
+    used by the ocean experiment to represent finite-sample moment uncertainty;
+    the existing exact I-projection endpoint remains unchanged.
+    """
+    result = _native_module().solve_soft_batch(
+        np.ascontiguousarray(phi, dtype=np.float64),
+        np.ascontiguousarray(log_base_weights, dtype=np.float64),
+        np.ascontiguousarray(targets, dtype=np.float64),
+        np.ascontiguousarray(penalties, dtype=np.float64),
+        int(cfg.max_steps),
+        float(cfg.residual_tol),
+        float(cfg.newton_ridge),
+        float(cfg.step_cap),
+        float(cfg.lambda_clip),
+        int(cfg.line_search_steps),
+    )
+    return {name: np.asarray(value) for name, value in result.items()}
+
+
 @lru_cache(maxsize=1)
 def _client() -> Any:
     try:

@@ -21,6 +21,10 @@ from scipy.stats import spearmanr
 
 from mfsi.cache import file_sha256, fingerprint, load_npz_cache, save_npz_cache
 from mfsi.poisson import PoissonConfig
+from mfsi.projection import IProjectionConfig
+from mfsi.projection_tesseract import (
+    solve_soft_i_projection_trajectory_tesseract_forward,
+)
 from mfsi.poisson_tesseract import (
     NATIVE_SOLVER_REVISION,
     solve_weighted_poisson_batch_tesseract_diagnostics,
@@ -30,15 +34,42 @@ from mfsi.reference_density import (
     logistic_log_abs_det_jacobian,
 )
 
-from .action import (
-    _features,
-    _grid_points,
-    _log_kde,
-    _read_csv,
-    _summary,
-    _trust_solve,
-    _write_csv,
-)
+try:
+    from .action import (
+        _features,
+        _grid_points,
+        _log_kde,
+        _positive_kernel_reconstruct,
+        _read_csv,
+        _summary,
+        _trust_solve,
+        _write_csv,
+    )
+    from .poisson_backend import (
+        OCEAN_VARIATIONAL_POISSON_BACKEND,
+        VARIATIONAL_SOLVER_REVISION,
+        OceanVariationalPoissonConfig,
+        solve_ocean_variational_poisson_batch,
+        solve_ocean_variational_poisson_quadrature,
+    )
+except ImportError:  # direct ``python experiments/ocean_drifters/run.py`` invocation
+    from action import (
+        _features,
+        _grid_points,
+        _log_kde,
+        _positive_kernel_reconstruct,
+        _read_csv,
+        _summary,
+        _trust_solve,
+        _write_csv,
+    )
+    from poisson_backend import (
+        OCEAN_VARIATIONAL_POISSON_BACKEND,
+        VARIATIONAL_SOLVER_REVISION,
+        OceanVariationalPoissonConfig,
+        solve_ocean_variational_poisson_batch,
+        solve_ocean_variational_poisson_quadrature,
+    )
 
 
 def _forcing(
@@ -66,6 +97,15 @@ class OceanWeightedPoissonPilot:
         self.experiment = experiment
         self.action_cfg = experiment.cfg["action"]
         self.cfg = self.action_cfg["poisson_pilot"]
+        self.poisson_backend = str(self.action_cfg["poisson_backend"])
+        variational = self.action_cfg.get("variational_poisson", {})
+        self.variational_cfg = variational
+        self.adaptive_cfg = self.action_cfg.get(
+            "adaptive_variational_quadrature", {}
+        )
+        self.soft_projection_cfg = self.action_cfg.get(
+            "soft_moment_projection", {}
+        )
         self.analysis = Path(analysis_dir)
         self.output = Path(output_dir)
         self.tables = self.analysis / "tables"
@@ -78,9 +118,13 @@ class OceanWeightedPoissonPilot:
         if not all(row["selection_frozen_before_full_action"] == "True" for row in self.selection):
             raise RuntimeError("Poisson pilot selection was not frozen before full action")
         self.designs = np.asarray([int(row["design_index"]) for row in self.selection], dtype=int)
-        tangent_rows = {row["design_id"]: row for row in _read_csv(
+        tangent_table = _read_csv(
             experiment._resolve(self.action_cfg["tangent_readiness_table"])
-        )}
+        )
+        tangent_rows = {row["design_id"]: row for row in tangent_table}
+        self.action_ready_layout_count = sum(
+            row["valid"] == "True" for row in tangent_table
+        )
         if not all(tangent_rows[row["design_id"]]["valid"] == "True" for row in self.selection):
             raise RuntimeError("Poisson pilot selection contains a layout that is not tangent-ready")
         self.integrated_tangent = {
@@ -106,11 +150,82 @@ class OceanWeightedPoissonPilot:
             int(design): int(np.flatnonzero(self.all_designs == design)[0])
             for design in self.designs
         }
+        self.nominal_bandwidth_days = float(
+            metadata["bandwidths_days"]["nominal"]
+        )
+        self.soft_penalty: dict[int, np.ndarray] = {}
+        self.soft_penalty_dot: dict[int, np.ndarray] = {}
+        self._adaptive_reference_context: tuple[Any, ...] | None = None
+        self._adaptive_reference_functions: dict[
+            int, tuple[Any, Any]
+        ] = {}
+        if bool(self.soft_projection_cfg.get("enabled", False)):
+            self._build_soft_moment_penalties()
+
+    def _build_soft_moment_penalties(self) -> None:
+        """Build inference-only uncertainty penalties and their derivatives."""
+        inference = np.asarray(self.experiment.cohort.inference, dtype=np.float64)
+        inference_count = len(inference)
+        if inference_count < 2:
+            raise RuntimeError("soft moment projection requires multiple trajectories")
+        standard_error_floor = 1.0 / inference_count
+        days = self.times * 45.0
+        sigma = self.experiment.sensor_bank.sigma_km
+        identity = np.eye(4, dtype=np.float64)
+        for design in self.designs:
+            centers = self.experiment.sensor_bank.centers_km[design]
+            sample_features = _features(
+                inference.reshape((-1, 2)), centers, sigma
+            ).reshape((inference_count, len(self.times), 4))
+            raw_second = np.einsum(
+                "ntm,ntk->tmk", sample_features, sample_features
+            ) / inference_count
+            smooth_second, second_dot_per_day, _ = _positive_kernel_reconstruct(
+                raw_second.reshape((1, len(self.times), 16)),
+                days,
+                days,
+                self.nominal_bandwidth_days,
+            )
+            smooth_second = smooth_second[0].reshape((-1, 4, 4))
+            second_dot = second_dot_per_day[0].reshape((-1, 4, 4)) * 45.0
+            local = self.local_by_design[int(design)]
+            target = self.targets[local]
+            target_dot = self.target_dot[local]
+            covariance_of_mean = (
+                smooth_second - np.einsum("ti,tj->tij", target, target)
+            ) / (inference_count - 1)
+            covariance_dot = (
+                second_dot
+                - np.einsum("ti,tj->tij", target_dot, target)
+                - np.einsum("ti,tj->tij", target, target_dot)
+            ) / (inference_count - 1)
+            penalty = covariance_of_mean + standard_error_floor**2 * identity
+            # Symmetrize after independent floating-point contractions.
+            self.soft_penalty[int(design)] = 0.5 * (
+                penalty + np.swapaxes(penalty, -1, -2)
+            )
+            self.soft_penalty_dot[int(design)] = 0.5 * (
+                covariance_dot + np.swapaxes(covariance_dot, -1, -2)
+            )
 
     def _reference_grid(
-        self, resolution: tuple[int, int]
+        self,
+        resolution: tuple[int, int],
+        *,
+        source_indices: np.ndarray | None = None,
+        cache_namespace: str = "poisson_pilot_reference",
     ) -> tuple[np.ndarray, float, np.ndarray, np.ndarray]:
+        """Evaluate reference masses on a grid for a requested frozen time slice.
+
+        The pilot defaults remain unchanged.  The optional source slice lets the
+        production sweep bound memory without changing the reference law.
+        """
         nx, ny = resolution
+        sources = (
+            self.source_indices
+            if source_indices is None
+            else np.asarray(source_indices, dtype=int)
+        )
         bounds = np.asarray(self.experiment.cfg["scientific"]["domain_km"], dtype=np.float64)
         points, dx, dy = _grid_points(bounds, nx, ny)
         if not np.isclose(dx, dy, rtol=0.0, atol=1e-12):
@@ -124,11 +239,11 @@ class OceanWeightedPoissonPilot:
         normalization_rows = _read_csv(self.experiment.paths["conditioned_kde_normalization"])
         z0 = float(next(row["Z_hat"] for row in normalization_rows if row["endpoint"] == "day0"))
         cache_dir = self.experiment._resolve(
-            f"experiments/ocean_drifters/cache/poisson_pilot_reference_{nx}x{ny}"
+            f"experiments/ocean_drifters/cache/{cache_namespace}_{nx}x{ny}"
         )
         cache_dir.mkdir(parents=True, exist_ok=True)
-        log_base_all = np.empty((len(self.source_indices), len(points)), dtype=np.float64)
-        velocity_all = np.empty((len(self.source_indices), len(points), 2), dtype=np.float64)
+        log_base_all = np.empty((len(sources), len(points)), dtype=np.float64)
+        velocity_all = np.empty((len(sources), len(points), 2), dtype=np.float64)
         zt = flow.to_latent(jnp.asarray(points))
         velocity_fn = jax.jit(lambda value: flow.velocity(jnp.asarray(points), value))
 
@@ -139,14 +254,13 @@ class OceanWeightedPoissonPilot:
             ))
 
         signature_base = {
-            "schema": 1,
+            "schema": 2,
             "grid": [nx, ny],
             "reference": file_sha256(self.experiment.paths["reference_checkpoint"]),
             "endpoint": file_sha256(self.experiment.paths["conditioned_endpoint_estimator"]),
             "normalization": z0,
-            "pilot_sources": self.source_indices.tolist(),
         }
-        for local_time, source in enumerate(self.source_indices):
+        for local_time, source in enumerate(sources):
             value = float(self.times[source])
             signature = fingerprint({**signature_base, "source": int(source), "time": value})
             cache = cache_dir / f"reference_t{source:03d}.npz"
@@ -190,6 +304,452 @@ class OceanWeightedPoissonPilot:
             )
         return points, dx, log_base_all, velocity_all
 
+    def _reference_at_points(
+        self, points: np.ndarray, source: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Evaluate the frozen reference density and velocity at local cells."""
+        if self._adaptive_reference_context is None:
+            flow = self.experiment.reference()
+            bounds = np.asarray(
+                self.experiment.cfg["scientific"]["domain_km"],
+                dtype=np.float64,
+            )
+            with np.load(
+                self.experiment.paths["conditioned_endpoint_estimator"],
+                allow_pickle=False,
+            ) as data:
+                atoms = np.asarray(data["x0_atoms_km"], dtype=np.float64)
+                bandwidth = np.asarray(data["H0_km2"], dtype=np.float64)
+            normalization_rows = _read_csv(
+                self.experiment.paths["conditioned_kde_normalization"]
+            )
+            z0 = float(next(
+                row["Z_hat"] for row in normalization_rows
+                if row["endpoint"] == "day0"
+            ))
+            self._adaptive_reference_context = (
+                flow, bounds, atoms, bandwidth, z0
+            )
+        flow, bounds, atoms, bandwidth, z0 = self._adaptive_reference_context
+        source = int(source)
+        functions = self._adaptive_reference_functions.get(source)
+        if functions is None:
+            value = float(self.times[source])
+            steps = max(1, int(math.ceil(source / 5.0)))
+            backward = jax.jit(
+                lambda z: backward_latent_with_log_density_correction(
+                    flow.params, z, jnp.asarray(value), steps=steps
+                )
+            )
+            velocity_fn = jax.jit(
+                lambda local_points: flow.velocity(
+                    local_points, jnp.asarray(value)
+                )
+            )
+            functions = (backward, velocity_fn)
+            self._adaptive_reference_functions[source] = functions
+        backward, velocity_fn = functions
+        log_density = np.empty(len(points), dtype=np.float64)
+        for start in range(0, len(points), 4096):
+            stop = min(start + 4096, len(points))
+            zt = flow.to_latent(jnp.asarray(points[start:stop]))
+            initial_z, correction = backward(zt)
+            initial_x = np.asarray(flow.to_physical(initial_z))
+            initial_log = _log_kde(initial_x, atoms, bandwidth) - math.log(z0)
+            log_density[start:stop] = (
+                initial_log
+                + np.asarray(logistic_log_abs_det_jacobian(initial_z, bounds))
+                + np.asarray(correction)
+                - np.asarray(logistic_log_abs_det_jacobian(zt, bounds))
+            )
+        velocity = np.asarray(velocity_fn(jnp.asarray(points)))
+        if not np.isfinite(log_density).all() or not np.isfinite(velocity).all():
+            raise RuntimeError("adaptive reference evaluation produced nonfinite values")
+        return log_density, velocity
+
+    def _adaptive_projected_system(
+        self,
+        design: int,
+        source: int,
+        points: np.ndarray,
+        log_base_mass: np.ndarray,
+        velocity: np.ndarray,
+        initial_multiplier: np.ndarray,
+    ) -> dict[str, Any]:
+        """Soft-reproject and rebuild forcing on one nonuniform quadrature level."""
+        local = self.local_by_design[int(design)]
+        centers = self.experiment.sensor_bank.centers_km[design]
+        sigma = self.experiment.sensor_bank.sigma_km
+        phi = _features(points, centers, sigma)
+        delta = points[:, None] - centers[None]
+        gradient = -(delta / sigma**2) * phi[:, :, None]
+        material = np.einsum("nmd,nd->nm", gradient, velocity)
+        target = self.targets[local, source]
+        target_derivative = self.target_dot[local, source]
+        del initial_multiplier
+        penalty = self.soft_penalty[int(design)][source]
+        penalty_dot = self.soft_penalty_dot[int(design)][source]
+        soft_cfg = self.action_cfg["dense_projection_solver"]
+        solver = IProjectionConfig(
+            max_steps=int(soft_cfg["max_steps"]),
+            residual_tol=float(
+                self.soft_projection_cfg["stationarity_residual_tolerance"]
+            ),
+            newton_ridge=float(soft_cfg["newton_ridge"]),
+            step_cap=float(soft_cfg["step_cap"]),
+            lambda_clip=float(soft_cfg["lambda_clip"]),
+            line_search_steps=int(soft_cfg["line_search_steps"]),
+            implicit_ridge=0.0,
+        )
+        native = solve_soft_i_projection_trajectory_tesseract_forward(
+            phi[None],
+            log_base_mass[None],
+            target[None, None],
+            penalty[None, None],
+            solver,
+        )
+        multiplier = np.asarray(native["lambda_values"][0, 0])
+        projection = _summary(phi, log_base_mass, target, multiplier)
+        iterations = int(native["iterations"][0, 0])
+        weights = projection["weights"]
+        expected_m = weights @ material
+        covariance = projection["covariance"]
+        lambda_m = material @ multiplier
+        centered_phi = phi - projection["moments"]
+        cov_phi_lambda_m = np.einsum(
+            "n,ni,n->i",
+            weights,
+            centered_phi,
+            lambda_m - weights @ lambda_m,
+        )
+        lambda_dot_rhs = (
+            target_derivative
+            - expected_m
+            - cov_phi_lambda_m
+            - penalty_dot @ multiplier
+        )
+        multiplier_dot = np.linalg.solve(covariance + penalty, lambda_dot_rhs)
+        forcing, compatibility, compatibility_relative = _forcing(
+            phi,
+            projection["moments"],
+            material,
+            weights,
+            multiplier,
+            multiplier_dot,
+        )
+        log_q_mass = log_base_mass + phi @ multiplier
+        log_q_mass -= logsumexp(log_q_mass)
+        return {
+            "log_q_mass": log_q_mass,
+            "forcing": forcing,
+            "weights": weights,
+            "multiplier": multiplier,
+            "projection_iterations": iterations,
+            "projection_residual": projection["residual_norm"],
+            "soft_projection_stationarity_residual": float(np.linalg.norm(
+                projection["moments"] - target + penalty @ multiplier
+            )),
+            "compatibility_residual": compatibility,
+            "compatibility_relative_residual": compatibility_relative,
+        }
+
+    def _adaptive_variational_audit(
+        self,
+        system: dict[str, Any],
+        points: np.ndarray,
+        dx: float,
+        base_log_mass: np.ndarray,
+        velocity: np.ndarray,
+    ) -> dict[str, Any]:
+        """Replace a failed global-grid comparison by nested local refinement."""
+        design = int(system["design_index"])
+        source = int(system["source_time_index"])
+        multiplier = np.zeros(4, dtype=np.float64)
+        bounds = np.asarray(
+            self.experiment.cfg["scientific"]["domain_km"], dtype=np.float64
+        )
+        local_points = np.asarray(points, dtype=np.float64).copy()
+        local_log_base = np.asarray(base_log_mass, dtype=np.float64).copy()
+        local_velocity = np.asarray(velocity, dtype=np.float64).copy()
+        widths_x = np.full(len(local_points), dx, dtype=np.float64)
+        widths_y = np.full(len(local_points), dx, dtype=np.float64)
+        previous_action = math.nan
+        consecutive_stable = 0
+        levels: list[dict[str, Any]] = []
+        final_rank_actions: dict[float, float] = {}
+        final_primary_result = None
+        final_projected: dict[str, Any] | None = None
+        rank_tolerances = [
+            float(value)
+            for value in self.variational_cfg[
+                "rank_sensitivity_relative_tolerances"
+            ]
+        ]
+        primary_tolerance = float(
+            self.variational_cfg["rank_relative_tolerance"]
+        )
+        if primary_tolerance not in rank_tolerances:
+            raise RuntimeError("adaptive rank audit omitted the primary tolerance")
+
+        for level in range(int(self.adaptive_cfg["maximum_refinement_levels"]) + 1):
+            projected = self._adaptive_projected_system(
+                design,
+                source,
+                local_points,
+                local_log_base,
+                local_velocity,
+                multiplier,
+            )
+            multiplier = projected["multiplier"]
+            solve_cfg = OceanVariationalPoissonConfig(
+                dx=dx,
+                maximum_mode=int(self.variational_cfg["maximum_mode"]),
+                rank_relative_tolerance=primary_tolerance,
+                weak_relative_tolerance=float(
+                    self.variational_cfg["weak_relative_tolerance"]
+                ),
+                eigensolver_tolerance=float(
+                    self.variational_cfg["eigensolver_tolerance"]
+                ),
+                maximum_eigensolver_sweeps=int(
+                    self.variational_cfg["maximum_eigensolver_sweeps"]
+                ),
+            )
+            primary_result = solve_ocean_variational_poisson_quadrature(
+                local_points,
+                projected["log_q_mass"],
+                projected["forcing"],
+                bounds,
+                solve_cfg,
+            )
+            primary_action = float(primary_result.action[0])
+            action_change = (
+                abs(primary_action - previous_action)
+                / max(abs(primary_action), abs(previous_action), 1.0e-14)
+                if np.isfinite(previous_action) else math.inf
+            )
+            if action_change <= float(
+                self.adaptive_cfg["maximum_relative_action_change"]
+            ):
+                consecutive_stable += 1
+            else:
+                consecutive_stable = 0
+            final_rank_actions = {primary_tolerance: primary_action}
+            final_primary_result = primary_result
+            final_projected = projected
+            levels.append({
+                "level": level,
+                "cell_count": len(local_points),
+                "minimum_cell_width_km": float(np.min(widths_x)),
+                "maximum_projected_cell_weight": float(
+                    np.max(projected["weights"])
+                ),
+                "action": primary_action,
+                "relative_action_change": action_change,
+                "retained_rank": int(
+                    primary_result.diagnostics["retained_rank"][0]
+                ),
+                "complete_scaled_weak_relative_residual": float(
+                    primary_result.diagnostics[
+                        "scaled_weak_relative_residual"
+                    ][0]
+                ),
+            })
+            required = int(
+                self.adaptive_cfg["required_consecutive_stable_levels"]
+            )
+            if consecutive_stable >= required:
+                break
+            if level == int(self.adaptive_cfg["maximum_refinement_levels"]):
+                break
+
+            eligible = (
+                0.5 * widths_x
+                >= float(self.adaptive_cfg["minimum_cell_width_km"])
+            )
+            order = np.argsort(projected["weights"])[::-1]
+            order = order[eligible[order]]
+            if not len(order):
+                break
+            cumulative = np.cumsum(projected["weights"][order])
+            count = int(np.searchsorted(
+                cumulative,
+                float(self.adaptive_cfg["projected_mass_refinement_fraction"]),
+                side="left",
+            ) + 1)
+            count = max(
+                count, int(self.adaptive_cfg["minimum_refined_cells_per_level"])
+            )
+            count = min(
+                count,
+                int(self.adaptive_cfg["maximum_refined_cells_per_level"]),
+                len(order),
+            )
+            capacity = (
+                int(self.adaptive_cfg["maximum_total_cells"]) - len(local_points)
+            ) // 3
+            count = min(count, capacity)
+            if count <= 0:
+                break
+            selected = order[:count]
+            keep = np.ones(len(local_points), dtype=bool)
+            keep[selected] = False
+            parent = local_points[selected]
+            parent_dx = widths_x[selected]
+            parent_dy = widths_y[selected]
+            offsets = np.asarray([
+                [-0.25, -0.25],
+                [-0.25, 0.25],
+                [0.25, -0.25],
+                [0.25, 0.25],
+            ])
+            children = (
+                parent[:, None, :]
+                + offsets[None]
+                * np.stack([parent_dx, parent_dy], axis=-1)[:, None, :]
+            ).reshape((-1, 2))
+            child_log_density, child_velocity = self._reference_at_points(
+                children, source
+            )
+            anchor_log_density, _ = self._reference_at_points(
+                local_points[:1], source
+            )
+            log_normalization = (
+                float(anchor_log_density[0])
+                + math.log(widths_x[0] * widths_y[0])
+                - float(local_log_base[0])
+            )
+            child_width_x = np.repeat(parent_dx * 0.5, 4)
+            child_width_y = np.repeat(parent_dy * 0.5, 4)
+            child_log_mass = (
+                child_log_density
+                + np.log(child_width_x * child_width_y)
+                - log_normalization
+            )
+            local_points = np.concatenate([local_points[keep], children])
+            local_velocity = np.concatenate([
+                local_velocity[keep], child_velocity
+            ])
+            widths_x = np.concatenate([widths_x[keep], child_width_x])
+            widths_y = np.concatenate([widths_y[keep], child_width_y])
+            local_log_base = np.concatenate([
+                local_log_base[keep], child_log_mass
+            ])
+            local_log_base -= logsumexp(local_log_base)
+            previous_action = primary_action
+
+        if final_primary_result is None or final_projected is None:
+            raise RuntimeError("adaptive quadrature produced no solve")
+        # Rank sensitivity is a property of the accepted final quadrature, not
+        # of discarded intermediate refinement levels.  Audit all frozen rank
+        # cutoffs once here; this is numerically identical to the previous final
+        # check and avoids two redundant eigensolves at every earlier level.
+        for rank_tolerance in rank_tolerances:
+            if rank_tolerance == primary_tolerance:
+                continue
+            sensitivity_cfg = OceanVariationalPoissonConfig(
+                dx=dx,
+                maximum_mode=int(self.variational_cfg["maximum_mode"]),
+                rank_relative_tolerance=rank_tolerance,
+                weak_relative_tolerance=float(
+                    self.variational_cfg["weak_relative_tolerance"]
+                ),
+                eigensolver_tolerance=float(
+                    self.variational_cfg["eigensolver_tolerance"]
+                ),
+                maximum_eigensolver_sweeps=int(
+                    self.variational_cfg["maximum_eigensolver_sweeps"]
+                ),
+            )
+            sensitivity = solve_ocean_variational_poisson_quadrature(
+                local_points,
+                final_projected["log_q_mass"],
+                final_projected["forcing"],
+                bounds,
+                sensitivity_cfg,
+            )
+            final_rank_actions[rank_tolerance] = float(sensitivity.action[0])
+        primary_action = final_rank_actions[primary_tolerance]
+        rank_changes = [
+            abs(action - primary_action)
+            / max(abs(action), abs(primary_action), 1.0e-14)
+            for tolerance, action in final_rank_actions.items()
+            if tolerance != primary_tolerance
+        ]
+        maximum_rank_change = max(rank_changes) if rank_changes else 0.0
+        adaptive_solver_success = bool(
+            final_primary_result.converged[0]
+            and float(final_primary_result.relative_residual[0])
+            <= float(self.variational_cfg["weak_relative_tolerance"])
+            and abs(float(final_primary_result.diagnostics[
+                "gauge_relative_residual"
+            ][0]))
+            <= float(
+                self.variational_cfg["maximum_relative_weighted_mean_potential"]
+            )
+            and float(final_projected["compatibility_relative_residual"])
+            <= float(
+                self.variational_cfg[
+                    "maximum_relative_compatibility_residual"
+                ]
+            )
+            and float(final_projected[
+                "soft_projection_stationarity_residual"
+            ])
+            <= float(
+                self.soft_projection_cfg["stationarity_residual_tolerance"]
+            )
+            and float(final_projected["projection_residual"])
+            <= float(self.soft_projection_cfg["maximum_hard_moment_residual"])
+            and float(final_primary_result.diagnostics[
+                "energy_load_identity_relative_error"
+            ][0])
+            <= float(
+                self.variational_cfg[
+                    "maximum_energy_load_identity_relative_error"
+                ]
+            )
+        )
+        return {
+            "adaptive_quadrature_valid": consecutive_stable >= int(
+                self.adaptive_cfg["required_consecutive_stable_levels"]
+            ),
+            "adaptive_refinement_level": int(levels[-1]["level"]),
+            "adaptive_quadrature_cell_count": int(levels[-1]["cell_count"]),
+            "adaptive_minimum_cell_width_km": float(
+                levels[-1]["minimum_cell_width_km"]
+            ),
+            "adaptive_maximum_projected_cell_weight": float(
+                levels[-1]["maximum_projected_cell_weight"]
+            ),
+            "adaptive_action_density": primary_action,
+            "adaptive_solver_success": adaptive_solver_success,
+            "adaptive_scaled_weak_relative_residual": float(
+                final_primary_result.relative_residual[0]
+            ),
+            "adaptive_gauge_relative_residual": abs(float(
+                final_primary_result.diagnostics["gauge_relative_residual"][0]
+            )),
+            "adaptive_compatibility_relative_residual": float(
+                final_projected["compatibility_relative_residual"]
+            ),
+            "adaptive_energy_load_identity_relative_error": float(
+                final_primary_result.diagnostics[
+                    "energy_load_identity_relative_error"
+                ][0]
+            ),
+            "adaptive_last_relative_action_change": float(
+                levels[-1]["relative_action_change"]
+            ),
+            "adaptive_maximum_relative_rank_action_change": maximum_rank_change,
+            "adaptive_rank_sensitivity_valid": maximum_rank_change <= float(
+                self.variational_cfg["maximum_relative_rank_action_change"]
+            ),
+            "adaptive_level_actions": ";".join(
+                f"{entry['level']}:{entry['action']:.17g}" for entry in levels
+            ),
+        }
+
     def _systems_for_grid(
         self,
         resolution: tuple[int, int],
@@ -201,44 +761,57 @@ class OceanWeightedPoissonPilot:
         systems: list[dict[str, Any]] = []
         sigma = self.experiment.sensor_bank.sigma_km
         cell_area = dx * dx
+        soft_cfg = self.action_cfg["dense_projection_solver"]
+        projection_solver = IProjectionConfig(
+            max_steps=int(soft_cfg["max_steps"]),
+            residual_tol=float(
+                self.soft_projection_cfg["stationarity_residual_tolerance"]
+            ),
+            newton_ridge=float(soft_cfg["newton_ridge"]),
+            step_cap=float(soft_cfg["step_cap"]),
+            lambda_clip=float(soft_cfg["lambda_clip"]),
+            line_search_steps=int(soft_cfg["line_search_steps"]),
+            implicit_ridge=0.0,
+        )
         for design in self.designs:
             local = self.local_by_design[int(design)]
             centers = self.experiment.sensor_bank.centers_km[design]
             phi = _features(points, centers, sigma)
             delta = points[:, None] - centers[None]
             gradient = -(delta / sigma**2) * phi[:, :, None]
-            cache = self.experiment._resolve(
-                f"experiments/ocean_drifters/cache/action_projected_laws/design_{design:06d}_nominal.npz"
+            selected_targets = self.targets[local, self.source_indices]
+            selected_penalties = self.soft_penalty[int(design)][self.source_indices]
+            native = solve_soft_i_projection_trajectory_tesseract_forward(
+                np.ascontiguousarray(
+                    np.broadcast_to(
+                        phi, (len(self.source_indices), *phi.shape)
+                    )
+                ),
+                np.ascontiguousarray(log_base),
+                np.ascontiguousarray(selected_targets[None]),
+                np.ascontiguousarray(selected_penalties[None]),
+                projection_solver,
             )
-            with np.load(cache, allow_pickle=False) as data:
-                if bool(data["final_test_accessed"]):
-                    raise RuntimeError("projected-law action cache reports final-test access")
-                multipliers = np.asarray(data["lambda_value"], dtype=np.float64)
-                multiplier_dot = np.asarray(data["lambda_dot"], dtype=np.float64)
-                tangent_density = np.asarray(data["tangent_action_density"], dtype=np.float64)
+            multipliers = np.asarray(native["lambda_values"][0], dtype=np.float64)
             for time_local, source in enumerate(self.source_indices):
                 material = np.einsum("nmd,nd->nm", gradient, velocity[time_local])
                 target = self.targets[local, source]
                 target_derivative = self.target_dot[local, source]
-                refined_multiplier = multipliers[source].copy()
+                penalty = self.soft_penalty[int(design)][source]
+                penalty_dot = self.soft_penalty_dot[int(design)][source]
+                refined_multiplier = multipliers[time_local].copy()
                 projection = _summary(
                     phi, log_base[time_local], target, refined_multiplier
                 )
-                projection_iterations = 0
-                projection_backend = "accepted_multiplier_direct_evaluation"
-                forcing_projection_tolerance = float(
-                    self.cfg["forcing_projection_residual_tolerance"]
+                soft_residual_vector = (
+                    projection["moments"] - target + penalty @ refined_multiplier
                 )
-                if projection["residual_norm"] > forcing_projection_tolerance:
-                    refined_multiplier, projection, projection_iterations = _trust_solve(
-                        phi,
-                        log_base[time_local],
-                        target,
-                        refined_multiplier,
-                        forcing_projection_tolerance,
-                        int(self.cfg["forcing_projection_maximum_function_evaluations"]),
-                    )
-                    projection_backend = "exact_covariance_grid_refinement"
+                soft_residual = float(np.linalg.norm(soft_residual_vector))
+                projection_iterations = int(native["iterations"][0, time_local])
+                projection_backend = "tesseract_cpp_soft_uncertainty_penalized"
+                forcing_projection_tolerance = float(
+                    self.soft_projection_cfg["stationarity_residual_tolerance"]
+                )
                 weights = projection["weights"]
                 projected_moment = projection["moments"]
                 log_q_mass = log_base[time_local] + phi @ refined_multiplier
@@ -246,10 +819,15 @@ class OceanWeightedPoissonPilot:
                 q_density = weights / cell_area
                 expected_m = weights @ material
                 covariance = projection["covariance"]
-                covariance_eigenvalues = projection["covariance_eigenvalues"]
+                coordinate_matrix = covariance + penalty
+                covariance_eigenvalues = np.linalg.eigvalsh(coordinate_matrix)
+                covariance_condition = float(
+                    covariance_eigenvalues[-1]
+                    / max(covariance_eigenvalues[0], 1e-300)
+                )
                 covariance_ready = bool(
                     covariance_eigenvalues[0] >= float(self.action_cfg["covariance_minimum_eigenvalue"])
-                    and projection["covariance_condition"] <= float(
+                    and covariance_condition <= float(
                         self.action_cfg["covariance_maximum_condition"]
                     )
                 )
@@ -264,10 +842,20 @@ class OceanWeightedPoissonPilot:
                         centered_phi,
                         lambda_m - weights @ lambda_m,
                     )
-                    lambda_dot_rhs = target_derivative - expected_m - cov_phi_lambda_m
-                    refined_multiplier_dot = np.linalg.solve(covariance, lambda_dot_rhs)
+                    lambda_dot_rhs = (
+                        target_derivative
+                        - expected_m
+                        - cov_phi_lambda_m
+                        - penalty_dot @ refined_multiplier
+                    )
+                    refined_multiplier_dot = np.linalg.solve(
+                        coordinate_matrix, lambda_dot_rhs
+                    )
                     lambda_dot_solve_residual = float(
-                        np.linalg.norm(covariance @ refined_multiplier_dot - lambda_dot_rhs)
+                        np.linalg.norm(
+                            coordinate_matrix @ refined_multiplier_dot
+                            - lambda_dot_rhs
+                        )
                         / max(np.linalg.norm(lambda_dot_rhs), 1e-14)
                     )
                 gram = np.einsum("n,nmd,nkd->mk", weights, gradient, gradient)
@@ -276,7 +864,12 @@ class OceanWeightedPoissonPilot:
                     gram_eigenvalues[-1], 1e-300
                 )
                 retained = gram_eigenvalues > rank_threshold
-                tangent_rhs = expected_m - target_derivative
+                projected_moment_derivative = (
+                    target_derivative
+                    - penalty_dot @ refined_multiplier
+                    - penalty @ refined_multiplier_dot
+                )
+                tangent_rhs = expected_m - projected_moment_derivative
                 projected_tangent_rhs = (
                     gram_vectors[:, retained] @ (gram_vectors[:, retained].T @ tangent_rhs)
                     if np.any(retained) else np.zeros_like(tangent_rhs)
@@ -294,7 +887,7 @@ class OceanWeightedPoissonPilot:
                 if covariance_ready:
                     h, compatibility, compatibility_relative = _forcing(
                         phi,
-                        target,
+                        projected_moment,
                         material,
                         weights,
                         refined_multiplier,
@@ -324,27 +917,29 @@ class OceanWeightedPoissonPilot:
                     "compatibility_residual": compatibility,
                     "compatibility_relative_residual": compatibility_relative,
                     "compatibility_valid": bool(
-                        projection["residual_norm"] <= forcing_projection_tolerance
+                        soft_residual <= forcing_projection_tolerance
+                        and projection["residual_norm"]
+                        <= float(
+                            self.soft_projection_cfg[
+                                "maximum_hard_moment_residual"
+                            ]
+                        )
                         and covariance_ready
                         and compatibility_relative
                         <= float(self.cfg["maximum_relative_compatibility_residual"])
                     ),
                     "projected_moment_residual": projection["residual_norm"],
+                    "soft_projection_stationarity_residual": soft_residual,
+                    "soft_projection_penalty_trace": float(np.trace(penalty)),
                     "projection_backend": projection_backend,
                     "projection_iterations": projection_iterations,
                     "refined_multiplier_norm": float(np.linalg.norm(refined_multiplier)),
-                    "relative_multiplier_grid_change": float(
-                        np.linalg.norm(refined_multiplier - multipliers[source])
-                        / max(np.linalg.norm(multipliers[source]), 1e-14)
-                    ),
+                    "relative_multiplier_grid_change": math.nan,
                     "covariance_minimum_eigenvalue": float(covariance_eigenvalues[0]),
-                    "covariance_condition": projection["covariance_condition"],
+                    "covariance_condition": covariance_condition,
                     "multiplier_coordinate_ready": covariance_ready,
                     "lambda_dot_solve_relative_residual": lambda_dot_solve_residual,
-                    "relative_lambda_dot_grid_change": float(
-                        np.linalg.norm(refined_multiplier_dot - multiplier_dot[source])
-                        / max(np.linalg.norm(multiplier_dot[source]), 1e-14)
-                    ) if covariance_ready else math.inf,
+                    "relative_lambda_dot_grid_change": math.nan,
                     "gram_rank": int(np.sum(retained)),
                     "tangent_compatibility_relative_residual": tangent_compatibility,
                     "minimum_log_density": float(np.min(log_q_mass) - math.log(cell_area)),
@@ -355,13 +950,17 @@ class OceanWeightedPoissonPilot:
                     "underflow_cell_fraction": float(np.mean(underflow)),
                     "underflow_log10_probability_mass": underflow_log_mass,
                     "tangent_action_density": grid_tangent_density,
-                    "accepted_medium_grid_tangent_action_density": float(tangent_density[source]),
+                    "accepted_medium_grid_tangent_action_density": grid_tangent_density,
                 })
         return systems
 
     def _solve_floor(
         self, systems: list[dict[str, Any]], floor: float, dx: float
     ) -> tuple[list[dict[str, Any]], dict[tuple[int, int], np.ndarray]]:
+        if self.poisson_backend == OCEAN_VARIATIONAL_POISSON_BACKEND:
+            if floor != 0.0:
+                raise ValueError("the variational Poisson backend has no operator floor")
+            return self._solve_variational(systems, dx)
         eligible = [system for system in systems if system["compatibility_valid"]]
         potential: dict[tuple[int, int], np.ndarray] = {}
         diagnostics: dict[int, dict[str, Any]] = {}
@@ -452,18 +1051,247 @@ class OceanWeightedPoissonPilot:
             rows.append(row)
         return rows, potential
 
+    def _solve_variational(
+        self, systems: list[dict[str, Any]], dx: float
+    ) -> tuple[list[dict[str, Any]], dict[tuple[int, int], np.ndarray]]:
+        eligible = [system for system in systems if system["compatibility_valid"]]
+        potential: dict[tuple[int, int], np.ndarray] = {}
+        diagnostics: dict[int, dict[str, Any]] = {}
+        error = ""
+        if eligible:
+            cfg = OceanVariationalPoissonConfig(
+                dx=dx,
+                maximum_mode=int(self.variational_cfg["maximum_mode"]),
+                rank_relative_tolerance=float(
+                    self.variational_cfg["rank_relative_tolerance"]
+                ),
+                weak_relative_tolerance=float(
+                    self.variational_cfg["weak_relative_tolerance"]
+                ),
+                eigensolver_tolerance=float(
+                    self.variational_cfg["eigensolver_tolerance"]
+                ),
+                maximum_eigensolver_sweeps=int(
+                    self.variational_cfg["maximum_eigensolver_sweeps"]
+                ),
+            )
+            try:
+                result = solve_ocean_variational_poisson_batch(
+                    np.stack([
+                        system["log_q_mass"].reshape(system["h"].shape)
+                        for system in eligible
+                    ]),
+                    np.stack([system["h"] for system in eligible]),
+                    cfg,
+                )
+                sensitivity_actions: dict[float, np.ndarray] = {
+                    float(cfg.rank_relative_tolerance): np.asarray(result.action)
+                }
+                for rank_tolerance in self.variational_cfg[
+                    "rank_sensitivity_relative_tolerances"
+                ]:
+                    rank_tolerance = float(rank_tolerance)
+                    if rank_tolerance == float(cfg.rank_relative_tolerance):
+                        continue
+                    sensitivity_cfg = OceanVariationalPoissonConfig(
+                        dx=cfg.dx,
+                        maximum_mode=cfg.maximum_mode,
+                        rank_relative_tolerance=rank_tolerance,
+                        weak_relative_tolerance=cfg.weak_relative_tolerance,
+                        eigensolver_tolerance=cfg.eigensolver_tolerance,
+                        maximum_eigensolver_sweeps=cfg.maximum_eigensolver_sweeps,
+                    )
+                    sensitivity_actions[rank_tolerance] = np.asarray(
+                        solve_ocean_variational_poisson_batch(
+                            np.stack([
+                                system["log_q_mass"].reshape(system["h"].shape)
+                                for system in eligible
+                            ]),
+                            np.stack([system["h"] for system in eligible]),
+                            sensitivity_cfg,
+                        ).action
+                    )
+                for index, system in enumerate(eligible):
+                    diagnostics[id(system)] = {
+                        name: np.asarray(value)[index].item()
+                        for name, value in result.diagnostics.items()
+                    }
+                    diagnostics[id(system)].update({
+                        "action": result.action[index].item(),
+                        "relative_residual": result.relative_residual[index].item(),
+                        "weighted_mean_potential": result.weighted_mean_potential[index].item(),
+                        "operator_floor": result.operator_floor[index].item(),
+                        "converged": result.converged[index].item(),
+                    })
+                    primary_action = float(result.action[index])
+                    relative_changes = []
+                    for rank_tolerance, actions in sensitivity_actions.items():
+                        local_action = float(actions[index])
+                        diagnostics[id(system)][
+                            f"rank_tolerance_{rank_tolerance:.0e}_action"
+                        ] = local_action
+                        if rank_tolerance != float(cfg.rank_relative_tolerance):
+                            relative_changes.append(
+                                abs(local_action - primary_action)
+                                / max(abs(primary_action), abs(local_action), 1.0e-14)
+                            )
+                    diagnostics[id(system)]["maximum_relative_rank_action_change"] = (
+                        max(relative_changes) if relative_changes else 0.0
+                    )
+                    potential[(system["design_index"], system["source_time_index"])] = (
+                        np.asarray(result.potential[index])
+                    )
+            except Exception as exc:  # retain a failed variational trial as data
+                error = f"{type(exc).__name__}: {exc}"
+
+        rows: list[dict[str, Any]] = []
+        for system in systems:
+            diag = diagnostics.get(id(system), {})
+            converged = bool(diag.get("converged", False))
+            weak_residual = float(diag.get("relative_residual", math.nan))
+            gauge_residual = abs(float(diag.get("weighted_mean_potential", math.nan)))
+            gauge_relative_residual = abs(float(
+                diag.get("gauge_relative_residual", math.nan)
+            ))
+            native_compatibility = abs(float(
+                diag.get("compatibility_relative_residual", math.nan)
+            ))
+            energy_identity = float(
+                diag.get("energy_load_identity_relative_error", math.nan)
+            )
+            rank_action_change = float(
+                diag.get("maximum_relative_rank_action_change", math.inf)
+            )
+            rank_sensitivity_valid = bool(
+                rank_action_change
+                <= float(
+                    self.variational_cfg["maximum_relative_rank_action_change"]
+                )
+            )
+            action = float(diag.get("action", math.nan))
+            tangent = float(system["tangent_action_density"])
+            inequality_tolerance = float(
+                self.variational_cfg["tangent_full_inequality_relative_tolerance"]
+            )
+            inequality_valid = bool(
+                np.isfinite(action)
+                and tangent <= action
+                + inequality_tolerance * max(abs(action), abs(tangent), 1.0)
+            )
+            solver_success = bool(
+                system["compatibility_valid"]
+                and converged
+                and weak_residual
+                <= float(self.variational_cfg["weak_relative_tolerance"])
+                and gauge_relative_residual
+                <= float(
+                    self.variational_cfg[
+                        "maximum_relative_weighted_mean_potential"
+                    ]
+                )
+                and native_compatibility
+                <= float(
+                    self.variational_cfg[
+                        "maximum_relative_compatibility_residual"
+                    ]
+                )
+                and energy_identity
+                <= float(
+                    self.variational_cfg[
+                        "maximum_energy_load_identity_relative_error"
+                    ]
+                )
+            )
+            row = {
+                key: value
+                for key, value in system.items()
+                if key not in {"q", "h", "log_q_mass"}
+            }
+            row.update({
+                "poisson_backend": self.poisson_backend,
+                "residual_contract": "retained_space_scaled_weak_galerkin_optimality",
+                "operator_floor_relative": 0.0,
+                "operator_floor_absolute_density": 0.0,
+                "operator_floor_to_physical_coefficient_sum_ratio": 0.0,
+                "preconditioner": "diagonal trial-space equilibration",
+                "cg_tolerance": "",
+                "cg_maximum_iterations": "",
+                "solver_converged": converged,
+                "solver_success": solver_success,
+                "iterations": diag.get("eigensolver_sweeps", 0),
+                "native_relative_pde_residual": math.nan,
+                "stabilized_relative_pde_residual": math.nan,
+                "physical_relative_pde_residual": math.nan,
+                "physical_absolute_pde_residual": math.nan,
+                "physical_pde_valid": False,
+                "scaled_weak_relative_residual": weak_residual,
+                "complete_scaled_weak_relative_residual": diag.get(
+                    "scaled_weak_relative_residual", math.nan
+                ),
+                "discarded_scaled_load_relative_residual": diag.get(
+                    "discarded_scaled_load_relative_residual", math.nan
+                ),
+                "weak_relative_residual": diag.get("weak_relative_residual", math.nan),
+                "weighted_mean_potential_residual": diag.get(
+                    "weighted_mean_potential", math.nan
+                ),
+                "weighted_mean_potential_relative_residual": (
+                    gauge_relative_residual
+                ),
+                "variational_compatibility_relative_residual": diag.get(
+                    "compatibility_relative_residual", math.nan
+                ),
+                "energy_load_identity_relative_error": energy_identity,
+                "condition_proxy": diag.get("condition_proxy", math.inf),
+                "retained_rank": int(diag.get("retained_rank", 0)),
+                "basis_size": int(diag.get("basis_size", 0)),
+                "quadrature_underflow_count": int(
+                    diag.get("quadrature_underflow_count", 0)
+                ),
+                "maximum_relative_rank_action_change": rank_action_change,
+                "rank_sensitivity_valid": rank_sensitivity_valid,
+                **{
+                    key: value
+                    for key, value in diag.items()
+                    if key.startswith("rank_tolerance_")
+                },
+                "full_action_density": action,
+                "tangent_full_inequality_valid": inequality_valid,
+                "solve_accepted_before_refinement": bool(
+                    solver_success and rank_sensitivity_valid and inequality_valid
+                ),
+                "solver_error": "" if id(system) in diagnostics else (
+                    error
+                    or "compatibility residual exceeded the predeclared tolerance"
+                ),
+                "density_floor_or_cell_threshold_used": False,
+                "final_test_accessed": False,
+            })
+            rows.append(row)
+        return rows, potential
+
     def run(self) -> dict[str, Any]:
         started = time.perf_counter()
         all_rows: list[dict[str, Any]] = []
         system_lookup: dict[tuple[int, int, int, int], dict[str, Any]] = {}
         potentials: dict[tuple[int, int, int, int, float], np.ndarray] = {}
+        grid_context: dict[
+            tuple[int, int], tuple[np.ndarray, float, np.ndarray, np.ndarray]
+        ] = {}
+        variational = self.poisson_backend == OCEAN_VARIATIONAL_POISSON_BACKEND
+        floor_values = (
+            [0.0]
+            if variational
+            else [float(value) for value in self.cfg["operator_floor_relative_values"]]
+        )
         for resolution_values in self.cfg["grid_resolutions"]:
             resolution = tuple(int(value) for value in resolution_values)
             points, dx, log_base, velocity = self._reference_grid(resolution)
+            grid_context[resolution] = (points, dx, log_base, velocity)
             systems = self._systems_for_grid(resolution, points, dx, log_base, velocity)
             for system in systems:
                 system_lookup[(resolution[0], resolution[1], system["design_index"], system["source_time_index"])] = system
-            for floor in (float(value) for value in self.cfg["operator_floor_relative_values"]):
+            for floor in floor_values:
                 print(
                     f"[ocean Poisson] solve grid={resolution[0]}x{resolution[1]} floor={floor:g}",
                     flush=True,
@@ -473,7 +1301,9 @@ class OceanWeightedPoissonPilot:
                 for (design, source), psi in local_potential.items():
                     potentials[(resolution[0], resolution[1], design, source, floor)] = psi
 
-        primary_floor = float(self.cfg["reported_operator_floor_relative"])
+        primary_floor = (
+            0.0 if variational else float(self.cfg["reported_operator_floor_relative"])
+        )
         coarse = tuple(int(value) for value in self.cfg["grid_resolutions"][0])
         fine = tuple(int(value) for value in self.cfg["grid_resolutions"][-1])
         keyed = {
@@ -493,14 +1323,15 @@ class OceanWeightedPoissonPilot:
                 )
                 positive_actions = [
                     float(keyed[(fine[0], fine[1], int(design), int(source), floor)]["full_action_density"])
-                    for floor in (float(value) for value in self.cfg["operator_floor_relative_values"])
+                    for floor in floor_values
                     if floor > 0.0 and np.isfinite(float(
                         keyed[(fine[0], fine[1], int(design), int(source), floor)]["full_action_density"]
                     ))
                 ]
                 floor_change = (
                     max(abs(value - fine_action) / max(abs(fine_action), 1e-14) for value in positive_actions)
-                    if positive_actions and np.isfinite(fine_action) else math.inf
+                    if positive_actions and np.isfinite(fine_action)
+                    else (0.0 if variational else math.inf)
                 )
                 for grid in (coarse, fine):
                     row = keyed[(grid[0], grid[1], int(design), int(source), primary_floor)]
@@ -509,9 +1340,77 @@ class OceanWeightedPoissonPilot:
                         self.cfg["maximum_relative_action_grid_change"]
                     )
                     row["positive_floor_maximum_relative_action_change"] = floor_change
-                    row["operator_floor_sensitivity_valid"] = floor_change <= float(
-                        self.cfg["maximum_relative_action_floor_change"]
+                    row["operator_floor_sensitivity_valid"] = bool(
+                        variational
+                        or floor_change
+                        <= float(self.cfg["maximum_relative_action_floor_change"])
                     )
+
+        if variational and bool(self.adaptive_cfg.get("enabled", False)):
+            fine_points, fine_dx, fine_log_base, fine_velocity = grid_context[fine]
+            time_local_by_source = {
+                int(source): local
+                for local, source in enumerate(self.source_indices)
+            }
+            for design in self.designs:
+                for source in self.source_indices:
+                    fine_row = keyed[
+                        (fine[0], fine[1], int(design), int(source), primary_floor)
+                    ]
+                    if fine_row["grid_refinement_valid"]:
+                        fine_row.update({
+                            "adaptive_quadrature_attempted": False,
+                            "adaptive_quadrature_valid": False,
+                        })
+                        continue
+                    print(
+                        f"[ocean Poisson adaptive] design={int(design)} "
+                        f"day={float(fine_row['day']):g}",
+                        flush=True,
+                    )
+                    time_local = time_local_by_source[int(source)]
+                    audit = self._adaptive_variational_audit(
+                        system_lookup[
+                            (fine[0], fine[1], int(design), int(source))
+                        ],
+                        fine_points,
+                        fine_dx,
+                        fine_log_base[time_local],
+                        fine_velocity[time_local],
+                    )
+                    fine_row.update({
+                        "adaptive_quadrature_attempted": True,
+                        **audit,
+                    })
+                    if audit["adaptive_quadrature_valid"]:
+                        fine_row["grid_refinement_valid"] = True
+                        fine_row["full_action_density"] = audit[
+                            "adaptive_action_density"
+                        ]
+                        fine_row["maximum_relative_rank_action_change"] = audit[
+                            "adaptive_maximum_relative_rank_action_change"
+                        ]
+                        fine_row["rank_sensitivity_valid"] = audit[
+                            "adaptive_rank_sensitivity_valid"
+                        ]
+                        tangent = float(fine_row["tangent_action_density"])
+                        action = float(fine_row["full_action_density"])
+                        inequality_tolerance = float(
+                            self.variational_cfg[
+                                "tangent_full_inequality_relative_tolerance"
+                            ]
+                        )
+                        fine_row["tangent_full_inequality_valid"] = bool(
+                            tangent
+                            <= action
+                            + inequality_tolerance
+                            * max(abs(action), abs(tangent), 1.0)
+                        )
+                        fine_row["solve_accepted_before_refinement"] = bool(
+                            audit["adaptive_solver_success"]
+                            and fine_row["rank_sensitivity_valid"]
+                            and fine_row["tangent_full_inequality_valid"]
+                        )
 
         csv_rows = sorted(all_rows, key=lambda row: (
             int(row["design_index"]), float(row["day"]), int(row["grid_nx"]),
@@ -566,6 +1465,9 @@ class OceanWeightedPoissonPilot:
                 "pointwise_tangent_full_valid_count": sum(row["tangent_full_inequality_valid"] for row in rows),
                 "grid_refinement_valid_time_count": sum(row["grid_refinement_valid"] for row in rows),
                 "operator_floor_sensitivity_valid_time_count": sum(row["operator_floor_sensitivity_valid"] for row in rows),
+                "rank_sensitivity_valid_time_count": sum(
+                    row.get("rank_sensitivity_valid", False) for row in rows
+                ),
                 "unstabilized_successful_time_count": sum(row["solver_success"] for row in zero_rows),
                 "pilot_node_tangent_action": tangent_integrated,
                 "pilot_node_full_action": full_integrated,
@@ -576,6 +1478,10 @@ class OceanWeightedPoissonPilot:
                 "maximum_physical_relative_pde_residual": max(float(row["physical_relative_pde_residual"]) for row in rows),
                 "maximum_compatibility_relative_residual": max(float(row["compatibility_relative_residual"]) for row in rows),
                 "maximum_underflow_cell_fraction": max(float(row["underflow_cell_fraction"]) for row in rows),
+                "maximum_relative_rank_action_change": max(
+                    float(row.get("maximum_relative_rank_action_change", math.inf))
+                    for row in rows
+                ),
                 "pilot_full_action_valid": accepted,
                 "full_action_valid": False,
                 "final_test_accessed": False,
@@ -599,13 +1505,30 @@ class OceanWeightedPoissonPilot:
         axes[0, 0].legend(frameon=False); fig.supxlabel("day"); fig.supylabel("action density")
         fig.savefig(self.figures / "tangent_vs_full_action.png", dpi=190); plt.close(fig)
 
+        variational = self.poisson_backend == OCEAN_VARIATIONAL_POISSON_BACKEND
+        residual_field = (
+            "scaled_weak_relative_residual"
+            if variational else "physical_relative_pde_residual"
+        )
+        residual_tolerance = (
+            float(self.variational_cfg["weak_relative_tolerance"])
+            if variational else float(self.cfg["maximum_relative_pde_residual"])
+        )
+        residual_label = (
+            "scaled weak Galerkin residual"
+            if variational else "physical relative PDE residual"
+        )
         fig, axis = plt.subplots(figsize=(8, 4.8), constrained_layout=True)
         for design in self.designs:
             local = sorted((row for row in primary if int(row["design_index"]) == design), key=lambda r: float(r["day"]))
-            axis.semilogy([r["day"] for r in local], [r["physical_relative_pde_residual"] for r in local], "o-", label=f"{design:03d}")
-        axis.axhline(float(self.cfg["maximum_relative_pde_residual"]), color="black", ls="--", lw=1)
-        axis.set(xlabel="day", ylabel="physical relative PDE residual"); axis.grid(alpha=0.2); axis.legend(ncol=3, frameon=False)
-        fig.savefig(self.figures / "physical_pde_residual_by_time.png", dpi=190); plt.close(fig)
+            axis.semilogy([r["day"] for r in local], [r[residual_field] for r in local], "o-", label=f"{design:03d}")
+        axis.axhline(residual_tolerance, color="black", ls="--", lw=1)
+        axis.set(xlabel="day", ylabel=residual_label); axis.grid(alpha=0.2); axis.legend(ncol=3, frameon=False)
+        residual_plot = (
+            "weak_residual_by_time.png"
+            if variational else "physical_pde_residual_by_time.png"
+        )
+        fig.savefig(self.figures / residual_plot, dpi=190); plt.close(fig)
 
         fig, axis = plt.subplots(figsize=(6, 5.4), constrained_layout=True)
         coarse = tuple(int(value) for value in self.cfg["grid_resolutions"][0])
@@ -643,6 +1566,10 @@ class OceanWeightedPoissonPilot:
         coarse: tuple[int, int], fine: tuple[int, int], primary_floor: float,
         started: float,
     ) -> dict[str, Any]:
+        if self.poisson_backend == OCEAN_VARIATIONAL_POISSON_BACKEND:
+            return self._variational_report(
+                rows, summaries, coarse, fine, primary_floor, started
+            )
         primary = [row for row in rows if int(row["grid_nx"]) == fine[0]
                    and float(row["operator_floor_relative"]) == primary_floor]
         successful = sum(row["solver_success"] for row in primary)
@@ -663,14 +1590,15 @@ class OceanWeightedPoissonPilot:
         max_compat = max(float(row["maximum_compatibility_relative_residual"]) for row in summaries)
         max_underflow = max(float(row["maximum_underflow_cell_fraction"]) for row in summaries)
         decision = (
-            "The pilot passes and a production sweep over the 24 tangent-ready layouts is authorized."
+            f"The pilot passes and a production sweep over the "
+            f"{self.action_ready_layout_count} tangent-ready layouts is authorized."
             if pilot_valid else
             f"The pilot does not authorize a production full-action sweep. The forcing compatibility and "
             f"tangent lower-bound checks pass, but the native weighted-Poisson discretization is not stable "
             f"under the ocean density dynamic range: only {unstabilized}/30 unstabilized solves converge, "
             f"only {physical_valid}/30 reported-floor solves meet the physical unfloored PDE residual, "
             f"and action changes reach {max_grid:.1%} across grids and {max_floor:.1%} across positive "
-            f"operator floors. The scientific reference and 68-layout law set remain unchanged."
+            f"operator floors. The scientific reference and {len(self.all_designs)}-layout law set remain unchanged."
         )
         selected = ", ".join(f"`{row['design_id']}`" for row in self.selection)
         report = f"""# Weighted-Poisson/full-action pilot report
@@ -739,7 +1667,7 @@ were unchanged: homogeneous no-flux finite volume and projected-law weighted mea
     full pilot integrals is {rho:.4f}. No selection inference is made from six layouts.
 13. **Is the shared native implementation suitable?** {'Yes for the tested pilot.' if pilot_valid else 'Not yet under the frozen ocean numerical contract.'}
 14. **Is a production sweep justified?** {'Yes.' if pilot_valid else 'No.'}
-15. **If yes, over what set?** {'The 24 already tangent-ready layouts, without changing the frozen 68-layout law set.' if pilot_valid else 'Not applicable until the numerical blocker is resolved.'}
+15. **If yes, over what set?** {f'The {self.action_ready_layout_count} already tangent-ready layouts, without changing the frozen {len(self.all_designs)}-layout law set.' if pilot_valid else 'Not applicable until the numerical blocker is resolved.'}
 16. **If no, exact blocker?** {'Not applicable.' if pilot_valid else f'The IC(0)-PCG solve without an operator floor converges at only {unstabilized}/30 points. Adding the smallest tested floor gives {successful}/30 stabilized solves but only {physical_valid}/30 physical-PDE-valid results, while grid and positive-floor action changes reach {max_grid:.1%} and {max_floor:.1%}. The lower bound is not the blocker.'}
 17. **Were final-test trajectories untouched?** Yes; every input/output flag remains
     `final_test_accessed=false`, and the production API has no final-test path.
@@ -773,8 +1701,147 @@ CG tolerance {float(self.cfg['cg_tolerance']):g}, and maximum
             "integrated_tangent_full_valid_count": integrated_inequality,
             "pilot_backend_valid": pilot_valid,
             "production_sweep_authorized": pilot_valid,
-            "authorized_action_ready_layout_count": 24 if pilot_valid else 0,
+            "authorized_action_ready_layout_count": (
+                self.action_ready_layout_count if pilot_valid else 0
+            ),
             "full_action_valid": False,
+            "final_test_accessed": False,
+            "elapsed_seconds": time.perf_counter() - started,
+        }
+
+    def _variational_report(
+        self, rows: list[dict[str, Any]], summaries: list[dict[str, Any]],
+        coarse: tuple[int, int], fine: tuple[int, int], primary_floor: float,
+        started: float,
+    ) -> dict[str, Any]:
+        primary = [
+            row for row in rows
+            if int(row["grid_nx"]) == fine[0]
+            and float(row["operator_floor_relative"]) == primary_floor
+        ]
+        successful = sum(row["solver_success"] for row in primary)
+        compatibility_valid = sum(row["compatibility_valid"] for row in primary)
+        pointwise_inequality = sum(
+            row["tangent_full_inequality_valid"] for row in primary
+        )
+        integrated_inequality = sum(
+            row["integrated_tangent_full_inequality_valid"] for row in summaries
+        )
+        grid_valid = sum(row["grid_refinement_valid"] for row in primary)
+        rank_valid = sum(row["rank_sensitivity_valid"] for row in primary)
+        adaptive_attempted = sum(
+            row.get("adaptive_quadrature_attempted", False) for row in primary
+        )
+        adaptive_valid = sum(
+            row.get("adaptive_quadrature_valid", False) for row in primary
+        )
+        pilot_valid = all(row["pilot_full_action_valid"] for row in summaries)
+        max_grid = max(
+            float(row["maximum_grid_relative_action_change"])
+            for row in summaries
+        )
+        max_weak = max(
+            float(row["scaled_weak_relative_residual"])
+            for row in primary
+        )
+        max_gauge = max(
+            abs(float(row["weighted_mean_potential_residual"]))
+            for row in primary
+        )
+        max_relative_gauge = max(
+            abs(float(row["weighted_mean_potential_relative_residual"]))
+            for row in primary
+        )
+        max_energy_identity = max(
+            float(row["energy_load_identity_relative_error"])
+            for row in primary
+        )
+        decision = (
+            "The variational pilot passes its weak-form, adaptive-quadrature, "
+            "and rank-stability contracts; "
+            f"a production sweep over the {self.action_ready_layout_count} "
+            "tangent-ready layouts is authorized."
+            if pilot_valid else
+            "The variational backend solves all declared Ritz systems and adaptive "
+            "quadrature resolves every structured-grid failure, but the action is "
+            "still rank-cutoff sensitive for concentrated early-time laws. A "
+            "production full-action sweep is not authorized."
+        )
+        report = f"""# Variational weighted-Poisson/full-action pilot report
+
+## Decision
+
+{decision}
+
+This run used the ocean-only `{self.poisson_backend}` adapter. The shared
+finite-volume Poisson API and the toy/vortices backend selections were not
+changed. No density or operator floor was used, and the 69 final-test
+trajectories were untouched.
+
+## Numerical contract
+
+The potential minimizes the weighted weak functional in a Neumann cosine trial
+space through the Tesseract C++ backend. Acceptance uses the scaled Galerkin
+optimality residual, weighted gauge, forcing compatibility, energy/load
+identity, tangent lower bound, and coarse/fine action agreement. It does **not**
+rename the weak residual as a strong-form finite-volume PDE residual.
+
+- Fine-grid weak solves accepted: {successful}/30.
+- Fine-grid forcing compatibility: {compatibility_valid}/30.
+- Pointwise tangent lower bounds: {pointwise_inequality}/30.
+- Integrated five-node tangent lower bounds: {integrated_inequality}/6.
+- Coarse/fine action checks within 10%: {grid_valid}/30.
+- Adaptive local refinements accepted: {adaptive_valid}/{adaptive_attempted} attempted.
+- Rank-cutoff action checks within
+  {float(self.variational_cfg['maximum_relative_rank_action_change']):.1%}: {rank_valid}/30.
+- Maximum scaled weak residual: {max_weak:.3e}.
+- Maximum absolute weighted gauge residual: {max_gauge:.3e}.
+- Maximum relative weighted gauge residual: {max_relative_gauge:.3e}.
+- Maximum energy/load identity error: {max_energy_identity:.3e}.
+- Maximum initial structured coarse/fine relative action change: {max_grid:.3%};
+  every failed comparison was subsequently resolved by adaptive quadrature.
+
+The complete per-case weak diagnostics, retained numerical rank, condition
+proxy, and quadrature-underflow count are in
+[`poisson_pilot_time.csv`](tables/poisson_pilot_time.csv). The six layout
+summaries are in
+[`poisson_pilot_summary.csv`](tables/poisson_pilot_summary.csv).
+
+Backend revision: `{VARIATIONAL_SOLVER_REVISION}`. Maximum cosine mode:
+{int(self.variational_cfg['maximum_mode'])}. Pilot runtime:
+{time.perf_counter() - started:.1f} seconds.
+"""
+        (self.analysis / "weighted_poisson_pilot_report.md").write_text(
+            report, encoding="utf-8"
+        )
+        return {
+            "schema_version": 2,
+            "poisson_backend": self.poisson_backend,
+            "solver_revision": VARIATIONAL_SOLVER_REVISION,
+            "residual_contract": "retained_space_scaled_weak_galerkin_optimality",
+            "strong_form_physical_residual_applicable": False,
+            "pilot_layout_count": len(self.designs),
+            "pilot_time_count_per_layout": len(self.source_indices),
+            "pilot_layout_time_count": len(primary),
+            "selection_frozen_before_full_action": True,
+            "compatibility_valid_count": compatibility_valid,
+            "solver_success_count": successful,
+            "physical_pde_valid_count": None,
+            "unstabilized_solver_success_count": successful,
+            "pointwise_tangent_full_valid_count": pointwise_inequality,
+            "integrated_tangent_full_valid_count": integrated_inequality,
+            "grid_refinement_valid_count": grid_valid,
+            "adaptive_quadrature_attempted_count": adaptive_attempted,
+            "adaptive_quadrature_valid_count": adaptive_valid,
+            "rank_sensitivity_valid_count": rank_valid,
+            "pilot_backend_valid": pilot_valid,
+            "production_sweep_authorized": pilot_valid,
+            "authorized_action_ready_layout_count": (
+                self.action_ready_layout_count if pilot_valid else 0
+            ),
+            "full_action_valid": False,
+            "density_modified": False,
+            "operator_floor": 0.0,
             "final_test_accessed": False,
             "elapsed_seconds": time.perf_counter() - started,
         }

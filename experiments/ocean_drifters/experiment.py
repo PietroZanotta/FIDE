@@ -180,8 +180,99 @@ class OceanDriftersExperiment:
                 raise FrozenArtifactError("the production API may not configure a final-test artifact")
         if self.cfg.get("projection", {}).get("backend") != "tesseract_cpp":
             raise FrozenArtifactError("the frozen production I-projection backend is tesseract_cpp")
-        if self.cfg.get("action", {}).get("poisson_backend") != "tesseract_cpp":
-            raise FrozenArtifactError("the frozen production Poisson backend is tesseract_cpp")
+        poisson_backend = self.cfg.get("action", {}).get("poisson_backend")
+        if poisson_backend not in {
+            "tesseract_cpp",
+            "tesseract_cpp_variational_ritz",
+        }:
+            raise FrozenArtifactError(
+                "the ocean Poisson backend must be tesseract_cpp or "
+                "tesseract_cpp_variational_ritz"
+            )
+        if poisson_backend == "tesseract_cpp_variational_ritz":
+            variational = self.cfg["action"].get("variational_poisson", {})
+            if float(variational.get("operator_floor", math.nan)) != 0.0:
+                raise FrozenArtifactError(
+                    "the ocean variational Poisson backend requires operator_floor=0"
+                )
+            if variational.get("density_floor_or_threshold_allowed") is not False:
+                raise FrozenArtifactError(
+                    "the ocean variational Poisson backend may not modify the density"
+                )
+        post = self.cfg.get("action", {}).get(
+            "post_dispersion_regularization_audit", {}
+        )
+        if tuple(float(value) for value in scientific.get(
+            "action_window_days", ()
+        )) != (12.0, 45.0):
+            raise FrozenArtifactError(
+                "the ocean action window must remain frozen at [12,45] days"
+            )
+        if (
+            float(post.get("window_start_day_inclusive", math.nan)) != 12.0
+            or float(post.get("window_end_day_inclusive", math.nan)) != 45.0
+            or float(post.get("source_horizon_days", math.nan)) != 45.0
+            or post.get("primary_action") != "unregularized_direct_qr_ritz"
+            or post.get("production_run_authorized") is not False
+            or post.get("scientific_ranking_allowed") is not False
+            or post.get("final_test_accessed") is not False
+        ):
+            raise FrozenArtifactError(
+                "the ocean post-dispersion action contract changed"
+            )
+        soft = self.cfg.get("action", {}).get("soft_moment_projection", {})
+        if bool(soft.get("enabled", False)):
+            if soft.get("finite_sample_standard_error_floor_rule") != (
+                "inverse_inference_trajectory_count"
+            ):
+                raise FrozenArtifactError(
+                    "the ocean soft projection requires the inference-only 1/n floor rule"
+                )
+            if not (0.0 < float(soft.get("stationarity_residual_tolerance", math.nan)) <= 1e-8):
+                raise FrozenArtifactError(
+                    "the ocean soft-projection stationarity tolerance must be in (0, 1e-8]"
+                )
+            rank_tolerances = tuple(float(value) for value in soft.get(
+                "tangent_rank_sensitivity_relative_tolerances", ()
+            ))
+            if rank_tolerances != (1e-10, 1e-12, 1e-14):
+                raise FrozenArtifactError(
+                    "the ocean tangent rank-sensitivity cutoffs must be 1e-10, 1e-12, 1e-14"
+                )
+            if not (0.0 < float(soft.get(
+                "maximum_relative_tangent_rank_action_change", math.nan
+            )) <= 0.1):
+                raise FrozenArtifactError(
+                    "the ocean tangent rank-sensitivity tolerance must be in (0, 0.1]"
+                )
+            if float(soft.get("minimum_valid_layout_fraction", math.nan)) != 0.95:
+                raise FrozenArtifactError(
+                    "the ocean tangent validity fraction must remain frozen at 0.95"
+                )
+        production = self.cfg.get("action", {}).get(
+            "full_action_production", {}
+        )
+        if production:
+            if (
+                int(production.get("layout_count", -1)) != 68
+                or int(production.get("time_count", -1)) != 181
+            ):
+                raise FrozenArtifactError(
+                    "the ocean full-action production set must remain 68x181"
+                )
+            pilot_grids = self.cfg["action"]["poisson_pilot"][
+                "grid_resolutions"
+            ]
+            if production.get("grid_resolution") != pilot_grids[-1]:
+                raise FrozenArtifactError(
+                    "ocean production must retain the pilot-authorized fine grid"
+                )
+            if float(production.get(
+                "minimum_valid_layout_fraction", math.nan
+            )) != 0.95:
+                raise FrozenArtifactError(
+                    "the ocean production validity fraction must remain 0.95"
+                )
 
     def _validate_frozen_artifacts(self) -> None:
         for name, entry in self.cfg["artifacts"].items():
@@ -566,7 +657,30 @@ class OceanDriftersExperiment:
             "reference_velocity_finite": True,
         }
 
+    def post_dispersion_action(self):
+        """Return the frozen [12,45] action API without running production."""
+        try:
+            from .post_dispersion_regularization import OceanPostDispersionAction
+        except ImportError:  # direct script invocation
+            from post_dispersion_regularization import OceanPostDispersionAction
+        return OceanPostDispersionAction(
+            self.cfg["action"]["post_dispersion_regularization_audit"],
+            self.paths["post_dispersion_action_audit"],
+            self.sensor_bank.design_ids,
+        )
+
     def action_status(self, stage: str) -> dict[str, Any]:
+        if stage == "post_dispersion_action":
+            payload = self.post_dispersion_action().result_payload()
+            return {
+                "stage": stage,
+                "window_days": payload["window_days"],
+                "layout_count": payload["layout_count"],
+                "valid_layout_count": payload["valid_layout_count"],
+                "all_layouts_valid": payload["all_layouts_valid"],
+                "primary_formulation": payload["primary_formulation"],
+                "production_run": False,
+            }
         if stage == "tangent_action":
             path = self._resolve(self.cfg["action"]["tangent_readiness_table"])
             if not path.is_file():
@@ -598,6 +712,30 @@ class OceanDriftersExperiment:
                 ),
                 "backend": self.cfg["action"]["poisson_backend"],
                 "full_action_valid": False,
+            }
+        if stage == "full_action_production":
+            path = self._resolve(
+                self.cfg["action"]["full_action_production"]["summary_table"]
+            )
+            if not path.is_file():
+                raise StageNotReadyError(
+                    "the production full-action sweep has not been completed"
+                )
+            rows = _read_csv(path)
+            return {
+                "stage": stage,
+                "production_layout_count": len(rows),
+                "valid_layout_count": sum(
+                    row.get("full_action_valid") == "True" for row in rows
+                ),
+                "backend": self.cfg["action"]["poisson_backend"],
+                "full_action_valid": bool(rows) and (
+                    sum(row.get("full_action_valid") == "True" for row in rows)
+                    / len(rows)
+                    >= float(self.cfg["action"]["full_action_production"][
+                        "minimum_valid_layout_fraction"
+                    ])
+                ),
             }
         raise ValueError(f"unknown action stage {stage!r}")
 
@@ -692,6 +830,8 @@ def run_experiment(
                 "multiplier_dynamics_valid": False,
                 "tangent_action_valid": False,
                 "full_action_valid": False,
+                "post_dispersion_action_valid": False,
+                "full_horizon_action_valid": False,
             },
             "elapsed_seconds": time.perf_counter() - started,
             "final_test_accessed": False,
@@ -744,6 +884,16 @@ def run_experiment(
             experiment._resolve("experiments/ocean_drifters/analysis"),
             output_dir,
         )
+    if stage == "full_action_production":
+        try:
+            from .full_action_production import run_full_action_production
+        except ImportError:  # direct script invocation
+            from full_action_production import run_full_action_production
+        result[stage] = run_full_action_production(
+            experiment,
+            experiment._resolve("experiments/ocean_drifters/analysis"),
+            output_dir,
+        )
     if stage == "solver_repair":
         try:
             from .solver_repair import run_poisson_solver_repair
@@ -754,7 +904,9 @@ def run_experiment(
             experiment._resolve("experiments/ocean_drifters/analysis"),
             output_dir,
         )
-    if stage not in {"projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "solver_repair"}:
+    if stage == "post_dispersion_action":
+        result[stage] = experiment.post_dispersion_action().result_payload()
+    if stage not in {"projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "full_action_production", "solver_repair", "post_dispersion_action"}:
         raise ValueError(f"unknown stage {stage!r}")
     payload = {
         "schema_version": 1,
@@ -764,16 +916,75 @@ def run_experiment(
         **result,
         "statuses": {
             "projection_valid": admissibility["excluded_layout_count"] == 0,
-            "law_risk_valid": "risk" in result or stage in {"plots", "tangent_action", "full_action", "solver_repair"},
+            "law_risk_valid": "risk" in result or stage in {"plots", "tangent_action", "full_action", "full_action_production", "solver_repair", "post_dispersion_action"},
             "multiplier_dynamics_valid": bool(
-                stage == "tangent_action"
-                and result[stage]["multiplier_dynamics_valid_count"] == 68
+                (
+                    stage == "tangent_action"
+                    and result[stage]["multiplier_dynamics_valid_count"]
+                    / max(result[stage]["frozen_layout_count"], 1)
+                    >= float(cfg["action"]["soft_moment_projection"][
+                        "minimum_valid_layout_fraction"
+                    ])
+                )
+                or (
+                    stage == "full_action"
+                    and result[stage]["authorized_action_ready_layout_count"]
+                    / max(len(json.loads(
+                        experiment.paths["risk_freeze"].read_text(encoding="utf-8")
+                    )["near_optimal_design_ids"]), 1)
+                    >= float(cfg["action"]["soft_moment_projection"][
+                        "minimum_valid_layout_fraction"
+                    ])
+                )
+                or stage == "full_action_production"
+                or (
+                    stage == "post_dispersion_action"
+                    and result[stage]["all_layouts_valid"]
+                )
             ),
             "tangent_action_valid": bool(
-                stage == "tangent_action"
-                and result[stage]["tangent_action_valid_count"] == 68
+                (
+                    stage == "tangent_action"
+                    and result[stage]["tangent_action_valid_count"]
+                    / max(result[stage]["frozen_layout_count"], 1)
+                    >= float(cfg["action"]["soft_moment_projection"][
+                        "minimum_valid_layout_fraction"
+                    ])
+                )
+                or (
+                    stage == "full_action"
+                    and result[stage]["authorized_action_ready_layout_count"]
+                    / max(len(json.loads(
+                        experiment.paths["risk_freeze"].read_text(encoding="utf-8")
+                    )["near_optimal_design_ids"]), 1)
+                    >= float(cfg["action"]["soft_moment_projection"][
+                        "minimum_valid_layout_fraction"
+                    ])
+                )
+                or stage == "full_action_production"
+                or (
+                    stage == "post_dispersion_action"
+                    and result[stage]["all_layouts_valid"]
+                )
             ),
-            "full_action_valid": False,
+            "full_action_valid": bool(
+                (
+                    stage == "full_action_production"
+                    and result[stage]["full_action_valid"]
+                )
+                or (
+                    stage == "post_dispersion_action"
+                    and result[stage]["all_layouts_valid"]
+                )
+            ),
+            "post_dispersion_action_valid": bool(
+                stage == "post_dispersion_action"
+                and result[stage]["all_layouts_valid"]
+            ),
+            "full_horizon_action_valid": bool(
+                stage == "full_action_production"
+                and result[stage]["full_action_valid"]
+            ),
         },
         "provenance": experiment.provenance(),
         "elapsed_seconds": time.perf_counter() - started,

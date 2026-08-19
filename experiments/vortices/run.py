@@ -25,16 +25,41 @@ CONFIG_PATH = SCRIPT_DIR / "config.json"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--config", type=Path, default=CONFIG_PATH)
+    parser.add_argument(
+        "--reference-seed",
+        type=int,
+        help="override only the learned reference-flow training seed",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="write an isolated run instead of outputs/run or outputs/smoke",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    cfg = load_config(CONFIG_PATH, smoke=args.smoke)
+    cfg = load_config(args.config, smoke=args.smoke)
+    if args.reference_seed is not None:
+        cfg.setdefault("reference_training", {})["seed"] = int(
+            args.reference_seed
+        )
     mode = "smoke" if args.smoke else "run"
-    output_dir = SCRIPT_DIR / "outputs" / mode
+    output_dir = (
+        args.output_dir.expanduser().resolve()
+        if args.output_dir is not None
+        else SCRIPT_DIR / "outputs" / mode
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"vortices_double_gyre smoke={args.smoke} output={output_dir}", flush=True)
+    print(
+        "vortices_double_gyre "
+        f"smoke={args.smoke} "
+        f"reference_seed={cfg['reference_training'].get('seed', cfg['seed'])} "
+        f"output={output_dir}",
+        flush=True,
+    )
     payload = run_experiment(cfg, output_dir, smoke=args.smoke)
     if payload.get("smoke"):
         print("[smoke] complete", flush=True)

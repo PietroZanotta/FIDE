@@ -9,7 +9,10 @@ struct SolveStats {
     double objective = 0.0;
     double weak_relative_residual = 0.0;
     double scaled_weak_relative_residual = 0.0;
+    double retained_scaled_weak_relative_residual = 0.0;
+    double discarded_scaled_load_relative_residual = 0.0;
     double gauge_residual = 0.0;
+    double gauge_relative_residual = 0.0;
     double compatibility_residual = 0.0;
     double compatibility_relative_residual = 0.0;
     double energy_load_identity_relative_error = 0.0;

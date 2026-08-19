@@ -254,6 +254,101 @@ void solve_one(
     }
 }
 
+double soft_state(
+    const double* phi, const double* log_base, const double* target,
+    const double* penalty, const std::vector<double>& lambda, int n, int m,
+    std::vector<double>& weights, std::vector<double>& mean,
+    std::vector<double>& covariance, std::vector<double>& residual,
+    double& hard_residual_norm) {
+    hard_residual_norm = state(
+        phi, log_base, target, lambda, n, m,
+        weights, mean, covariance, residual);
+    double norm2 = 0.0;
+    for (int j = 0; j < m; ++j) {
+        for (int k = 0; k < m; ++k) {
+            residual[j] += penalty[static_cast<std::size_t>(j) * m + k] * lambda[k];
+            covariance[static_cast<std::size_t>(j) * m + k]
+                += penalty[static_cast<std::size_t>(j) * m + k];
+        }
+        norm2 += residual[j] * residual[j];
+    }
+    return std::sqrt(norm2);
+}
+
+double soft_dual_value(
+    const double* phi, const double* log_base, const double* target,
+    const double* penalty, const std::vector<double>& lambda, int n, int m) {
+    double result = dual_value(phi, log_base, target, lambda, n, m);
+    double quadratic = 0.0;
+    for (int j = 0; j < m; ++j) {
+        for (int k = 0; k < m; ++k) {
+            quadratic += lambda[j]
+                * penalty[static_cast<std::size_t>(j) * m + k] * lambda[k];
+        }
+    }
+    return result + 0.5 * quadratic;
+}
+
+void solve_soft_one(
+    const double* phi, const double* log_base, const double* target,
+    const double* penalty, int n, int m, const Config& cfg,
+    std::vector<double>& lambda, int& iterations, double& residual_norm,
+    double& hard_residual_norm) {
+    std::vector<double> weights, mean, hessian, residual, delta;
+    residual_norm = soft_state(
+        phi, log_base, target, penalty, lambda, n, m,
+        weights, mean, hessian, residual, hard_residual_norm);
+    iterations = 0;
+    while (iterations < cfg.max_steps && residual_norm > cfg.residual_tol) {
+        for (int j = 0; j < m; ++j) {
+            hessian[static_cast<std::size_t>(j) * m + j] += cfg.newton_ridge;
+        }
+        if (!solve_dense(hessian, residual, m, delta)) {
+            break;
+        }
+        double norm2 = 0.0;
+        for (const double value : delta) {
+            norm2 += value * value;
+        }
+        const double norm = std::sqrt(norm2);
+        const double cap_scale = std::min(
+            1.0, cfg.step_cap / std::max(norm, 1.0e-30));
+        for (double& value : delta) {
+            value *= cap_scale;
+        }
+
+        const double current_dual = soft_dual_value(
+            phi, log_base, target, penalty, lambda, n, m);
+        std::vector<double> best_lambda(m);
+        double best_dual = std::numeric_limits<double>::infinity();
+        double scale = 1.0;
+        for (int line = 0; line < cfg.line_search_steps; ++line) {
+            std::vector<double> candidate(m);
+            for (int j = 0; j < m; ++j) {
+                candidate[j] = std::clamp(
+                    lambda[j] - scale * delta[j],
+                    -cfg.lambda_clip, cfg.lambda_clip);
+            }
+            const double value = soft_dual_value(
+                phi, log_base, target, penalty, candidate, n, m);
+            if (value < best_dual) {
+                best_dual = value;
+                best_lambda = candidate;
+            }
+            if (value <= current_dual + 1.0e-14) {
+                best_lambda = std::move(candidate);
+                break;
+            }
+            scale *= 0.5;
+        }
+        lambda = std::move(best_lambda);
+        residual_norm = soft_state(
+            phi, log_base, target, penalty, lambda, n, m,
+            weights, mean, hessian, residual, hard_residual_norm);
+        ++iterations;
+    }
+}
+
 py::dict solve_batch(
     const py::array& phi_array, const py::array& log_base_array,
     const py::array& targets_array, int max_steps, double residual_tol,
@@ -300,6 +395,84 @@ py::dict solve_batch(
         "lambda_values"_a = std::move(lambda_out),
         "iterations"_a = std::move(iteration_out),
         "residual_norm"_a = std::move(residual_out),
+        "converged"_a = std::move(converged_out));
+}
+
+py::dict solve_soft_batch(
+    const py::array& phi_array, const py::array& log_base_array,
+    const py::array& targets_array, const py::array& penalties_array,
+    int max_steps, double residual_tol, double newton_ridge,
+    double step_cap, double lambda_clip, int line_search_steps) {
+    const Shape s = validate_inputs(phi_array, log_base_array, targets_array);
+    if (penalties_array.ndim() != 4
+        || !penalties_array.dtype().is(py::dtype::of<double>())
+        || !(penalties_array.flags() & py::array::c_style)
+        || penalties_array.shape(0) != s.batch
+        || penalties_array.shape(1) != s.times
+        || penalties_array.shape(2) != s.moments
+        || penalties_array.shape(3) != s.moments) {
+        throw py::value_error(
+            "penalties must be contiguous float64 [B,T,M,M]");
+    }
+    const Config cfg = validate_config(
+        max_steps, residual_tol, newton_ridge, step_cap,
+        lambda_clip, line_search_steps, 0.0);
+    const auto* penalties = static_cast<const double*>(penalties_array.data());
+    for (ssize_t index = 0; index < penalties_array.size(); ++index) {
+        if (!std::isfinite(penalties[index])) {
+            throw py::value_error("penalties must be finite");
+        }
+    }
+    const auto* phi = static_cast<const double*>(phi_array.data());
+    const auto* log_base = static_cast<const double*>(log_base_array.data());
+    const auto* targets = static_cast<const double*>(targets_array.data());
+    py::array_t<double> lambda_out({s.batch, s.times, s.moments});
+    py::array_t<std::int32_t> iteration_out({s.batch, s.times});
+    py::array_t<double> residual_out({s.batch, s.times});
+    py::array_t<double> hard_residual_out({s.batch, s.times});
+    py::array_t<bool> converged_out({s.batch, s.times});
+    auto* lambdas = lambda_out.mutable_data();
+    auto* iterations = iteration_out.mutable_data();
+    auto* residuals = residual_out.mutable_data();
+    auto* hard_residuals = hard_residual_out.mutable_data();
+    auto* converged = converged_out.mutable_data();
+    {
+        py::gil_scoped_release release;
+        #pragma omp parallel for schedule(static)
+        for (int b = 0; b < s.batch; ++b) {
+            std::vector<double> lambda(s.moments, 0.0);
+            for (int t = 0; t < s.times; ++t) {
+                const std::size_t pt
+                    = static_cast<std::size_t>(t) * s.particles * s.moments;
+                const std::size_t wt
+                    = static_cast<std::size_t>(t) * s.particles;
+                const std::size_t bt
+                    = (static_cast<std::size_t>(b) * s.times + t) * s.moments;
+                const std::size_t penalty_offset = bt * s.moments;
+                int count = 0;
+                double norm = 0.0;
+                double hard_norm = 0.0;
+                solve_soft_one(
+                    phi + pt, log_base + wt, targets + bt,
+                    penalties + penalty_offset, s.particles, s.moments,
+                    cfg, lambda, count, norm, hard_norm);
+                for (int j = 0; j < s.moments; ++j) {
+                    lambdas[bt + j] = lambda[j];
+                }
+                const std::size_t row
+                    = static_cast<std::size_t>(b) * s.times + t;
+                iterations[row] = count;
+                residuals[row] = norm;
+                hard_residuals[row] = hard_norm;
+                converged[row] = norm <= cfg.residual_tol;
+            }
+        }
+    }
+    return py::dict(
+        "lambda_values"_a = std::move(lambda_out),
+        "iterations"_a = std::move(iteration_out),
+        "residual_norm"_a = std::move(residual_out),
+        "hard_moment_residual_norm"_a = std::move(hard_residual_out),
         "converged"_a = std::move(converged_out));
 }
 
@@ -465,6 +638,12 @@ PYBIND11_MODULE(_iprojection_native, module) {
                py::arg("targets").noconvert(), py::arg("max_steps"),
                py::arg("residual_tol"), py::arg("newton_ridge"), py::arg("step_cap"),
                py::arg("lambda_clip"), py::arg("line_search_steps"), py::arg("implicit_ridge"));
+    module.def("solve_soft_batch", &solve_soft_batch,
+               py::arg("phi").noconvert(), py::arg("log_base_weights").noconvert(),
+               py::arg("targets").noconvert(), py::arg("penalties").noconvert(),
+               py::arg("max_steps"), py::arg("residual_tol"),
+               py::arg("newton_ridge"), py::arg("step_cap"),
+               py::arg("lambda_clip"), py::arg("line_search_steps"));
     module.def("vjp_batch", &vjp_batch,
                py::arg("phi").noconvert(), py::arg("log_base_weights").noconvert(),
                py::arg("targets").noconvert(), py::arg("lambda_values").noconvert(),

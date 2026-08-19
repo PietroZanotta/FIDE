@@ -14,34 +14,39 @@ namespace {
 constexpr long double kPi = 3.141592653589793238462643383279502884L;
 
 struct EigenResult {
-    std::vector<double> values;
-    std::vector<double> vectors;
+    std::vector<long double> values;
+    std::vector<long double> vectors;
     int sweeps = 0;
     bool converged = false;
 };
 
-double l2_norm(const std::vector<double>& values) {
+long double l2_norm(const std::vector<long double>& values) {
     long double sum = 0.0L;
-    for (const double value : values) {
-        sum += static_cast<long double>(value) * value;
+    for (const long double value : values) {
+        sum += value * value;
     }
-    return std::sqrt(static_cast<double>(sum));
+    return std::sqrt(sum);
 }
 
-EigenResult jacobi_eigendecomposition(
-    std::vector<double> matrix,
+EigenResult symmetric_eigendecomposition(
+    std::vector<long double> matrix,
     int size,
     double tolerance,
     int maximum_sweeps) {
     EigenResult result;
-    result.vectors.assign(static_cast<std::size_t>(size) * size, 0.0);
+    result.values.resize(size);
+    result.vectors.assign(static_cast<std::size_t>(size) * size, 0.0L);
     for (int i = 0; i < size; ++i) {
-        result.vectors[static_cast<std::size_t>(i) * size + i] = 1.0;
+        result.vectors[static_cast<std::size_t>(i) * size + i] = 1.0L;
     }
 
+    const long double requested = static_cast<long double>(tolerance);
+    const long double relative_tolerance = std::max(
+        requested,
+        8.0L * std::numeric_limits<long double>::epsilon());
     for (int sweep = 0; sweep < maximum_sweeps; ++sweep) {
-        double maximum_off_diagonal = 0.0;
-        double maximum_diagonal = 0.0;
+        long double maximum_diagonal = 0.0L;
+        long double maximum_off_diagonal = 0.0L;
         for (int p = 0; p < size; ++p) {
             maximum_diagonal = std::max(
                 maximum_diagonal,
@@ -52,56 +57,54 @@ EigenResult jacobi_eigendecomposition(
                     std::abs(matrix[static_cast<std::size_t>(p) * size + q]));
             }
         }
-        result.sweeps = sweep;
-        if (maximum_off_diagonal <= tolerance * std::max(maximum_diagonal, 1.0)) {
+        if (maximum_off_diagonal <= relative_tolerance
+                * std::max(maximum_diagonal, 1.0e-300L)) {
+            result.sweeps = sweep;
             result.converged = true;
             break;
         }
 
-        for (int p = 0; p < size; ++p) {
+        for (int p = 0; p < size - 1; ++p) {
             for (int q = p + 1; q < size; ++q) {
                 const std::size_t pp = static_cast<std::size_t>(p) * size + p;
                 const std::size_t qq = static_cast<std::size_t>(q) * size + q;
                 const std::size_t pq = static_cast<std::size_t>(p) * size + q;
-                const double apq = matrix[pq];
-                if (std::abs(apq) <= tolerance) {
+                const long double apq = matrix[pq];
+                if (std::abs(apq) <= relative_tolerance
+                        * std::sqrt(std::max(
+                            std::abs(matrix[pp] * matrix[qq]), 1.0e-300L))) {
                     continue;
                 }
-                const double app = matrix[pp];
-                const double aqq = matrix[qq];
-                const double tau = (aqq - app) / (2.0 * apq);
-                const double tangent = std::copysign(
-                    1.0 / (std::abs(tau) + std::hypot(1.0, tau)), tau);
-                const double cosine = 1.0 / std::hypot(1.0, tangent);
-                const double sine = tangent * cosine;
-
+                const long double tau = (matrix[qq] - matrix[pp]) / (2.0L * apq);
+                const long double tangent = std::copysign(
+                    1.0L, tau) / (std::abs(tau) + std::sqrt(1.0L + tau * tau));
+                const long double cosine = 1.0L / std::sqrt(1.0L + tangent * tangent);
+                const long double sine = tangent * cosine;
+                const long double app = matrix[pp];
+                const long double aqq = matrix[qq];
+                matrix[pp] = cosine * cosine * app
+                    - 2.0L * sine * cosine * apq + sine * sine * aqq;
+                matrix[qq] = sine * sine * app
+                    + 2.0L * sine * cosine * apq + cosine * cosine * aqq;
+                matrix[pq] = 0.0L;
+                matrix[static_cast<std::size_t>(q) * size + p] = 0.0L;
                 for (int k = 0; k < size; ++k) {
-                    if (k == p || k == q) {
-                        continue;
+                    if (k != p && k != q) {
+                        const std::size_t kp = static_cast<std::size_t>(k) * size + p;
+                        const std::size_t kq = static_cast<std::size_t>(k) * size + q;
+                        const long double akp = matrix[kp];
+                        const long double akq = matrix[kq];
+                        matrix[kp] = cosine * akp - sine * akq;
+                        matrix[static_cast<std::size_t>(p) * size + k] = matrix[kp];
+                        matrix[kq] = sine * akp + cosine * akq;
+                        matrix[static_cast<std::size_t>(q) * size + k] = matrix[kq];
                     }
-                    const std::size_t kp = static_cast<std::size_t>(k) * size + p;
-                    const std::size_t kq = static_cast<std::size_t>(k) * size + q;
-                    const double akp = matrix[kp];
-                    const double akq = matrix[kq];
-                    matrix[kp] = cosine * akp - sine * akq;
-                    matrix[static_cast<std::size_t>(p) * size + k] = matrix[kp];
-                    matrix[kq] = sine * akp + cosine * akq;
-                    matrix[static_cast<std::size_t>(q) * size + k] = matrix[kq];
-                }
-                matrix[pp] = cosine * cosine * app - 2.0 * sine * cosine * apq
-                    + sine * sine * aqq;
-                matrix[qq] = sine * sine * app + 2.0 * sine * cosine * apq
-                    + cosine * cosine * aqq;
-                matrix[pq] = 0.0;
-                matrix[static_cast<std::size_t>(q) * size + p] = 0.0;
-
-                for (int k = 0; k < size; ++k) {
-                    const std::size_t kp = static_cast<std::size_t>(k) * size + p;
-                    const std::size_t kq = static_cast<std::size_t>(k) * size + q;
-                    const double vkp = result.vectors[kp];
-                    const double vkq = result.vectors[kq];
-                    result.vectors[kp] = cosine * vkp - sine * vkq;
-                    result.vectors[kq] = sine * vkp + cosine * vkq;
+                    const std::size_t vp = static_cast<std::size_t>(k) * size + p;
+                    const std::size_t vq = static_cast<std::size_t>(k) * size + q;
+                    const long double vkp = result.vectors[vp];
+                    const long double vkq = result.vectors[vq];
+                    result.vectors[vp] = cosine * vkp - sine * vkq;
+                    result.vectors[vq] = sine * vkp + cosine * vkq;
                 }
             }
         }
@@ -109,26 +112,25 @@ EigenResult jacobi_eigendecomposition(
     }
 
     if (!result.converged) {
-        double maximum_off_diagonal = 0.0;
-        double maximum_diagonal = 0.0;
-        for (int p = 0; p < size; ++p) {
-            maximum_diagonal = std::max(
-                maximum_diagonal,
-                std::abs(matrix[static_cast<std::size_t>(p) * size + p]));
-            for (int q = p + 1; q < size; ++q) {
-                maximum_off_diagonal = std::max(
-                    maximum_off_diagonal,
-                    std::abs(matrix[static_cast<std::size_t>(p) * size + q]));
-            }
+        return result;
+    }
+    std::vector<int> order(size);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](int left, int right) {
+        return matrix[static_cast<std::size_t>(left) * size + left]
+            < matrix[static_cast<std::size_t>(right) * size + right];
+    });
+    std::vector<long double> sorted_vectors(result.vectors.size());
+    for (int column = 0; column < size; ++column) {
+        const int source = order[column];
+        result.values[column]
+            = matrix[static_cast<std::size_t>(source) * size + source];
+        for (int row = 0; row < size; ++row) {
+            sorted_vectors[static_cast<std::size_t>(row) * size + column]
+                = result.vectors[static_cast<std::size_t>(row) * size + source];
         }
-        result.converged = maximum_off_diagonal
-            <= tolerance * std::max(maximum_diagonal, 1.0);
     }
-
-    result.values.resize(size);
-    for (int i = 0; i < size; ++i) {
-        result.values[i] = matrix[static_cast<std::size_t>(i) * size + i];
-    }
+    result.vectors = std::move(sorted_vectors);
     return result;
 }
 
@@ -283,40 +285,47 @@ SolveStats solve_one(
     stats.compatibility_relative_residual = std::abs(stats.compatibility_residual)
         / std::max(std::sqrt(static_cast<double>(forcing_square_mean)), 1.0e-300);
 
-    std::vector<double> scale(mode_count, 0.0);
-    std::vector<double> scaled_gram(static_cast<std::size_t>(mode_count) * mode_count, 0.0);
-    std::vector<double> scaled_load(mode_count, 0.0);
+    std::vector<long double> scale(mode_count, 0.0L);
+    std::vector<long double> scaled_gram(
+        static_cast<std::size_t>(mode_count) * mode_count, 0.0L);
+    std::vector<long double> scaled_load(mode_count, 0.0L);
     for (int a = 0; a < mode_count; ++a) {
         const long double diagonal = gram[static_cast<std::size_t>(a) * mode_count + a];
         if (diagonal > 0.0L) {
-            scale[a] = 1.0 / std::sqrt(static_cast<double>(diagonal));
+            scale[a] = 1.0L / std::sqrt(diagonal);
         }
     }
     for (int a = 0; a < mode_count; ++a) {
-        scaled_load[a] = scale[a] * static_cast<double>(load[a]);
+        scaled_load[a] = scale[a] * load[a];
         for (int b = 0; b < mode_count; ++b) {
             scaled_gram[static_cast<std::size_t>(a) * mode_count + b]
-                = scale[a] * static_cast<double>(
-                    gram[static_cast<std::size_t>(a) * mode_count + b]) * scale[b];
+                = scale[a] * gram[static_cast<std::size_t>(a) * mode_count + b]
+                * scale[b];
         }
     }
 
-    EigenResult eigen = jacobi_eigendecomposition(
+    EigenResult eigen = symmetric_eigendecomposition(
         scaled_gram,
         mode_count,
         eigensolver_tolerance,
         maximum_eigensolver_sweeps);
     stats.eigensolver_sweeps = eigen.sweeps;
-    const double maximum_eigenvalue = *std::max_element(
+    const long double maximum_eigenvalue = *std::max_element(
         eigen.values.begin(), eigen.values.end());
-    const double rank_threshold = rank_relative_tolerance
-        * std::max(maximum_eigenvalue, std::numeric_limits<double>::min());
-    std::vector<double> scaled_coefficients(mode_count, 0.0);
-    double minimum_retained_eigenvalue = std::numeric_limits<double>::infinity();
+    const long double rank_threshold = static_cast<long double>(rank_relative_tolerance)
+        * std::max(maximum_eigenvalue, std::numeric_limits<long double>::min());
+    std::vector<long double> scaled_coefficients(mode_count, 0.0L);
+    std::vector<bool> retained_mode(mode_count, false);
+    long double minimum_retained_eigenvalue
+        = std::numeric_limits<long double>::infinity();
+    long double spectral_action = 0.0L;
+    long double retained_algebraic_residual_square = 0.0L;
+    long double retained_algebraic_load_square = 0.0L;
     for (int k = 0; k < mode_count; ++k) {
         if (eigen.values[k] <= rank_threshold) {
             continue;
         }
+        retained_mode[k] = true;
         ++stats.retained_rank;
         minimum_retained_eigenvalue = std::min(
             minimum_retained_eigenvalue, eigen.values[k]);
@@ -325,7 +334,13 @@ SolveStats solve_one(
             projection += eigen.vectors[static_cast<std::size_t>(a) * mode_count + k]
                 * scaled_load[a];
         }
-        const double amplitude = -static_cast<double>(projection) / eigen.values[k];
+        const long double amplitude = -projection / eigen.values[k];
+        const long double algebraic_residual
+            = eigen.values[k] * amplitude + projection;
+        retained_algebraic_residual_square
+            += algebraic_residual * algebraic_residual;
+        retained_algebraic_load_square += projection * projection;
+        spectral_action += projection * projection / eigen.values[k];
         for (int a = 0; a < mode_count; ++a) {
             scaled_coefficients[a] += amplitude
                 * eigen.vectors[static_cast<std::size_t>(a) * mode_count + k];
@@ -335,46 +350,58 @@ SolveStats solve_one(
         ? maximum_eigenvalue / minimum_retained_eigenvalue
         : std::numeric_limits<double>::infinity();
 
-    std::vector<double> coefficients(mode_count);
+    std::vector<long double> coefficients(mode_count);
     for (int a = 0; a < mode_count; ++a) {
         coefficients[a] = scale[a] * scaled_coefficients[a];
     }
 
-    std::vector<double> weak_residual(mode_count, 0.0);
-    std::vector<double> scaled_weak_residual(mode_count, 0.0);
-    std::vector<double> load_double(mode_count);
+    std::vector<long double> weak_residual(mode_count, 0.0L);
+    std::vector<long double> scaled_weak_residual(mode_count, 0.0L);
     for (int a = 0; a < mode_count; ++a) {
-        load_double[a] = static_cast<double>(load[a]);
         long double residual = load[a];
         for (int b = 0; b < mode_count; ++b) {
             residual += gram[static_cast<std::size_t>(a) * mode_count + b]
                 * coefficients[b];
         }
-        weak_residual[a] = static_cast<double>(residual);
+        weak_residual[a] = residual;
         scaled_weak_residual[a] = scale[a] * weak_residual[a];
     }
     stats.weak_relative_residual = l2_norm(weak_residual)
-        / std::max(l2_norm(load_double), 1.0e-300);
+        / std::max(l2_norm(load), 1.0e-300L);
     stats.scaled_weak_relative_residual = l2_norm(scaled_weak_residual)
-        / std::max(l2_norm(scaled_load), 1.0e-300);
+        / std::max(l2_norm(scaled_load), 1.0e-300L);
 
-    long double action = 0.0L;
+    long double discarded_load_square = 0.0L;
+    for (int k = 0; k < mode_count; ++k) {
+        long double load_projection = 0.0L;
+        for (int a = 0; a < mode_count; ++a) {
+            const long double component
+                = eigen.vectors[static_cast<std::size_t>(a) * mode_count + k];
+            load_projection += component * scaled_load[a];
+        }
+        if (!retained_mode[k]) {
+            discarded_load_square += load_projection * load_projection;
+        }
+    }
+    stats.retained_scaled_weak_relative_residual = static_cast<double>(
+        std::sqrt(retained_algebraic_residual_square)
+        / std::max(std::sqrt(retained_algebraic_load_square), 1.0e-300L));
+    stats.discarded_scaled_load_relative_residual = static_cast<double>(
+        std::sqrt(discarded_load_square)
+        / std::max(l2_norm(scaled_load), 1.0e-300L));
+
     long double load_value = 0.0L;
     for (int a = 0; a < mode_count; ++a) {
         load_value += coefficients[a] * load[a];
-        for (int b = 0; b < mode_count; ++b) {
-            action += coefficients[a]
-                * gram[static_cast<std::size_t>(a) * mode_count + b]
-                * coefficients[b];
-        }
     }
-    stats.action = static_cast<double>(action);
-    stats.objective = static_cast<double>(0.5L * action + load_value);
+    stats.action = static_cast<double>(spectral_action);
+    stats.objective = static_cast<double>(0.5L * spectral_action + load_value);
     stats.energy_load_identity_relative_error = static_cast<double>(
-        std::abs(action + load_value)
-        / std::max({std::abs(action), std::abs(load_value), 1.0e-300L}));
+        std::abs(spectral_action + load_value)
+        / std::max({std::abs(spectral_action), std::abs(load_value), 1.0e-300L}));
 
     long double gauge = 0.0L;
+    long double potential_square_mean = 0.0L;
     for (int i = 0; i < height; ++i) {
         for (int j = 0; j < width; ++j) {
             const std::size_t cell = static_cast<std::size_t>(i) * width + j;
@@ -386,14 +413,19 @@ SolveStats solve_one(
             }
             potential[cell] = static_cast<double>(local_potential);
             gauge += (unnormalized_weight[cell] / normalization) * local_potential;
+            potential_square_mean += (unnormalized_weight[cell] / normalization)
+                * local_potential * local_potential;
         }
     }
     stats.gauge_residual = static_cast<double>(gauge);
+    stats.gauge_relative_residual = static_cast<double>(
+        std::abs(gauge)
+        / std::max(std::sqrt(potential_square_mean), 1.0e-300L));
     stats.converged = eigen.converged
         && stats.retained_rank > 0
         && std::isfinite(stats.action)
-        && std::isfinite(stats.scaled_weak_relative_residual)
-        && stats.scaled_weak_relative_residual <= weak_relative_tolerance;
+        && std::isfinite(stats.retained_scaled_weak_relative_residual)
+        && stats.retained_scaled_weak_relative_residual <= weak_relative_tolerance;
     return stats;
 }
 

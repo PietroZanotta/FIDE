@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--stage",
-        choices=("projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "solver_repair", "final_evaluation"),
+        choices=("projection", "risk", "benchmark", "plots", "tangent_action", "full_action", "post_dispersion_action", "full_action_production", "solver_repair", "final_evaluation"),
         default="benchmark",
     )
     parser.add_argument("--smoke", action="store_true")
@@ -66,6 +66,15 @@ def main() -> None:
         if "risk" in payload:
             print(f"  best={payload['risk']['best_design_id']}", flush=True)
             print(f"  R*={payload['risk']['R_star']:.8g}", flush=True)
+        if "post_dispersion_action" in payload:
+            action = payload["post_dispersion_action"]
+            print(f"  window_days={action['window_days']}", flush=True)
+            print(
+                f"  valid_layouts={action['valid_layout_count']}/"
+                f"{action['layout_count']}",
+                flush=True,
+            )
+            print(f"  primary={action['primary_formulation']}", flush=True)
     print(f"results={output_dir / 'result.json'}", flush=True)
 
 

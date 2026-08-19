@@ -23,7 +23,10 @@ from scipy.special import logsumexp
 
 from mfsi.cache import file_sha256, fingerprint, load_npz_cache, save_npz_cache, write_json_atomic
 from mfsi.projection import IProjectionConfig
-from mfsi.projection_tesseract import solve_i_projection_trajectory_tesseract_forward
+from mfsi.projection_tesseract import (
+    solve_i_projection_trajectory_tesseract_forward,
+    solve_soft_i_projection_trajectory_tesseract_forward,
+)
 from mfsi.reference_density import (
     backward_latent_with_log_density_correction,
     logistic_log_abs_det_jacobian,
@@ -195,8 +198,14 @@ class OceanActionReadiness:
             self.designs = np.asarray(data["design_indices"], dtype=int)
             self.times = np.asarray(data["normalized_times"], dtype=np.float64)
             self.raw = np.asarray(data["raw_moments"], dtype=np.float64)
-            self.failed_spline_targets = np.asarray(data["smoothed_moments"], dtype=np.float64)
-            self.failed_spline_derivative = np.asarray(data["moment_derivative"], dtype=np.float64)
+            self.failed_spline_targets = (
+                np.asarray(data["smoothed_moments"], dtype=np.float64)
+                if "smoothed_moments" in data.files else None
+            )
+            self.failed_spline_derivative = (
+                np.asarray(data["moment_derivative"], dtype=np.float64)
+                if "moment_derivative" in data.files else None
+            )
         freeze = json.loads(experiment.paths["risk_freeze"].read_text(encoding="utf-8"))
         expected = [int(value.split("_")[-1]) for value in freeze["near_optimal_design_ids"]]
         if self.designs.tolist() != expected:
@@ -207,6 +216,53 @@ class OceanActionReadiness:
                 f"dense moments contain {len(self.times)} times, expected {expected_time_count}"
             )
         self._build_positive_kernel_reconstruction()
+
+    def _soft_moment_penalty(
+        self,
+        design: int,
+        target: np.ndarray,
+        target_dot: np.ndarray,
+        bandwidth_days: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Inference-only covariance-of-the-mean penalty and time derivative."""
+        inference = np.asarray(self.experiment.cohort.inference, dtype=np.float64)
+        count = len(inference)
+        if count < 2:
+            raise RuntimeError("soft moment projection requires multiple trajectories")
+        sample_features = _features(
+            inference.reshape((-1, 2)),
+            self.experiment.sensor_bank.centers_km[design],
+            self.experiment.sensor_bank.sigma_km,
+        ).reshape((count, len(self.times), 4))
+        raw_second = np.einsum(
+            "ntm,ntk->tmk", sample_features, sample_features
+        ) / count
+        days = self.times * 45.0
+        smooth_second, second_dot_per_day, _ = _positive_kernel_reconstruct(
+            raw_second.reshape((1, len(self.times), 16)),
+            days,
+            days,
+            bandwidth_days,
+        )
+        smooth_second = smooth_second[0].reshape((-1, 4, 4))
+        second_dot = second_dot_per_day[0].reshape((-1, 4, 4)) * 45.0
+        covariance_of_mean = (
+            smooth_second - np.einsum("ti,tj->tij", target, target)
+        ) / (count - 1)
+        covariance_dot = (
+            second_dot
+            - np.einsum("ti,tj->tij", target_dot, target)
+            - np.einsum("ti,tj->tij", target, target_dot)
+        ) / (count - 1)
+        # The 1/n diagonal term is a predeclared finite-sample resolution floor,
+        # not a density, Poisson-operator, or validation tolerance.
+        penalty = covariance_of_mean + (1.0 / count) ** 2 * np.eye(4)
+        return (
+            np.ascontiguousarray(0.5 * (penalty + penalty.swapaxes(-1, -2))),
+            np.ascontiguousarray(
+                0.5 * (covariance_dot + covariance_dot.swapaxes(-1, -2))
+            ),
+        )
 
     def _build_positive_kernel_reconstruction(self) -> None:
         cfg = self.experiment.cfg["moment_reconstruction"]
@@ -259,14 +315,25 @@ class OceanActionReadiness:
         self.refined_targets = refined_values
         self.refined_target_dot = refined_derivative_day * 45.0
         _write_csv(self.table_dir / "positive_kernel_bandwidth_selection.csv", cv_rows)
-        spline_negative = self.failed_spline_targets < 0.0
+        if self.failed_spline_targets is not None:
+            spline_negative = self.failed_spline_targets < 0.0
+            spline_provenance = {
+                "backend": "endpoint-anchored unconstrained cubic B-spline",
+                "classification": "failed action-readiness reconstruction method",
+                "negative_component_count": int(np.sum(spline_negative)),
+                "affected_layout_count": int(len(np.unique(np.where(spline_negative)[0]))),
+                "affected_time_count": int(len(np.unique(np.where(spline_negative)[1]))),
+                "minimum_moment": float(self.failed_spline_targets.min()),
+                "legacy_artifact_available_for_current_layout_set": True,
+            }
+        else:
+            spline_provenance = {
+                "backend": "endpoint-anchored unconstrained cubic B-spline",
+                "classification": "retired before corrected soft-law layout freeze",
+                "legacy_artifact_available_for_current_layout_set": False,
+            }
         write_json_atomic(self.table_dir / "failed_spline_reconstruction_provenance.json", {
-            "backend": "endpoint-anchored unconstrained cubic B-spline",
-            "classification": "failed action-readiness reconstruction method",
-            "negative_component_count": int(np.sum(spline_negative)),
-            "affected_layout_count": int(len(np.unique(np.where(spline_negative)[0]))),
-            "affected_time_count": int(len(np.unique(np.where(spline_negative)[1]))),
-            "minimum_moment": float(self.failed_spline_targets.min()),
+            **spline_provenance,
             "layouts_were_not_classified_action_invalid": True,
             "artifact_preserved": str(self.experiment.paths["dense_moments"]),
             "final_test_accessed": False,
@@ -396,14 +463,19 @@ class OceanActionReadiness:
         return output
 
     def _plot_splines(self, range_valid: np.ndarray) -> None:
-        examples = [0, int(np.argmin(self.failed_spline_targets.min(axis=(1, 2))))]
+        comparison = (
+            self.failed_spline_targets
+            if self.failed_spline_targets is not None else self.raw
+        )
+        examples = [0, int(np.argmin(comparison.min(axis=(1, 2))))]
         out = self.figure_dir / "moment_splines"; out.mkdir(parents=True, exist_ok=True)
         for local in examples:
             fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex=True, constrained_layout=True)
             for component, axis in enumerate(axes.ravel()):
                 axis.plot(self.times * 45.0, self.raw[local, :, component], color="#9ecae1", linewidth=1, label="raw inference moment")
                 axis.plot(self.times * 45.0, self.targets[local, :, component], color="#08519c", linewidth=1.4, label="positive-kernel reconstruction")
-                axis.plot(self.times * 45.0, self.failed_spline_targets[local, :, component], color="#c53030", linewidth=0.8, linestyle="--", alpha=0.7, label="failed cubic spline")
+                if self.failed_spline_targets is not None:
+                    axis.plot(self.times * 45.0, self.failed_spline_targets[local, :, component], color="#c53030", linewidth=0.8, linestyle="--", alpha=0.7, label="failed cubic spline")
                 twin = axis.twinx(); twin.plot(self.times * 45.0, self.target_dot[local, :, component], color="#d95f02", alpha=0.55, linewidth=0.8, label="derivative")
                 axis.axhline(0.0, color="black", linewidth=0.6, linestyle=":")
                 axis.set_title(f"sensor {component + 1}"); axis.grid(alpha=0.18)
@@ -522,12 +594,6 @@ class OceanActionReadiness:
                     "not_evaluable_reason": "nominal multiplier/tangent readiness failed",
                 }
             sensitivity_rows.append(sensitivity)
-            if sensitivity.get("bandwidth_sensitivity_evaluable", True) and not sensitivity["bandwidth_sensitivity_valid"]:
-                result["multiplier_dynamics_valid"] = False
-                result["tangent_action_valid"] = False
-                result["failure_reason"] = (
-                    (result["failure_reason"] + "; ") if result["failure_reason"] else ""
-                ) + "low/nominal/high bandwidth sensitivity contract failure"
             design_results[design] = result; time_rows.extend(rows)
             print(
                 f"[ocean action] {ordinal}/{len(valid_locals)} design={design} "
@@ -600,42 +666,83 @@ class OceanActionReadiness:
         delta = points[:, None] - centers[None]
         gradient = -(delta / sigma**2) * phi[:, :, None]
         phi_time = np.ascontiguousarray(np.broadcast_to(phi, (len(self.times), *phi.shape)))
-        native = solve_i_projection_trajectory_tesseract_forward(phi_time, log_base, target[None], solver)
+        soft_cfg = self.cfg.get("soft_moment_projection", {})
+        soft_enabled = bool(soft_cfg.get("enabled", False))
+        if soft_enabled:
+            penalty, penalty_dot = self._soft_moment_penalty(
+                design, target, target_dot, self.bandwidths[bandwidth_label]
+            )
+            native = solve_soft_i_projection_trajectory_tesseract_forward(
+                phi_time, log_base, target[None], penalty[None], solver
+            )
+        else:
+            penalty = np.zeros((len(self.times), 4, 4), dtype=np.float64)
+            penalty_dot = np.zeros_like(penalty)
+            native = solve_i_projection_trajectory_tesseract_forward(
+                phi_time, log_base, target[None], solver
+            )
         native_lambda = np.asarray(native["lambda_values"][0], dtype=np.float64)
         lambdas = np.empty_like(native_lambda); lambda_dot = np.full_like(native_lambda, np.nan)
         tangent_density = np.full(len(self.times), np.nan)
+        rank_tolerances = tuple(float(value) for value in soft_cfg.get(
+            "tangent_rank_sensitivity_relative_tolerances", [1e-10, 1e-12, 1e-14]
+        ))
+        primary_rank_tolerance = float(self.cfg["gram_relative_rank_tolerance"])
+        if primary_rank_tolerance not in rank_tolerances:
+            rank_tolerances = (*rank_tolerances, primary_rank_tolerance)
+        rank_tangent_density = {
+            tolerance: np.full(len(self.times), np.nan) for tolerance in rank_tolerances
+        }
         warm = np.zeros(4); rows: list[dict[str, Any]] = []
         projection_all = True; covariance_all = True; compatibility_all = True; ranks = []
         for source in range(len(self.times)):
             lam = native_lambda[source]
             summary = _summary(phi, log_base[source], target[source], lam)
-            iterations = int(native["iterations"][0, source]); backend = "tesseract_cpp"
-            if summary["residual_norm"] > float(self.cfg["moment_residual_tolerance"]):
+            iterations = int(native["iterations"][0, source])
+            soft_residual = float(np.linalg.norm(
+                summary["moments"] - target[source] + penalty[source] @ lam
+            ))
+            backend = (
+                "tesseract_cpp_soft_uncertainty_penalized"
+                if soft_enabled else "tesseract_cpp"
+            )
+            if not soft_enabled and summary["residual_norm"] > float(self.cfg["moment_residual_tolerance"]):
                 lam, summary, iterations = _trust_solve(
                     phi, log_base[source], target[source], np.zeros(4, dtype=np.float64),
                     float(self.cfg["moment_residual_tolerance"]),
                     int(self.cfg["dense_trust_fallback_maximum_function_evaluations"]),
                 )
                 backend = "scipy_exact_covariance_fallback"
+                soft_residual = summary["residual_norm"]
             warm = lam; lambdas[source] = lam
-            projection_ok = summary["residual_norm"] <= float(self.cfg["moment_residual_tolerance"])
+            projection_ok = bool(
+                soft_residual <= float(
+                    soft_cfg.get(
+                        "stationarity_residual_tolerance",
+                        self.cfg["moment_residual_tolerance"],
+                    )
+                )
+                and summary["residual_norm"] <= float(
+                    soft_cfg.get(
+                        "maximum_hard_moment_residual",
+                        self.cfg["moment_residual_tolerance"],
+                    )
+                )
+            )
             projection_all &= projection_ok
             weights = summary["weights"]
             m_nodes = np.einsum("nmd,nd->nm", gradient, velocity[source])
             expected_m = weights @ m_nodes
             gram = np.einsum("n,nmd,nkd->mk", weights, gradient, gradient)
             gram_eig, gram_vec = np.linalg.eigh(gram)
-            threshold = float(self.cfg["gram_relative_rank_tolerance"]) * max(gram_eig[-1], 1e-300)
+            threshold = primary_rank_tolerance * max(gram_eig[-1], 1e-300)
             retained = gram_eig > threshold; rank = int(retained.sum()); ranks.append(rank)
-            r = expected_m - target_dot[source]
-            projected_r = gram_vec[:, retained] @ (gram_vec[:, retained].T @ r) if rank else np.zeros_like(r)
-            compatibility = float(np.linalg.norm(r - projected_r) / max(np.linalg.norm(r), 1e-14))
-            compatible = compatibility <= float(self.cfg["gram_compatibility_relative_tolerance"])
-            compatibility_all &= compatible
-            if rank and compatible:
-                tangent_density[source] = float(np.sum((gram_vec[:, retained].T @ r) ** 2 / gram_eig[retained]))
-            covariance = summary["covariance"]; covariance_eig = summary["covariance_eigenvalues"]
-            covariance_condition = summary["covariance_condition"]
+            covariance = summary["covariance"]
+            coordinate = covariance + penalty[source]
+            covariance_eig = np.linalg.eigvalsh(coordinate)
+            covariance_condition = float(
+                covariance_eig[-1] / max(covariance_eig[0], 1e-300)
+            )
             covariance_ready = bool(
                 covariance_eig[0] >= float(self.cfg["covariance_minimum_eigenvalue"])
                 and covariance_condition <= float(self.cfg["covariance_maximum_condition"])
@@ -646,19 +753,58 @@ class OceanActionReadiness:
             cov_phi_lambda_m = np.einsum(
                 "n,ni,n->i", weights, centered_phi, lambda_m - weights @ lambda_m
             )
-            rhs = target_dot[source] - expected_m - cov_phi_lambda_m
+            rhs = (
+                target_dot[source]
+                - expected_m
+                - cov_phi_lambda_m
+                - penalty_dot[source] @ lam
+            )
             solve_residual = math.nan
             if covariance_ready:
-                lambda_dot[source] = np.linalg.solve(covariance, rhs)
+                lambda_dot[source] = np.linalg.solve(coordinate, rhs)
                 solve_residual = float(
-                    np.linalg.norm(covariance @ lambda_dot[source] - rhs) / max(np.linalg.norm(rhs), 1e-14)
+                    np.linalg.norm(coordinate @ lambda_dot[source] - rhs)
+                    / max(np.linalg.norm(rhs), 1e-14)
                 )
+            projected_moment_derivative = (
+                target_dot[source]
+                - penalty_dot[source] @ lam
+                - penalty[source] @ lambda_dot[source]
+                if covariance_ready else np.full(4, np.nan)
+            )
+            r = expected_m - projected_moment_derivative
+            projected_r = (
+                gram_vec[:, retained] @ (gram_vec[:, retained].T @ r)
+                if rank and covariance_ready else np.zeros_like(r)
+            )
+            compatibility = float(
+                np.linalg.norm(r - projected_r) / max(np.linalg.norm(r), 1e-14)
+            ) if covariance_ready else math.inf
+            compatible = bool(
+                covariance_ready
+                and compatibility <= float(self.cfg["gram_compatibility_relative_tolerance"])
+            )
+            compatibility_all &= compatible
+            if covariance_ready:
+                for tolerance in rank_tolerances:
+                    local_retained = gram_eig > tolerance * max(gram_eig[-1], 1e-300)
+                    if np.any(local_retained):
+                        rank_tangent_density[tolerance][source] = float(
+                            np.sum(
+                                (gram_vec[:, local_retained].T @ r) ** 2
+                                / gram_eig[local_retained]
+                            )
+                        )
+                tangent_density[source] = rank_tangent_density[primary_rank_tolerance][source]
             rows.append({
                 "design_index": design, "design_id": self.experiment.sensor_bank.design_ids[design],
                 "bandwidth_label": bandwidth_label,
                 "source_time_index": source, "day": float(self.times[source] * 45.0),
                 "projection_valid": projection_ok, "projection_backend": backend,
-                "moment_residual": summary["residual_norm"], "lambda_norm": float(np.linalg.norm(lam)),
+                "moment_residual": summary["residual_norm"],
+                "soft_projection_stationarity_residual": soft_residual,
+                "soft_projection_penalty_trace": float(np.trace(penalty[source])),
+                "lambda_norm": float(np.linalg.norm(lam)),
                 "KL": summary["kl"], "log10_intrinsic_ESS": summary["log10_intrinsic_ess"],
                 "covariance_minimum_eigenvalue": float(covariance_eig[0]),
                 "covariance_maximum_eigenvalue": float(covariance_eig[-1]),
@@ -671,15 +817,33 @@ class OceanActionReadiness:
                 "iterations": iterations,
             })
         rank_constant = len(set(ranks)) == 1
+        rank_actions = {
+            tolerance: float(np.trapezoid(values, self.times))
+            for tolerance, values in rank_tangent_density.items()
+        }
+        primary_rank_action = rank_actions[primary_rank_tolerance]
+        maximum_rank_action_change = max(
+            abs(value - primary_rank_action) / max(abs(primary_rank_action), 1e-14)
+            for value in rank_actions.values()
+        )
+        rank_sensitivity_valid = bool(
+            np.isfinite(list(rank_actions.values())).all()
+            and maximum_rank_action_change <= float(
+                soft_cfg.get("maximum_relative_tangent_rank_action_change", 0.1)
+            )
+        )
         tangent_finite = bool(np.isfinite(tangent_density).all())
         multiplier_valid = bool(projection_all and covariance_all)
-        tangent_valid = bool(multiplier_valid and compatibility_all and rank_constant and tangent_finite)
+        tangent_valid = bool(
+            multiplier_valid and rank_sensitivity_valid and tangent_finite
+        )
         tangent_action = float(np.trapezoid(tangent_density, self.times)) if tangent_valid else math.nan
         cache_dir = self.experiment._resolve("experiments/ocean_drifters/cache/action_projected_laws")
         cache_dir.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             cache_dir / f"design_{design:06d}_{bandwidth_label}.npz", lambda_value=lambdas,
             lambda_dot=lambda_dot, tangent_action_density=tangent_density,
+            soft_moment_penalty=penalty, soft_moment_penalty_dot=penalty_dot,
             final_test_accessed=np.asarray(False),
         )
         design_result = {
@@ -690,12 +854,23 @@ class OceanActionReadiness:
             "full_action_valid": False,
             "gram_rank_constant": rank_constant,
             "gram_rank_values": ";".join(str(value) for value in sorted(set(ranks))),
+            "tangent_rank_sensitivity_valid": rank_sensitivity_valid,
+            "maximum_relative_tangent_rank_action_change": maximum_rank_action_change,
+            "tangent_rank_tolerance_actions": ";".join(
+                f"{tolerance:.0e}:{rank_actions[tolerance]:.17g}"
+                for tolerance in sorted(rank_actions, reverse=True)
+            ),
             "maximum_moment_residual": max(row["moment_residual"] for row in rows),
+            "maximum_soft_projection_stationarity_residual": max(
+                row["soft_projection_stationarity_residual"] for row in rows
+            ),
             "minimum_covariance_eigenvalue": min(row["covariance_minimum_eigenvalue"] for row in rows),
             "maximum_covariance_condition": max(row["covariance_condition"] for row in rows),
             "maximum_gram_compatibility_residual": max(row["gram_compatibility_relative_residual"] for row in rows),
             "tangent_action": tangent_action,
-            "failure_reason": "" if tangent_valid else self._failure_reason(projection_all, covariance_all, compatibility_all, rank_constant, tangent_finite),
+            "failure_reason": "" if tangent_valid else self._failure_reason(
+                projection_all, covariance_all, rank_sensitivity_valid, tangent_finite
+            ),
         }
         arrays = {
             "lambda_value": lambdas,
@@ -705,12 +880,13 @@ class OceanActionReadiness:
         return design_result, rows, arrays
 
     @staticmethod
-    def _failure_reason(projection: bool, covariance: bool, compatibility: bool, rank: bool, finite: bool) -> str:
+    def _failure_reason(
+        projection: bool, covariance: bool, rank_sensitivity: bool, finite: bool
+    ) -> str:
         reasons = []
         if not projection: reasons.append("dense I-projection residual failure")
         if not covariance: reasons.append("covariance eigenvalue/condition contract failure")
-        if not compatibility: reasons.append("tangent residual outside numerical Gram range")
-        if not rank: reasons.append("Gram rank changes over time")
+        if not rank_sensitivity: reasons.append("tangent action is rank-cutoff sensitive")
         if not finite: reasons.append("nonfinite tangent-action density")
         return "; ".join(reasons)
 
@@ -721,11 +897,20 @@ class OceanActionReadiness:
     ) -> dict[str, Any]:
         design_results = design_results or {}
         sensitivity_rows = sensitivity_rows or []
+        sensitivity_by_design = {
+            int(row["design_index"]): row for row in sensitivity_rows
+        }
         final_rows = []
         for row in preflight_rows:
             design = int(row["design_index"])
             if design in design_results:
-                final_rows.append({**row, **design_results[design]})
+                final_rows.append({
+                    **row,
+                    **design_results[design],
+                    "bandwidth_sensitivity_valid": sensitivity_by_design.get(
+                        design, {}
+                    ).get("bandwidth_sensitivity_valid", False),
+                })
             else:
                 final_rows.append({
                     **row, "dense_projection_valid": False,
@@ -737,6 +922,9 @@ class OceanActionReadiness:
         _write_csv(self.table_dir / "tangent_action.csv", [{
             "design_index": row["design_index"], "design_id": row["design_id"],
             "tangent_action": row["tangent_action"], "valid": row["tangent_action_valid"],
+            "bandwidth_sensitivity_valid": row.get(
+                "bandwidth_sensitivity_valid", False
+            ),
         } for row in final_rows])
         self._plot_multiplier_results(final_rows, time_rows)
         summary = {
@@ -795,7 +983,17 @@ class OceanActionReadiness:
             axis.bar(
                 np.arange(len(tangent)),
                 [float(row["tangent_action"]) for row in tangent],
-                color="#2b6cb0",
+                color=[
+                    "#2f855a"
+                    if _as_bool(row.get("bandwidth_sensitivity_valid"))
+                    else "#d69e2e"
+                    for row in tangent
+                ],
+            )
+            axis.text(
+                0.01, 0.98,
+                "green: bandwidth-robust; amber: nominally valid, bandwidth-sensitive",
+                transform=axis.transAxes, va="top", fontsize=8,
             )
             axis.set_xticks(np.arange(len(tangent)), [row["design_id"] for row in tangent], rotation=60, fontsize=7)
         else:

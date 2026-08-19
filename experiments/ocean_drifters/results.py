@@ -163,7 +163,11 @@ def _sensor_maps(experiment, near_indices: np.ndarray, representatives: list[int
     fig, axis = plt.subplots(figsize=(8.2, 5.2), constrained_layout=True)
     axis.hexbin(inference[:, 0], inference[:, 1], gridsize=56, bins="log", mincnt=1, cmap="Greys", alpha=0.5)
     all_centers = centers[near_indices].reshape(-1, 2)
-    axis.scatter(all_centers[:, 0], all_centers[:, 1], s=14, color=COLORS["blue"], alpha=0.45, edgecolor="none", label="272 sensor placements from 68 layouts")
+    axis.scatter(
+        all_centers[:, 0], all_centers[:, 1], s=14, color=COLORS["blue"],
+        alpha=0.45, edgecolor="none",
+        label=f"{len(all_centers)} sensor placements from {len(near_indices)} layouts",
+    )
     axis.set(xlabel="projected x (km)", ylabel="projected y (km)", xlim=(bounds[0], bounds[1]), ylim=(bounds[2], bounds[3]))
     axis.set_aspect("equal"); axis.grid(alpha=0.15); axis.legend(frameon=False)
     _save_figure(fig, stem.with_name("near_optimal_sensor_centers_aggregate"))
@@ -364,7 +368,7 @@ def generate_law_results(experiment, risk: dict[str, Any], analysis_dir: Path) -
     summary_payload = {
         "schema_version": 1,
         "layout_count": 512,
-        "near_optimal_layout_count": 68,
+        "near_optimal_layout_count": len(near_indices),
         "best_design_id": freeze["best_design_id"],
         "R_star": r_star,
         "epsilon": float(freeze["frozen_additive_epsilon"]),

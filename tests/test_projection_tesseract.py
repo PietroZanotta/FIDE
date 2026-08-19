@@ -9,6 +9,7 @@ from mfsi.projection import EmpiricalIProjector, IProjectionConfig
 from mfsi.projection_tesseract import (
     is_tesseract_iprojection_available,
     solve_i_projection_trajectory_tesseract_forward,
+    solve_soft_i_projection_trajectory_tesseract_forward,
 )
 
 jax.config.update("jax_enable_x64", True)
@@ -102,3 +103,43 @@ def test_direct_forward_audit_path_matches_differentiable_native_path():
     )
     assert np.all(actual["converged"])
     assert np.max(actual["residual_norm"]) <= cfg.residual_tol
+
+
+def test_soft_forward_solves_penalized_moment_stationarity():
+    phi, base, targets = _inputs()
+    cfg = IProjectionConfig(
+        max_steps=100,
+        residual_tol=1.0e-10,
+        newton_ridge=1.0e-12,
+        line_search_steps=8,
+    )
+    log_base = np.log(np.asarray(base))
+    moment_count = phi.shape[-1]
+    penalty = np.broadcast_to(
+        2.5e-3 * np.eye(moment_count),
+        (*targets.shape[:2], moment_count, moment_count),
+    ).copy()
+    result = solve_soft_i_projection_trajectory_tesseract_forward(
+        np.asarray(phi), log_base, np.asarray(targets), penalty, cfg
+    )
+    logits = (
+        log_base[None]
+        + np.einsum("tnm,btm->btn", np.asarray(phi), result["lambda_values"])
+    )
+    logits -= np.max(logits, axis=-1, keepdims=True)
+    weights = np.exp(logits)
+    weights /= weights.sum(axis=-1, keepdims=True)
+    moments = np.einsum("btn,tnm->btm", weights, np.asarray(phi))
+    stationarity = (
+        moments
+        - np.asarray(targets)
+        + np.einsum("btmk,btk->btm", penalty, result["lambda_values"])
+    )
+    assert np.max(np.linalg.norm(stationarity, axis=-1)) <= cfg.residual_tol
+    np.testing.assert_allclose(
+        result["hard_moment_residual_norm"],
+        np.linalg.norm(moments - np.asarray(targets), axis=-1),
+        rtol=1e-10,
+        atol=1e-12,
+    )
+    assert np.all(result["converged"])

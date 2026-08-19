@@ -44,7 +44,10 @@ class OutputSchema(BaseModel):
     objective: BatchVector64
     weak_relative_residual: BatchVector64
     scaled_weak_relative_residual: BatchVector64
+    retained_scaled_weak_relative_residual: BatchVector64
+    discarded_scaled_load_relative_residual: BatchVector64
     gauge_residual: BatchVector64
+    gauge_relative_residual: BatchVector64
     compatibility_residual: BatchVector64
     compatibility_relative_residual: BatchVector64
     energy_load_identity_relative_error: BatchVector64
@@ -89,7 +92,10 @@ def abstract_eval(abstract_inputs: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "objective",
         "weak_relative_residual",
         "scaled_weak_relative_residual",
+        "retained_scaled_weak_relative_residual",
+        "discarded_scaled_load_relative_residual",
         "gauge_residual",
+        "gauge_relative_residual",
         "compatibility_residual",
         "compatibility_relative_residual",
         "energy_load_identity_relative_error",

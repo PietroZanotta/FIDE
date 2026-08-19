@@ -18,12 +18,16 @@ and minimizes `0.5 c^T K c + f^T c`. It never assembles a strong-form grid PDE
 matrix. The density is supplied as finite `log_q_mass`; normalization uses
 long-double shifted exponentials without a density or operator floor.
 
-The dense Galerkin system is diagonally equilibrated and eigensolved. Numerical
-rank truncation applies only to redundant trial-space directions and is reported
-explicitly; it does not alter `q` or add an operator floor. Acceptance is based on
-the scaled weak optimality residual. The endpoint also reports the unscaled weak
-residual, weighted gauge, compatibility, action, objective, energy/load identity,
-retained rank, and condition proxy.
+The dense Galerkin system is assembled, diagonally equilibrated, and eigensolved
+in extended-precision `long double` arithmetic with a cyclic symmetric Jacobi
+algorithm. This is necessary because concentrated ocean laws have positive weak
+Gram eigenvalues below float64 precision. Numerical rank truncation applies only
+to redundant trial-space directions and is reported explicitly; it does not alter
+`q` or add an operator floor. Acceptance is based on algebraic optimality in the
+explicitly retained eigenspace. The complete-space residual and discarded-load
+fraction remain separate audit diagnostics. The endpoint also reports the weighted
+gauge and its relative form, compatibility, action, objective, energy/load
+identity, retained rank, and condition proxy.
 
 Build from the repository root:
 
@@ -45,7 +49,12 @@ JAX_PLATFORMS=cpu OMP_NUM_THREADS=4 \
   .venv/bin/python -m pytest tests/test_variational_poisson_tesseract.py -q
 ```
 
-This first section establishes and tests the backend boundary. It is not yet
-wired into an ocean production sweep. The endpoint is intentionally
-non-differentiable at this stage and no toy/vortices backend selector refers to
-it; their existing differentiable JAX/native paths remain unchanged.
+The ocean experiment now reaches this endpoint through its local
+`experiments.ocean_drifters.poisson_backend` adapter and preserves the common
+Poisson result fields. This is still a validation pilot, not an authorized ocean
+production sweep. The endpoint is intentionally non-differentiable at this stage,
+and no toy/vortices backend selector refers to it; their existing differentiable
+JAX/native paths remain unchanged. Concentrated ocean cases that fail the original
+structured coarse/fine comparison are reprojected and audited on nested local
+quadrature through the ocean adapter; that adaptive path does not modify this
+shared native endpoint.

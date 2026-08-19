@@ -19,7 +19,9 @@
   },
   "physical_bank": {
     "seed_offset": 1001,
-    "save_times": [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    "workers": 8,
+    "save_times": [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    "population_times": [22, 23, 24, 25, 26, 27, 28, 29, 30]
   },
   "splits": {
     "train_runs": 32,
@@ -34,8 +36,8 @@
     "fit_rmax_cells": 6.0
   },
   "measurement": {
-    "n_sensors": 4,
-    "sensor_width": 2.0,
+    "n_sensors": 2,
+    "sensor_width": 4.0,
     "min_sep": 3.0,
     "channels": ["occupancy", "polarity_cos", "polarity_sin"],
     "finite_n": 256,
@@ -49,7 +51,7 @@
     "roughness_quadrature_order": 8
   },
   "reference_training": {
-    "seeds": [20260818],
+    "seeds": [20260818, 20260819, 20260820],
     "hidden_width": 128,
     "hidden_layers": 4,
     "train_steps": 12000,
@@ -70,7 +72,8 @@
   },
   "law": {
     "mmd_bandwidths": [0.5, 1.0, 2.0, 4.0],
-    "grid_shape": [48, 48, 24],
+    "grid_shape_position": [64, 64],
+    "grid_shape_polarity": [48, 48, 24],
     "epsilon_r": 0.01
   },
   "projection": {
@@ -79,7 +82,12 @@
     "newton_ridge": 1e-7,
     "step_cap": 20.0,
     "lambda_clip": 1000.0,
-    "line_search_steps": 8
+    "line_search_steps": 8,
+    "solver_accept_tol": 2e-6,
+    "lbfgs_maxiter": 800,
+    "retry_clip_multiplier": 2.0,
+    "max_retries": 2,
+    "support_certificate_tol": 1e-10
   },
   "particle_mfsi": {
     "covariance_ridge": 1e-7,
@@ -87,10 +95,13 @@
   },
   "full_action": {
     "grid_n": 96,
-    "raster_bandwidth": 0.0,
+    "grid_shape_polarity": [48, 48, 24],
+    "polarity_metric_radius": 1.0,
+    "backend_3d": "tesseract_cpp",
+    "raster_bandwidth": 1.2,
     "operator_floor_rel": 2e-5,
     "cg_tol": 1e-7,
-    "cg_maxiter": 520,
+    "cg_maxiter": 1200,
     "gauge_strength": 1.0
   },
   "validity": {
@@ -100,15 +111,36 @@
   },
   "optimization": {
     "steps": 60,
+    "law_steps": 40,
+    "tangent_steps": 30,
+    "full_steps": 20,
     "learning_rate": 0.01,
+    "law_learning_rate": 0.008,
+    "tangent_learning_rate": 0.006,
+    "full_learning_rate": 0.004,
     "constraint_penalty": 10000.0,
     "feasibility_tol": 1e-6,
     "invalid_penalty": 1000.0,
     "start_count": 16,
-    "start_oversample": 64
+    "start_oversample": 64,
+    "law_start_count": 6,
+    "tangent_start_count": 4,
+    "full_start_count": 3,
+    "law_gradient_trials": 2,
+    "tangent_gradient_trials": 2,
+    "full_gradient_trials": 2,
+    "full_gradient_grid_shape": [32, 32, 16],
+    "full_gradient_cg_tol": 1e-6,
+    "full_gradient_cg_maxiter": 360,
+    "law_exact_audit_candidates": 8,
+    "tangent_exact_audit_candidates": 8,
+    "full_exact_audit_candidates": 8
+  },
+  "controls": {
+    "reference_easy_eta": null
   },
   "randomness": {
-    "selection_trials": 8,
+    "selection_trials": 32,
     "validation_trials": 32,
     "selection_namespace": 9890,
     "validation_namespace": 9891,
@@ -116,14 +148,15 @@
   },
   "smoke": {
     "physics": {"n": 32, "dt": 0.02},
-    "physical_bank": {"save_times": [0.0, 0.04, 0.08, 0.12, 0.16]},
+    "physical_bank": {"save_times": [25.0, 27.5, 30.0, 32.5, 35.0], "population_times": [25.0, 27.5, 30.0, 32.5, 35.0], "workers": 1},
     "splits": {"train_runs": 1, "design_runs": 1, "validation_runs": 1},
     "measurement": {"finite_n": 16, "acquisition_k": 3},
     "reference_training": {"seeds": [20260818], "hidden_width": 16, "hidden_layers": 1, "train_steps": 2, "batch_size": 16, "log_every": 1},
     "reference": {"endpoint_particles": 32, "particles": 32, "rk4_substeps_per_time_interval": 1},
-    "full_action": {"grid_n": 16, "cg_maxiter": 40},
-    "law": {"grid_shape": [12, 12, 8]},
-    "optimization": {"steps": 1, "start_count": 2, "start_oversample": 16},
+    "full_action": {"grid_n": 16, "grid_shape_polarity": [12, 12, 8], "cg_maxiter": 160},
+    "law": {"grid_shape_position": [16, 16], "grid_shape_polarity": [12, 12, 8]},
+    "validity": {"allow_invalid_selection": true},
+    "optimization": {"steps": 1, "law_steps": 1, "tangent_steps": 1, "full_steps": 1, "start_count": 2, "law_start_count": 2, "tangent_start_count": 2, "full_start_count": 2, "law_gradient_trials": 1, "tangent_gradient_trials": 1, "full_gradient_trials": 1, "full_gradient_grid_shape": [12, 12, 8], "law_exact_audit_candidates": 2, "tangent_exact_audit_candidates": 2, "full_exact_audit_candidates": 2, "start_oversample": 16},
     "randomness": {"selection_trials": 1, "validation_trials": 1, "truth_particles": 16}
   }
 }

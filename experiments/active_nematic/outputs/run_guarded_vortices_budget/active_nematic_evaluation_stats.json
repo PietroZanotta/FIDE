@@ -1,0 +1,959 @@
+{
+  "all_selection_certified": true,
+  "bootstrap": {
+    "confidence_level": 0.95,
+    "estimand": "1 - mean_paired_full_action / mean_paired_law_action",
+    "reps_per_reference_seed": 10000,
+    "seed": 20260818
+  },
+  "reference_seed_count": 3,
+  "rows": [
+    {
+      "designs": {
+        "full": [
+          4.151815415711167,
+          30.334833244607974,
+          28.49123904803426,
+          2.8315949591075364
+        ],
+        "law": [
+          3.889970065417933,
+          30.23789729905289,
+          28.746260885951784,
+          2.7337685389600703
+        ],
+        "tangent": [
+          4.070690075734371,
+          30.413555644341717,
+          28.571156367877798,
+          2.912036504349186
+        ]
+      },
+      "epsilon_r": 0.009999999999999995,
+      "full_action_max_to_median": 2.859825775356278,
+      "full_trials": 64,
+      "full_valid_trials": 64,
+      "law_action_max_to_median": 3.295060532596049,
+      "law_trials": 64,
+      "law_valid_trials": 64,
+      "paired_bootstrap_reduction_95": {
+        "estimate": 0.18374946290168293,
+        "lower": 0.1707684643911819,
+        "reps": 10000,
+        "upper": 0.1970885663991194
+      },
+      "paired_valid_trials": 64,
+      "reference_seed": 20260818,
+      "result": "/home/zanot/projects/tesseract2026/experiments/active_nematic/outputs/run_guarded_vortices_budget/position_polarity_reference_seed_20260818/result.json",
+      "result_schema_version": 1,
+      "risk_max": 0.06516206846660245,
+      "risk_star": 0.05516206846660246,
+      "selection": {
+        "full": {
+          "certified": true,
+          "full_action": 304.56206138042626,
+          "law_risk": 0.05496080775284525,
+          "law_slack_to_max": 0.010201260713757203,
+          "valid": true
+        },
+        "law": {
+          "certified": true,
+          "full_action": 319.4464391627803,
+          "law_risk": 0.05516206846660246,
+          "law_slack_to_max": 0.009999999999999995,
+          "valid": true
+        },
+        "tangent": {
+          "certified": true,
+          "full_action": 315.8420060525485,
+          "law_risk": 0.05500108524010788,
+          "law_slack_to_max": 0.010160983226494572,
+          "valid": true
+        }
+      },
+      "selection_action_ratio": 0.9534057170229736,
+      "selection_certified": true,
+      "selection_full_action": 304.56206138042626,
+      "selection_full_risk": 0.05496080775284525,
+      "selection_law_action": 319.4464391627803,
+      "selection_law_risk": 0.05516206846660246,
+      "selection_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      },
+      "state_mode": "position_polarity",
+      "time_diagnostics": {
+        "action_physical_times": [
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0
+        ],
+        "final_action_time": 30.0,
+        "full_action_mean_by_time": [
+          5348.070046870677,
+          363.6297322325183,
+          486.6880119435402,
+          432.72391953296045,
+          388.01262207286726,
+          179.37311926503918,
+          229.84201919069486,
+          710.5417635855265,
+          338.6757482624123,
+          326.68931581475147,
+          862.2123997286302
+        ],
+        "full_final_time_contribution_fraction": 0.05250523291749104,
+        "full_to_law_ratio_by_action_time": [
+          0.7961312454262065,
+          0.7923609042625507,
+          0.7529779122649963,
+          0.8620312650954511,
+          0.9283386342910006,
+          0.9305203381248484,
+          0.8421773042526037,
+          0.8126142827726507,
+          0.6714764859163184
+        ],
+        "full_to_law_ratio_by_time": [
+          0.8414306841084781,
+          0.7961312454262065,
+          0.7923609042625507,
+          0.7529779122649963,
+          0.8620312650954511,
+          0.9283386342910006,
+          0.9305203381248484,
+          0.8421773042526037,
+          0.8126142827726507,
+          0.6714764859163184,
+          0.8535579659268382
+        ],
+        "law_action_mean_by_time": [
+          6355.924674338592,
+          456.74596283160594,
+          614.2251710368018,
+          574.6834169827168,
+          450.1143262244709,
+          193.2194919389859,
+          247.00375668721477,
+          843.6961670631838,
+          416.77306865299755,
+          486.5238361533103,
+          1010.1392455430893
+        ],
+        "law_final_time_contribution_fraction": 0.06382565207907419,
+        "note": "Post-hoc endpoint-leverage diagnostic only; this is not the predeclared full-horizon estimand.",
+        "physical_times": [
+          21.0,
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0,
+          31.0
+        ],
+        "without_final_time_action_ratio": 0.8269585586632131,
+        "without_final_time_action_reduction": 0.1730414413367869,
+        "without_final_time_full_action": 396.9048851197277,
+        "without_final_time_law_action": 479.9574065250966
+      },
+      "validation": {
+        "full": {
+          "full_action_max_to_median": 2.859825775356278,
+          "summary": {
+            "full_action": {
+              "mean": 388.87709098458447,
+              "n": 64,
+              "se": 18.553054087648025
+            },
+            "law_risk": {
+              "mean": 0.07978846232174001,
+              "n": 64,
+              "se": 0.0009688219688591275
+            },
+            "tangent_action": {
+              "mean": 11.868277427033036,
+              "n": 64,
+              "se": 0.42626587581659897
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -156.9212002875921,
+          "valid_fraction": 1.0
+        },
+        "law": {
+          "full_action_max_to_median": 3.295060532596049,
+          "summary": {
+            "full_action": {
+              "mean": 476.41878725985373,
+              "n": 64,
+              "se": 25.346279342979734
+            },
+            "law_risk": {
+              "mean": 0.08220310923292068,
+              "n": 64,
+              "se": 0.0010746299375828132
+            },
+            "tangent_action": {
+              "mean": 12.13553303723756,
+              "n": 64,
+              "se": 0.44033340906528573
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -181.89259940661654,
+          "valid_fraction": 1.0
+        },
+        "tangent": {
+          "full_action_max_to_median": 3.0097408157433696,
+          "summary": {
+            "full_action": {
+              "mean": 426.3490003624614,
+              "n": 64,
+              "se": 20.75755403889808
+            },
+            "law_risk": {
+              "mean": 0.08150334838285901,
+              "n": 64,
+              "se": 0.001036738009801579
+            },
+            "tangent_action": {
+              "mean": 11.93550372397759,
+              "n": 64,
+              "se": 0.43159645387619766
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -168.9545055520653,
+          "valid_fraction": 1.0
+        }
+      },
+      "validation_action_advantage": true,
+      "validation_action_ratio": 0.8162505370983171,
+      "validation_action_ratio_by_time": [
+        0.8414306841084781,
+        0.7961312454262065,
+        0.7923609042625507,
+        0.7529779122649963,
+        0.8620312650954511,
+        0.9283386342910006,
+        0.9305203381248484,
+        0.8421773042526037,
+        0.8126142827726507,
+        0.6714764859163184,
+        0.8535579659268382
+      ],
+      "validation_action_reduction": 0.18374946290168293,
+      "validation_full_action": 388.87709098458447,
+      "validation_full_risk": 0.07978846232174001,
+      "validation_information_equivalent": true,
+      "validation_law_action": 476.41878725985373,
+      "validation_law_risk": 0.08220310923292068,
+      "validation_risk_difference": -0.002414646911180665,
+      "validation_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      }
+    },
+    {
+      "designs": {
+        "full": [
+          4.049550445530692,
+          30.506008504299235,
+          28.400398305163762,
+          2.8281974339441738
+        ],
+        "law": [
+          3.898610496896527,
+          30.271195546227815,
+          28.655451009697252,
+          2.7343344257963453
+        ],
+        "tangent": [
+          4.0827477438488184,
+          30.443324809570548,
+          28.480513567977017,
+          2.9098139840804347
+        ]
+      },
+      "epsilon_r": 0.009999999999999995,
+      "full_action_max_to_median": 1.7703627201336558,
+      "full_trials": 64,
+      "full_valid_trials": 64,
+      "law_action_max_to_median": 2.003997972210804,
+      "law_trials": 64,
+      "law_valid_trials": 64,
+      "paired_bootstrap_reduction_95": {
+        "estimate": 0.12728437594988973,
+        "lower": 0.11440429521191156,
+        "reps": 10000,
+        "upper": 0.14058228295859676
+      },
+      "paired_valid_trials": 64,
+      "reference_seed": 20260819,
+      "result": "/home/zanot/projects/tesseract2026/experiments/active_nematic/outputs/run_guarded_vortices_budget/position_polarity_reference_seed_20260819/result.json",
+      "result_schema_version": 1,
+      "risk_max": 0.06589795245819198,
+      "risk_star": 0.055897952458191985,
+      "selection": {
+        "full": {
+          "certified": true,
+          "full_action": 349.96025504196336,
+          "law_risk": 0.055607130386741026,
+          "law_slack_to_max": 0.010290822071450954,
+          "valid": true
+        },
+        "law": {
+          "certified": true,
+          "full_action": 366.5614116508448,
+          "law_risk": 0.055897952458191985,
+          "law_slack_to_max": 0.009999999999999995,
+          "valid": true
+        },
+        "tangent": {
+          "certified": true,
+          "full_action": 360.8297535104499,
+          "law_risk": 0.05564630424078901,
+          "law_slack_to_max": 0.010251648217402973,
+          "valid": true
+        }
+      },
+      "selection_action_ratio": 0.9547111177520937,
+      "selection_certified": true,
+      "selection_full_action": 349.96025504196336,
+      "selection_full_risk": 0.055607130386741026,
+      "selection_law_action": 366.5614116508448,
+      "selection_law_risk": 0.055897952458191985,
+      "selection_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      },
+      "state_mode": "position_polarity",
+      "time_diagnostics": {
+        "action_physical_times": [
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0
+        ],
+        "final_action_time": 30.0,
+        "full_action_mean_by_time": [
+          5396.704308311069,
+          194.71467833327227,
+          1101.3608579023728,
+          200.6666108448742,
+          157.74060746239613,
+          140.9641937725221,
+          172.97858667803612,
+          381.5347770082102,
+          757.4305635340635,
+          403.86119571440025,
+          1205.8501396802628
+        ],
+        "full_final_time_contribution_fraction": 0.06286826048443425,
+        "full_to_law_ratio_by_action_time": [
+          0.8585565215384802,
+          0.884612795488742,
+          0.9688317845679609,
+          0.803772876289937,
+          0.774671836119726,
+          0.8445876733929615,
+          0.9344917938666385,
+          0.8828824181436985,
+          0.7600697696029864
+        ],
+        "full_to_law_ratio_by_time": [
+          0.8849677508292447,
+          0.8585565215384802,
+          0.884612795488742,
+          0.9688317845679609,
+          0.803772876289937,
+          0.774671836119726,
+          0.8445876733929615,
+          0.9344917938666385,
+          0.8828824181436985,
+          0.7600697696029864,
+          0.8545994776693482
+        ],
+        "law_action_mean_by_time": [
+          6098.193186423093,
+          226.7930805351704,
+          1245.0202659502331,
+          207.1222414883499,
+          196.25022455410144,
+          181.96633361372903,
+          204.80832497013526,
+          408.28050017382935,
+          857.9064980437561,
+          531.3475313264365,
+          1411.0120251522276
+        ],
+        "law_final_time_contribution_fraction": 0.07218562739349126,
+        "note": "Post-hoc endpoint-leverage diagnostic only; this is not the predeclared full-horizon estimand.",
+        "physical_times": [
+          21.0,
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0,
+          31.0
+        ],
+        "without_final_time_action_ratio": 0.8812781496189548,
+        "without_final_time_action_reduction": 0.11872185038104521,
+        "without_final_time_full_action": 375.90260780029706,
+        "without_final_time_law_action": 426.54252571997733
+      },
+      "validation": {
+        "full": {
+          "full_action_max_to_median": 1.7703627201336558,
+          "summary": {
+            "full_action": {
+              "mean": 401.4955167782889,
+              "n": 64,
+              "se": 14.866163920109603
+            },
+            "law_risk": {
+              "mean": 0.07505456292818202,
+              "n": 64,
+              "se": 0.0008585331737313624
+            },
+            "tangent_action": {
+              "mean": 12.677472912942672,
+              "n": 64,
+              "se": 0.4034600496190384
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -188.95525814357592,
+          "valid_fraction": 1.0
+        },
+        "law": {
+          "full_action_max_to_median": 2.003997972210804,
+          "summary": {
+            "full_action": {
+              "mean": 460.0530868406173,
+              "n": 64,
+              "se": 18.77938749977088
+            },
+            "law_risk": {
+              "mean": 0.07740439476701241,
+              "n": 64,
+              "se": 0.0009703769303392981
+            },
+            "tangent_action": {
+              "mean": 13.001876352031154,
+              "n": 64,
+              "se": 0.41789237659321915
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -203.97298440771866,
+          "valid_fraction": 1.0
+        },
+        "tangent": {
+          "full_action_max_to_median": 1.7903703678084806,
+          "summary": {
+            "full_action": {
+              "mean": 433.5183810876272,
+              "n": 64,
+              "se": 16.48749975912068
+            },
+            "law_risk": {
+              "mean": 0.07633404123331612,
+              "n": 64,
+              "se": 0.000905905314341186
+            },
+            "tangent_action": {
+              "mean": 12.823228470882023,
+              "n": 64,
+              "se": 0.4100087124885396
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -199.3715053457968,
+          "valid_fraction": 1.0
+        }
+      },
+      "validation_action_advantage": true,
+      "validation_action_ratio": 0.8727156240501103,
+      "validation_action_ratio_by_time": [
+        0.8849677508292447,
+        0.8585565215384802,
+        0.884612795488742,
+        0.9688317845679609,
+        0.803772876289937,
+        0.774671836119726,
+        0.8445876733929615,
+        0.9344917938666385,
+        0.8828824181436985,
+        0.7600697696029864,
+        0.8545994776693482
+      ],
+      "validation_action_reduction": 0.12728437594988973,
+      "validation_full_action": 401.4955167782889,
+      "validation_full_risk": 0.07505456292818202,
+      "validation_information_equivalent": true,
+      "validation_law_action": 460.0530868406173,
+      "validation_law_risk": 0.07740439476701241,
+      "validation_risk_difference": -0.0023498318388303907,
+      "validation_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      }
+    },
+    {
+      "designs": {
+        "full": [
+          26.6033277604757,
+          13.785867820058055,
+          5.317692968977376,
+          5.28963850460771
+        ],
+        "law": [
+          3.8807858917808966,
+          30.27675365666433,
+          28.674844819674245,
+          2.725443993662944
+        ],
+        "tangent": [
+          3.4048075332432837,
+          30.15405823586023,
+          28.85500745293668,
+          2.606220581090132
+        ]
+      },
+      "epsilon_r": 0.009999999999999995,
+      "full_action_max_to_median": 2.027619899745142,
+      "full_trials": 64,
+      "full_valid_trials": 64,
+      "law_action_max_to_median": 1.7672585522657496,
+      "law_trials": 64,
+      "law_valid_trials": 64,
+      "paired_bootstrap_reduction_95": {
+        "estimate": 0.744830308372886,
+        "lower": 0.7187607688009507,
+        "reps": 10000,
+        "upper": 0.7686574776241805
+      },
+      "paired_valid_trials": 64,
+      "reference_seed": 20260820,
+      "result": "/home/zanot/projects/tesseract2026/experiments/active_nematic/outputs/run_guarded_vortices_budget/position_polarity_reference_seed_20260820/result.json",
+      "result_schema_version": 1,
+      "risk_max": 0.06603814126472538,
+      "risk_star": 0.05603814126472538,
+      "selection": {
+        "full": {
+          "certified": true,
+          "full_action": 148.57987072539305,
+          "law_risk": 0.058130192476022836,
+          "law_slack_to_max": 0.007907948788702539,
+          "valid": true
+        },
+        "law": {
+          "certified": true,
+          "full_action": 403.8090403099547,
+          "law_risk": 0.05603814126472538,
+          "law_slack_to_max": 0.009999999999999995,
+          "valid": true
+        },
+        "tangent": {
+          "certified": true,
+          "full_action": 431.09835423760035,
+          "law_risk": 0.05710592115568369,
+          "law_slack_to_max": 0.008932220109041683,
+          "valid": true
+        }
+      },
+      "selection_action_ratio": 0.3679458751377792,
+      "selection_certified": true,
+      "selection_full_action": 148.57987072539305,
+      "selection_full_risk": 0.058130192476022836,
+      "selection_law_action": 403.8090403099547,
+      "selection_law_risk": 0.05603814126472538,
+      "selection_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      },
+      "state_mode": "position_polarity",
+      "time_diagnostics": {
+        "action_physical_times": [
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0
+        ],
+        "final_action_time": 30.0,
+        "full_action_mean_by_time": [
+          128.6019986852276,
+          109.91448393895226,
+          142.0353558516808,
+          62.762473687842956,
+          63.51257244397398,
+          53.122864601271864,
+          56.94902211909915,
+          60.36594270872749,
+          90.88324380359992,
+          312.9712983693387,
+          1513.954033555475
+        ],
+        "full_final_time_contribution_fraction": 0.21116052084099182,
+        "full_to_law_ratio_by_action_time": [
+          0.2918129478268631,
+          0.13288709944330565,
+          0.15824079668234897,
+          0.6914105865008687,
+          0.8425610905275377,
+          0.4426657586086385,
+          0.3257104007762351,
+          0.13953023935220352,
+          1.2019275734243906
+        ],
+        "full_to_law_ratio_by_time": [
+          0.02148696974697748,
+          0.2918129478268631,
+          0.13288709944330565,
+          0.15824079668234897,
+          0.6914105865008687,
+          0.8425610905275377,
+          0.4426657586086385,
+          0.3257104007762351,
+          0.13953023935220352,
+          1.2019275734243906,
+          1.8165978422273237
+        ],
+        "law_action_mean_by_time": [
+          5985.115639831798,
+          376.6607505166842,
+          1068.8423213893545,
+          396.6263757748372,
+          91.85941564100447,
+          63.04927345744271,
+          128.6501632701342,
+          185.33624521925918,
+          651.3515939307723,
+          260.3911460968132,
+          833.4007661812599
+        ],
+        "law_final_time_contribution_fraction": 0.044829460758024776,
+        "note": "Post-hoc endpoint-leverage diagnostic only; this is not the predeclared full-horizon estimand.",
+        "physical_times": [
+          21.0,
+          22.0,
+          23.0,
+          24.0,
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0,
+          31.0
+        ],
+        "without_final_time_action_ratio": 0.2202065466232743,
+        "without_final_time_action_reduction": 0.7797934533767257,
+        "without_final_time_full_action": 77.02101361198176,
+        "without_final_time_law_action": 349.7671381393943
+      },
+      "validation": {
+        "full": {
+          "full_action_max_to_median": 2.027619899745142,
+          "summary": {
+            "full_action": {
+              "mean": 92.63429579629269,
+              "n": 64,
+              "se": 3.223159285173696
+            },
+            "law_risk": {
+              "mean": 0.053420220648497566,
+              "n": 64,
+              "se": 6.402837804982994e-05
+            },
+            "tangent_action": {
+              "mean": 13.321091338034138,
+              "n": 64,
+              "se": 0.4748294854183918
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -40.937904959629776,
+          "valid_fraction": 1.0
+        },
+        "law": {
+          "full_action_max_to_median": 1.7672585522657496,
+          "summary": {
+            "full_action": {
+              "mean": 363.0301671236941,
+              "n": 64,
+              "se": 13.105830866607558
+            },
+            "law_risk": {
+              "mean": 0.06493819167502843,
+              "n": 64,
+              "se": 0.0004567842474524183
+            },
+            "tangent_action": {
+              "mean": 11.588451295569898,
+              "n": 64,
+              "se": 0.34865379180612516
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -160.35660987717523,
+          "valid_fraction": 1.0
+        },
+        "tangent": {
+          "full_action_max_to_median": 1.8161850843593719,
+          "summary": {
+            "full_action": {
+              "mean": 404.99711474894605,
+              "n": 64,
+              "se": 16.025245266665664
+            },
+            "law_risk": {
+              "mean": 0.06603894206919836,
+              "n": 64,
+              "se": 0.0005066620402070554
+            },
+            "tangent_action": {
+              "mean": 11.30269036674329,
+              "n": 64,
+              "se": 0.350665456885263
+            },
+            "trials": 64,
+            "valid_trials": 64
+          },
+          "tangent_lower_bound_max_violation": -172.27592905638784,
+          "valid_fraction": 1.0
+        }
+      },
+      "validation_action_advantage": true,
+      "validation_action_ratio": 0.255169691627114,
+      "validation_action_ratio_by_time": [
+        0.02148696974697748,
+        0.2918129478268631,
+        0.13288709944330565,
+        0.15824079668234897,
+        0.6914105865008687,
+        0.8425610905275377,
+        0.4426657586086385,
+        0.3257104007762351,
+        0.13953023935220352,
+        1.2019275734243906,
+        1.8165978422273237
+      ],
+      "validation_action_reduction": 0.744830308372886,
+      "validation_full_action": 92.63429579629269,
+      "validation_full_risk": 0.053420220648497566,
+      "validation_information_equivalent": true,
+      "validation_law_action": 363.0301671236941,
+      "validation_law_risk": 0.06493819167502843,
+      "validation_risk_difference": -0.011517971026530863,
+      "validation_solver": {
+        "backend": "tesseract_cpp",
+        "cg_maxiter": 1200,
+        "cg_tol": 1e-07,
+        "gauge_strength": 1.0,
+        "grid_shape": [
+          48,
+          48,
+          24
+        ],
+        "native_solver_revision": "periodic-3d-cpp-openmp-ic0-reliable-residual-v2",
+        "operator_floor_rel": 2e-05,
+        "polarity_metric_radius": 1.0,
+        "raster_bandwidth": 1.2,
+        "state_dimension": 3,
+        "time_guard_points": 1,
+        "time_weights": [
+          0.0,
+          0.0625,
+          0.12499999999999999,
+          0.125,
+          0.125,
+          0.12499999999999997,
+          0.12499999999999997,
+          0.12500000000000003,
+          0.12500000000000003,
+          0.062499999999999986,
+          0.0
+        ],
+        "trial_time_batching": true
+      }
+    }
+  ],
+  "schema_version": 1,
+  "validation_action_advantage_seeds": 3,
+  "validation_action_ratio_max": 0.8727156240501103,
+  "validation_action_ratio_mean": 0.6480452842585137,
+  "validation_action_ratio_median": 0.8162505370983171,
+  "validation_action_ratio_min": 0.255169691627114,
+  "validation_information_equivalent_seeds": 3,
+  "validation_joint_success_seeds": 3
+}

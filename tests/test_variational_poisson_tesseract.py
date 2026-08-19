@@ -58,8 +58,11 @@ def test_variational_native_recovers_neumann_cosine_manufactured_solution():
     np.testing.assert_allclose(result["action"][0], expected_action, rtol=1e-12)
     np.testing.assert_allclose(result["objective"][0], -0.5 * expected_action, rtol=1e-12)
     assert result["scaled_weak_relative_residual"][0] < 1e-12
+    assert result["retained_scaled_weak_relative_residual"][0] < 1e-12
+    assert result["discarded_scaled_load_relative_residual"][0] < 1e-12
     assert result["weak_relative_residual"][0] < 1e-12
     assert abs(result["gauge_residual"][0]) < 1e-14
+    assert result["gauge_relative_residual"][0] < 1e-14
     assert abs(result["compatibility_relative_residual"][0]) < 1e-14
     assert result["energy_load_identity_relative_error"][0] < 1e-12
 
@@ -90,6 +93,7 @@ def test_variational_native_is_log_normalization_shift_invariant():
     assert np.all(result["converged"] == 1.0)
     assert np.all(result["retained_rank"] == result["basis_size"])
     assert np.max(result["scaled_weak_relative_residual"]) < 1e-10
+    assert np.max(result["retained_scaled_weak_relative_residual"]) < 1e-10
     assert np.max(np.abs(result["gauge_residual"])) < 1e-13
     np.testing.assert_allclose(result["action"][0], result["action"][1], rtol=1e-11)
     np.testing.assert_allclose(
