@@ -1,0 +1,87 @@
+{
+  "cumulative_vjp_differences_seconds": {
+    "forcing_beyond_iprojection": 0.016969663000054425,
+    "iprojection_beyond_reconstruction": 0.013643859000012526,
+    "poisson_beyond_raster": 0.020382366000148977,
+    "raster_beyond_forcing": -0.0010068340001225806,
+    "reconstruction_beyond_geometry": 0.041600496999990355
+  },
+  "note": "Differences of separately compiled cumulative kernels are diagnostic, not perfectly additive, because XLA fusion and scalar cotangents differ.",
+  "schema_version": 1,
+  "shared_polytope_optimization": {
+    "gradient_max_absolute_error": 0.0,
+    "gradient_relative_l2_error": 0.0,
+    "legacy_value_gradient_seconds": 0.1307516020000321,
+    "optimized_value_gradient_seconds": 0.07229175399993437,
+    "speedup": 1.808665508380815,
+    "value_absolute_error": 0.0
+  },
+  "timings": {
+    "A_geometry": {
+      "first_forward_compile_and_run_seconds": 0.18034096700000646,
+      "first_value_gradient_compile_and_run_seconds": 0.40707407699994747,
+      "forward_seconds": 0.0005158820000588094,
+      "value_gradient_seconds": 0.0010845689999996466
+    },
+    "B_geometry_reconstruction": {
+      "first_forward_compile_and_run_seconds": 1.5490452520000417,
+      "first_value_gradient_compile_and_run_seconds": 2.815572002999943,
+      "forward_seconds": 0.03493257299999186,
+      "value_gradient_seconds": 0.04268506599999
+    },
+    "C_geometry_reconstruction_iprojection": {
+      "first_forward_compile_and_run_seconds": 4.756919745999994,
+      "first_value_gradient_compile_and_run_seconds": 8.598756628000046,
+      "forward_seconds": 0.04565494399992076,
+      "value_gradient_seconds": 0.05632892500000253
+    },
+    "D_geometry_reconstruction_iprojection_forcing": {
+      "first_forward_compile_and_run_seconds": 6.4330781719999095,
+      "first_value_gradient_compile_and_run_seconds": 12.523333930999911,
+      "forward_seconds": 0.044194998999955715,
+      "value_gradient_seconds": 0.07329858800005695
+    },
+    "E0_legacy_repeated_polytope_raster": {
+      "first_forward_compile_and_run_seconds": 8.486751073999926,
+      "first_value_gradient_compile_and_run_seconds": 17.48288959799993,
+      "forward_seconds": 0.05893431000004057,
+      "value_gradient_seconds": 0.1307516020000321
+    },
+    "E_geometry_reconstruction_iprojection_forcing_raster": {
+      "first_forward_compile_and_run_seconds": 8.701622173000032,
+      "first_value_gradient_compile_and_run_seconds": 17.08902065799998,
+      "forward_seconds": 0.04722515299999941,
+      "value_gradient_seconds": 0.07229175399993437
+    },
+    "F_complete_stage4_tesseract_cpp": {
+      "first_forward_compile_and_run_seconds": 9.375334253999995,
+      "first_value_gradient_compile_and_run_seconds": 18.62896289299988,
+      "forward_seconds": 0.053379824000103326,
+      "value_gradient_seconds": 0.09267412000008335
+    }
+  },
+  "workload": {
+    "OMP_NUM_THREADS": "8",
+    "affinity_cpu_count": 1,
+    "design_deg": [
+      23.26406012392596,
+      71.72283796963714
+    ],
+    "gradient_grid_n": 41,
+    "jax_devices": [
+      "TFRT_CPU_0"
+    ],
+    "reference_particles": 2592,
+    "repetitions": 3,
+    "time_indices": [
+      0,
+      3,
+      7,
+      10,
+      13,
+      17,
+      20
+    ],
+    "trials": 4
+  }
+}

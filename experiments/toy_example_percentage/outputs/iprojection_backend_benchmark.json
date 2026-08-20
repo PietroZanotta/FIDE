@@ -1,0 +1,55 @@
+{
+  "errors": {
+    "complete_stage4_gradient_max_absolute": 2.7491030323290033e-05,
+    "complete_stage4_gradient_relative_l2": 5.333246681424129e-09,
+    "complete_stage4_value_absolute": 3.1410409064847045e-06,
+    "lambda_max_absolute": 8.571230964093957e-06,
+    "residual_max_absolute": 6.683196675932868e-08,
+    "trajectory_gradient_max_absolute": 2.9143245354745773e-06,
+    "trajectory_gradient_relative_l2": 2.167536500589002e-08,
+    "trajectory_value_absolute": 3.180653565526548e-08,
+    "weights_max_absolute": 4.718499279146582e-08
+  },
+  "native_diagnostics": {
+    "all_converged": true,
+    "max_iterations": 7,
+    "max_residual_norm": 4.75142952894977e-08,
+    "mean_iterations": 4.321428571428571
+  },
+  "schema_version": 1,
+  "speedups": {
+    "complete_stage4_value_gradient": 1.0334694799882154,
+    "trajectory_forward": 3.4075719161153177,
+    "trajectory_value_gradient": 1.4122959153996872
+  },
+  "timings": {
+    "jax_complete_stage4_value_gradient_seconds": 0.0880164700001842,
+    "jax_trajectory_forward_seconds": 0.008932960000038292,
+    "jax_trajectory_value_gradient_seconds": 0.009857929999725457,
+    "tesseract_complete_stage4_value_gradient_seconds": 0.08516600799976004,
+    "tesseract_trajectory_forward_seconds": 0.002621502999772929,
+    "tesseract_trajectory_value_gradient_seconds": 0.006980074000239256
+  },
+  "workload": {
+    "OMP_NUM_THREADS": "4",
+    "affinity_cpu_count": 1,
+    "design_deg": [
+      23.26405625622187,
+      71.72393810240928
+    ],
+    "jax_devices": [
+      "TFRT_CPU_0"
+    ],
+    "repetitions": 5,
+    "shape_phi": [
+      7,
+      2592,
+      2
+    ],
+    "shape_targets": [
+      4,
+      7,
+      2
+    ]
+  }
+}

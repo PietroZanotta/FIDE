@@ -1,0 +1,1039 @@
+{
+  "config": {
+    "feasibility": {
+      "directions": 96,
+      "feasibility_tol": 1e-09,
+      "margin": 1e-06
+    },
+    "law": {
+      "epsilon_l": 0.0005,
+      "epsilon_r": 0.0002,
+      "mmd_bandwidth": 0.55
+    },
+    "measurement": {
+      "acquisition_k": 11,
+      "finite_n": 100,
+      "min_sep_deg": 20.0,
+      "obs_noise_std": 0.01,
+      "sensor_radius": 1.5,
+      "sensor_width": 0.45
+    },
+    "moment_reconstruction": {
+      "kind": "endpoint_anchored_quadratic_gls",
+      "ridge_rel": 1e-12,
+      "variance_floor": 1e-10
+    },
+    "name": "toy_example",
+    "optimization": {
+      "constraint_penalty": 10000.0,
+      "feasibility_tol": 1e-06,
+      "full_exact_audit_candidates": 30,
+      "full_exact_poisson_backend": "tesseract_cpp",
+      "full_exact_rescore_candidates": 10,
+      "full_gradient_cg_maxiter": 360,
+      "full_gradient_cg_tol": 1e-06,
+      "full_gradient_grid_n": 41,
+      "full_gradient_poisson_backend": "tesseract_cpp",
+      "full_gradient_time_n": 7,
+      "full_gradient_trials": 4,
+      "full_learning_rate": 0.01,
+      "full_local_starts": 16,
+      "full_min_exact_finalists": 10,
+      "full_min_exact_law_valid": 12,
+      "full_prescreen_trials": 12,
+      "full_random_starts": 8,
+      "full_start_count": 7,
+      "full_start_perturb_deg": 6.0,
+      "full_steps": 40,
+      "invalid_penalty": 10000.0,
+      "jit_objectives": true,
+      "law_exact_audit_candidates": 8,
+      "law_gradient_trials": 4,
+      "law_learning_rate": 0.015,
+      "law_start_count": 4,
+      "law_steps": 50,
+      "learning_rate": 0.02,
+      "population_steps": 120,
+      "start_count": 12,
+      "tangent_exact_audit_candidates": 16,
+      "tangent_exact_rescore_candidates": 8,
+      "tangent_gradient_trials": 4,
+      "tangent_learning_rate": 0.012,
+      "tangent_local_starts": 12,
+      "tangent_min_exact_finalists": 6,
+      "tangent_min_exact_law_valid": 8,
+      "tangent_start_count": 7,
+      "tangent_start_perturb_deg": 5.0,
+      "tangent_steps": 40
+    },
+    "particle_mfsi": {
+      "covariance_ridge": 1e-07,
+      "exact_covariance_min_eig": 1e-12,
+      "exact_covariance_ridge": 0.0,
+      "exact_tangent_ridge": 0.0,
+      "max_tangent_compatibility_residual": 1e-07,
+      "tangent_pinv_rcond": 1e-10,
+      "tangent_ridge": 1e-07
+    },
+    "poisson": {
+      "cg_maxiter": 520,
+      "cg_tol": 1e-08,
+      "gauge_strength": 1.0,
+      "grid_n": 51,
+      "operator_floor_rel": 2e-05,
+      "time_n": 21
+    },
+    "population": {
+      "alpha_max_deg": 60.0,
+      "alpha_min_deg": 30.0,
+      "alpha_quadrature_n": 5,
+      "domain_half_width": 3.2,
+      "radius": 1.5,
+      "sigma": 0.3
+    },
+    "projection": {
+      "implicit_ridge": 0.0,
+      "lambda_clip": 1000.0,
+      "max_steps": 300,
+      "newton_ridge": 1e-07,
+      "search_line_search_steps": 6,
+      "search_max_steps": 80,
+      "search_residual_tol": 1e-07,
+      "solver_accept_tol": 2e-06,
+      "step_cap": 20.0,
+      "trajectory_backend": "tesseract_cpp"
+    },
+    "randomness": {
+      "action_trials": 64,
+      "bootstrap_reps": 5000,
+      "law_trials": 32,
+      "selection_namespace": 8890,
+      "validation_namespace": 8891,
+      "validation_trials": 128
+    },
+    "raster": {
+      "bandwidth": 0.0,
+      "truncate": 4.0
+    },
+    "reference": {
+      "bank_mode": "gauss-hermite",
+      "gh_order": 36,
+      "rk4_substeps_per_time_interval": 16
+    },
+    "reference_training": {
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.999,
+      "adam_eps": 1e-08,
+      "batch_size": 2048,
+      "bridge_noise_std": 0.15,
+      "bridge_schedule": "linear",
+      "grad_clip_norm": 10.0,
+      "hidden_layers": 4,
+      "hidden_width": 128,
+      "learning_rate": 0.001,
+      "log_every": 500,
+      "min_learning_rate_ratio": 0.05,
+      "reuse_checkpoint": true,
+      "seed": 20260813,
+      "train_steps": 12000
+    },
+    "seed": 20260813,
+    "validity": {
+      "max_finite_calibration_resid": 0.001,
+      "max_population_calibration_resid": 1e-05,
+      "min_ess_fraction": 0.03,
+      "min_in_domain_base_mass": 0.995,
+      "tangent_lower_bound_tol": 1e-06
+    }
+  },
+  "config_hash": "ef0094f1d9250d89dd0d35ad8ca47ed48ab61b9760e1661483e3935f3b6daf79",
+  "contrasts": {
+    "full_vs_law_full_action_reduction": {
+      "mean_paired_reduction": 0.1374060617900404,
+      "n": 128,
+      "ratio_of_means_reduction": 0.08052258651381716,
+      "se_paired_reduction": 0.011785739251119445
+    },
+    "full_vs_law_ratio_of_means_bootstrap_95": {
+      "lower": 0.060092763243261224,
+      "reps": 5000,
+      "upper": 0.10398445848596873
+    }
+  },
+  "experiment": "toy_example",
+  "full_exact_evaluator": {
+    "cg_maxiter": 520,
+    "cg_tol": 1e-08,
+    "grid_n": 51,
+    "poisson_backend": "tesseract_cpp",
+    "time_batch_per_trial": 21,
+    "time_n": 21
+  },
+  "full_gradient_proxy": {
+    "cache_signature": "45796be31fb96e7401c4a56eaca1fa5d7e8f8f0e1afb8c654d851233fb3b283e",
+    "cg_maxiter": 360,
+    "cg_tol": 1e-06,
+    "grid_n": 41,
+    "poisson_backend": "tesseract_cpp",
+    "time_indices": [
+      0,
+      3,
+      7,
+      10,
+      13,
+      17,
+      20
+    ],
+    "trials": 4
+  },
+  "full_proxy_agreement": {
+    "candidate_count": 11,
+    "pearson": 0.8353910044993192,
+    "same_best_candidate": false,
+    "spearman_rank": 0.6454545454545455
+  },
+  "full_search_funnel": {
+    "distinct_screen_starts": 42,
+    "exact_full_finalists": 11,
+    "exact_law_audited": 30,
+    "exact_law_valid": 27,
+    "gradient_starts": 7,
+    "screened_candidates": 49
+  },
+  "law_screens": {
+    "L_max": 0.0692360118546043,
+    "L_star": 0.0687360118546043,
+    "R_max": 0.06638573672099662,
+    "R_star": 0.06618573672099662,
+    "epsilon_l": 0.0005000000000000004,
+    "epsilon_r": 0.00020000000000000573
+  },
+  "randomness": {
+    "action_trials_effective": 64,
+    "law_trials_effective": 32,
+    "selection_bank": "selection_bank.npz",
+    "selection_namespace": 8890,
+    "validation_bank": "validation_bank.npz",
+    "validation_namespace": 8891,
+    "validation_trials_effective": 128
+  },
+  "reference": {
+    "checkpoint": "/home/zanot/projects/tesseract2026/experiments/toy_example/outputs/pareto/epsR_0p0002000/reference.npz",
+    "metadata": {
+      "endpoint_source": {
+        "radius": 1.5,
+        "sigma": 0.3
+      },
+      "training": {
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-08,
+        "batch_size": 2048,
+        "bridge_noise_std": 0.15,
+        "bridge_schedule": "linear",
+        "grad_clip_norm": 10.0,
+        "hidden_layers": 4,
+        "hidden_width": 128,
+        "history": [
+          {
+            "grad_norm": 9.227810408157035,
+            "learning_rate": 0.001,
+            "loss": 5.245678355039628,
+            "step": 1
+          },
+          {
+            "grad_norm": 0.7372015887608072,
+            "learning_rate": 0.0009959518508566789,
+            "loss": 1.382287957273163,
+            "step": 500
+          },
+          {
+            "grad_norm": 0.7233277173992929,
+            "learning_rate": 0.000983844259984829,
+            "loss": 1.4857991442552398,
+            "step": 1000
+          },
+          {
+            "grad_norm": 0.5625660688168195,
+            "learning_rate": 0.0009638844098227798,
+            "loss": 1.4839091309386818,
+            "step": 1500
+          },
+          {
+            "grad_norm": 0.3337279724883056,
+            "learning_rate": 0.0009364138757862743,
+            "loss": 1.4039922702258898,
+            "step": 2000
+          },
+          {
+            "grad_norm": 0.629645143068158,
+            "learning_rate": 0.000901902764564894,
+            "loss": 1.508450139493765,
+            "step": 2500
+          },
+          {
+            "grad_norm": 0.3688197434326587,
+            "learning_rate": 0.0008609416691273997,
+            "loss": 1.4657113740705285,
+            "step": 3000
+          },
+          {
+            "grad_norm": 0.600118621555887,
+            "learning_rate": 0.0008142315618302866,
+            "loss": 1.403001053557377,
+            "step": 3500
+          },
+          {
+            "grad_norm": 0.350444679158535,
+            "learning_rate": 0.0007625717985900522,
+            "loss": 1.4155837446007014,
+            "step": 4000
+          },
+          {
+            "grad_norm": 0.3713906717786599,
+            "learning_rate": 0.0007068464394052814,
+            "loss": 1.4027606763834852,
+            "step": 4500
+          },
+          {
+            "grad_norm": 0.31587260395178923,
+            "learning_rate": 0.0006480091193271628,
+            "loss": 1.3850055096694787,
+            "step": 5000
+          },
+          {
+            "grad_norm": 0.3645282546229409,
+            "learning_rate": 0.0005870667287834183,
+            "loss": 1.410862179382299,
+            "step": 5500
+          },
+          {
+            "grad_norm": 0.42268909480374833,
+            "learning_rate": 0.0005250621825363028,
+            "loss": 1.4070617964306447,
+            "step": 6000
+          },
+          {
+            "grad_norm": 0.41363372579761687,
+            "learning_rate": 0.0004630565721516553,
+            "loss": 1.4560636227679715,
+            "step": 6500
+          },
+          {
+            "grad_norm": 0.4717377887354614,
+            "learning_rate": 0.0004021110074060339,
+            "loss": 1.3945873616896212,
+            "step": 7000
+          },
+          {
+            "grad_norm": 0.4582613055148635,
+            "learning_rate": 0.00034326845738220745,
+            "loss": 1.4478653444404221,
+            "step": 7500
+          },
+          {
+            "grad_norm": 0.40768567092944913,
+            "learning_rate": 0.000287535902008614,
+            "loss": 1.5194398148575798,
+            "step": 8000
+          },
+          {
+            "grad_norm": 0.30768157896324877,
+            "learning_rate": 0.00023586709948572295,
+            "loss": 1.3845204310260737,
+            "step": 8500
+          },
+          {
+            "grad_norm": 0.2854534842826785,
+            "learning_rate": 0.00018914626450249506,
+            "loss": 1.4814385672180757,
+            "step": 9000
+          },
+          {
+            "grad_norm": 0.28020162849093433,
+            "learning_rate": 0.00014817293655966407,
+            "loss": 1.506069722840977,
+            "step": 9500
+          },
+          {
+            "grad_norm": 0.29994266983678536,
+            "learning_rate": 0.00011364829735012142,
+            "loss": 1.472963565146205,
+            "step": 10000
+          },
+          {
+            "grad_norm": 0.28550160599805796,
+            "learning_rate": 8.61631713487832e-05,
+            "loss": 1.469036456496646,
+            "step": 10500
+          },
+          {
+            "grad_norm": 0.26098259753800795,
+            "learning_rate": 6.61879149593527e-05,
+            "loss": 1.4378096323335265,
+            "step": 11000
+          },
+          {
+            "grad_norm": 0.3198896163096846,
+            "learning_rate": 5.4064367246272464e-05,
+            "loss": 1.3372700258133783,
+            "step": 11500
+          },
+          {
+            "grad_norm": 0.3551749244645814,
+            "learning_rate": 5e-05,
+            "loss": 1.3715870715594516,
+            "step": 12000
+          }
+        ],
+        "learning_rate": 0.001,
+        "min_learning_rate_ratio": 0.05,
+        "seed": 20260813,
+        "train_steps": 12000
+      }
+    },
+    "min_in_domain_base_mass": 0.9999999999999998,
+    "reference_bank": "reference_bank.npz"
+  },
+  "schema_version": 3,
+  "selection": {
+    "full_optimum_deg": [
+      23.264056370699997,
+      71.72393964602179
+    ],
+    "law_optimum_deg": [
+      23.384916430742205,
+      67.95178714113146
+    ],
+    "optimizer_starts_deg": [
+      [
+        25.836561137178435,
+        72.2734356282845
+      ],
+      [
+        259.418236906311,
+        328.78054284768376
+      ],
+      [
+        28.707954532082553,
+        135.50470169622105
+      ],
+      [
+        175.39067329735292,
+        294.213058141993
+      ],
+      [
+        72.96257653755879,
+        140.0688261705221
+      ],
+      [
+        124.96487585075029,
+        160.07619056336716
+      ],
+      [
+        109.44441761050294,
+        184.85684750119395
+      ],
+      [
+        55.01826101357156,
+        166.2999158083578
+      ],
+      [
+        231.44607569829884,
+        260.936258979353
+      ],
+      [
+        7.676159221956347,
+        332.1069297304308
+      ],
+      [
+        107.0465792428122,
+        147.51111486870298
+      ],
+      [
+        257.6205520798591,
+        336.2092465722245
+      ]
+    ],
+    "population_optimum_deg": [
+      23.384916430742205,
+      67.95178714113146
+    ],
+    "tangent_optimum_deg": [
+      24.4396105492577,
+      67.28087707534857
+    ]
+  },
+  "selection_audit": {
+    "full": [
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          22.27317565205972,
+          68.17514990771171
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06626604516840917,
+        "gradient_start_count": 7,
+        "objective": 273.02671183054963,
+        "population_loss": 0.06875475449943871,
+        "prescreen_objective": 300.23230159774624,
+        "screen_objective": 642.9692811909867,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.264056370699997,
+          71.72393964602179
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06636255476138901,
+        "gradient_start_count": 7,
+        "objective": 268.9293745193896,
+        "population_loss": 0.06898030702140732,
+        "prescreen_objective": 315.89430738174764,
+        "screen_objective": 692.4951922080618,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          22.807935872940195,
+          67.84972740458109
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06622318509670452,
+        "gradient_start_count": 7,
+        "objective": 286.70113468920863,
+        "population_loss": 0.06873965620509603,
+        "prescreen_objective": 316.85090336032204,
+        "screen_objective": 682.9806621498894,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          22.69355589367215,
+          66.62061449726359
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06625738024393382,
+        "gradient_start_count": 7,
+        "objective": 293.1723304413728,
+        "population_loss": 0.06875852673822516,
+        "prescreen_objective": 317.6848946794903,
+        "screen_objective": 680.4092093703887,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.383024190071968,
+          71.7075490655188
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06634932257585142,
+        "gradient_start_count": 7,
+        "objective": 272.16870621631034,
+        "population_loss": 0.06897293662417403,
+        "prescreen_objective": 320.24333336500433,
+        "screen_objective": 703.4531327159973,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.086777111831903,
+          69.0608505468599
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06621188562919099,
+        "gradient_start_count": 7,
+        "objective": 284.181565134411,
+        "population_loss": 0.06875937109395161,
+        "prescreen_objective": 321.0309113219691,
+        "screen_objective": 697.4724315782307,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.315788098422367,
+          68.01511435621849
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06618912631083923,
+        "gradient_start_count": 7,
+        "objective": 296.55387269600794,
+        "population_loss": 0.06873616534896124,
+        "prescreen_objective": 331.355033911029,
+        "screen_objective": 719.4463777346302,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.474708950271513,
+          69.26556115357403
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.0661892115924724,
+        "gradient_start_count": 7,
+        "objective": 291.8650530887047,
+        "population_loss": 0.06876168522732787,
+        "prescreen_objective": 332.75286798600763,
+        "screen_objective": 727.3991299000827,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.384916430742205,
+          67.95178714113146
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06618573672099662,
+        "gradient_start_count": 7,
+        "objective": 298.4982416695128,
+        "population_loss": 0.0687360118546043,
+        "prescreen_objective": 333.60578213753524,
+        "screen_objective": 724.7756305470618,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          23.408353930742205,
+          67.95178714113146
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.06618442864153173,
+        "gradient_start_count": 7,
+        "objective": 299.01745624157616,
+        "population_loss": 0.06873601851850068,
+        "prescreen_objective": 334.31374178191294,
+        "screen_objective": 726.5262363338254,
+        "screened_candidate_count": 49
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 42,
+        "eta_deg": [
+          24.4396105492577,
+          67.28087707534857
+        ],
+        "exact_finalist_count": 11,
+        "exact_law_audited_count": 30,
+        "exact_law_valid_count": 27,
+        "finite_risk": 0.0661589932739404,
+        "gradient_start_count": 7,
+        "objective": 325.935452417668,
+        "population_loss": 0.06876124417721063,
+        "prescreen_objective": 366.73901736563204,
+        "screen_objective": 803.7828564793465,
+        "screened_candidate_count": 49
+      }
+    ],
+    "tangent": [
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          24.4396105492577,
+          67.28087707534857
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.0661589932739404,
+        "gradient_start_count": 7,
+        "objective": 2.543703157945659,
+        "population_loss": 0.06876124417721063,
+        "screen_objective": 2.5608162726248214,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          23.412236969716258,
+          67.64048369086122
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06618868714174546,
+        "gradient_start_count": 7,
+        "objective": 2.651669635578945,
+        "population_loss": 0.0687375457468716,
+        "screen_objective": 2.6504118649757524,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          23.419638652964426,
+          67.95178714113146
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06618380391942992,
+        "gradient_start_count": 7,
+        "objective": 2.68066738723733,
+        "population_loss": 0.06873602635585954,
+        "screen_objective": 2.704545903537037,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          23.384916430742205,
+          67.95178714113146
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06618573672099662,
+        "gradient_start_count": 7,
+        "objective": 2.683401837403566,
+        "population_loss": 0.0687360118546043,
+        "screen_objective": 2.7056781657116984,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          22.530130419183674,
+          67.8005875314272
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06624420924544536,
+        "gradient_start_count": 7,
+        "objective": 2.7397821565698925,
+        "population_loss": 0.06874412120856271,
+        "screen_objective": 2.7096729995116084,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          23.282504086564664,
+          68.04560523755667
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06619086971317506,
+        "gradient_start_count": 7,
+        "objective": 2.700633497217601,
+        "population_loss": 0.06873635297833444,
+        "screen_objective": 2.725783203720031,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          23.722938020174908,
+          68.39267644740464
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06616483547657831,
+        "gradient_start_count": 7,
+        "objective": 2.7004030062080613,
+        "population_loss": 0.06873881962639276,
+        "screen_objective": 2.7745990361725825,
+        "screened_candidate_count": 32
+      },
+      {
+        "action_valid": true,
+        "distinct_screen_start_count": 25,
+        "eta_deg": [
+          26.02675757665379,
+          68.91658329046489
+        ],
+        "exact_finalist_count": 8,
+        "exact_law_audited_count": 16,
+        "exact_law_valid_count": 14,
+        "finite_risk": 0.06609718157165076,
+        "gradient_start_count": 7,
+        "objective": 2.6007318047178734,
+        "population_loss": 0.06880002714419903,
+        "screen_objective": 2.8204764911753655,
+        "screened_candidate_count": 32
+      }
+    ]
+  },
+  "selection_certificates": {
+    "full": {
+      "L_excess_from_star": 0.0002442951668030213,
+      "L_max": 0.0692360118546043,
+      "L_selection": 0.06898030702140732,
+      "L_slack_to_max": 0.0002557048331969791,
+      "L_star": 0.0687360118546043,
+      "R_excess_from_star": 0.00017681804039239302,
+      "R_max": 0.06638573672099662,
+      "R_selection": 0.06636255476138901,
+      "R_slack_to_max": 2.3181959607612712e-05,
+      "R_star": 0.06618573672099662,
+      "certified": true,
+      "eta_deg": [
+        23.264056370699997,
+        71.72393964602179
+      ],
+      "full_action_selection": 268.9293745193896,
+      "passes_L": true,
+      "passes_R": true,
+      "required_screens": [
+        "L",
+        "R"
+      ],
+      "tangent_action_selection": 3.1203685677996322
+    },
+    "law": {
+      "L_excess_from_star": 0.0,
+      "L_max": 0.0692360118546043,
+      "L_selection": 0.0687360118546043,
+      "L_slack_to_max": 0.0005000000000000004,
+      "L_star": 0.0687360118546043,
+      "R_excess_from_star": 0.0,
+      "R_max": 0.06638573672099662,
+      "R_selection": 0.06618573672099662,
+      "R_slack_to_max": 0.00020000000000000573,
+      "R_star": 0.06618573672099662,
+      "certified": true,
+      "eta_deg": [
+        23.384916430742205,
+        67.95178714113146
+      ],
+      "full_action_selection": 298.4982416695128,
+      "passes_L": true,
+      "passes_R": true,
+      "required_screens": [
+        "L"
+      ],
+      "tangent_action_selection": 2.683401837403566
+    },
+    "population": {
+      "L_excess_from_star": 0.0,
+      "L_max": 0.0692360118546043,
+      "L_selection": 0.0687360118546043,
+      "L_slack_to_max": 0.0005000000000000004,
+      "L_star": 0.0687360118546043,
+      "R_excess_from_star": 0.0,
+      "R_max": 0.06638573672099662,
+      "R_selection": 0.06618573672099662,
+      "R_slack_to_max": 0.00020000000000000573,
+      "R_star": 0.06618573672099662,
+      "certified": true,
+      "eta_deg": [
+        23.384916430742205,
+        67.95178714113146
+      ],
+      "full_action_selection": 298.4982416695128,
+      "passes_L": true,
+      "passes_R": true,
+      "required_screens": [
+        "L"
+      ],
+      "tangent_action_selection": 2.683401837403566
+    },
+    "tangent": {
+      "L_excess_from_star": 2.523232260633057e-05,
+      "L_max": 0.0692360118546043,
+      "L_selection": 0.06876124417721063,
+      "L_slack_to_max": 0.0004747676773936699,
+      "L_star": 0.0687360118546043,
+      "R_excess_from_star": -2.6743447056221115e-05,
+      "R_max": 0.06638573672099662,
+      "R_selection": 0.0661589932739404,
+      "R_slack_to_max": 0.00022674344705622684,
+      "R_star": 0.06618573672099662,
+      "certified": true,
+      "eta_deg": [
+        24.4396105492577,
+        67.28087707534857
+      ],
+      "full_action_selection": 325.935452417668,
+      "passes_L": true,
+      "passes_R": true,
+      "required_screens": [
+        "L",
+        "R"
+      ],
+      "tangent_action_selection": 2.543703157945659
+    }
+  },
+  "selection_protocol": {
+    "full": "Gradient-based optimization of a lower-fidelity discretization of the same full weighted-Poisson MFSI action (4 CRN trials, 7 time nodes, 41x41 Poisson grid); exact 12-trial common-CRN pre-screen; top 10 plus Law/Tangent/Population incumbents are re-estimated at full time/CG fidelity on the complete action bank. The proxy is never reported as the scientific action.",
+    "population_and_law": "Differentiable batched search with proxy-ranked exact auditing; every selectable candidate is rechecked with exact ConvexHull feasibility, robust hard I-projection, strict all-trial validity, and the complete selection CRN bank.",
+    "tangent": "Exact tangent algebra on a small CRN gradient prefix; proxy-ranked candidates are rechecked against the exact law screens, then the declared finalists and mandatory Law/Population incumbents are evaluated on the complete action bank."
+  },
+  "smoke": false,
+  "timings_seconds": {
+    "config_hash": "ef0094f1d9250d89dd0d35ad8ca47ed48ab61b9760e1661483e3935f3b6daf79",
+    "phases_seconds": {
+      "setup_and_cached_inputs": 4.079428097000346,
+      "stage_3_tangent": 174.20289345999845,
+      "stage_4_full": 433.94777738300036,
+      "stages_1_2_law": 85.56798291800078,
+      "validation_and_certification": 192.83503305699924
+    },
+    "schema_version": 1,
+    "total_seconds": 890.704838564001
+  },
+  "validation": {
+    "full": {
+      "eta_deg": [
+        23.264056370699997,
+        71.72393964602179
+      ],
+      "full_action": {
+        "mean": 288.76910271810317,
+        "n": 128,
+        "se": 15.437255389419144
+      },
+      "law_risk": {
+        "mean": 0.06598731614694221,
+        "n": 128,
+        "se": 0.00023889457660257083
+      },
+      "tangent_action": {
+        "mean": 3.2348497727101684,
+        "n": 128,
+        "se": 0.09077221426755107
+      },
+      "tangent_lower_bound_check": {
+        "checked_trials": 128,
+        "max_violation": 0.0,
+        "tolerance": 1e-06,
+        "violating_trials": 0
+      },
+      "valid_fraction": 1.0
+    },
+    "law": {
+      "eta_deg": [
+        23.384916430742205,
+        67.95178714113146
+      ],
+      "full_action": {
+        "mean": 314.0578533878718,
+        "n": 128,
+        "se": 13.065824998650692
+      },
+      "law_risk": {
+        "mean": 0.06581583881174527,
+        "n": 128,
+        "se": 0.00021071385858786602
+      },
+      "tangent_action": {
+        "mean": 2.7294111796217893,
+        "n": 128,
+        "se": 0.0479023564029904
+      },
+      "tangent_lower_bound_check": {
+        "checked_trials": 128,
+        "max_violation": 0.0,
+        "tolerance": 1e-06,
+        "violating_trials": 0
+      },
+      "valid_fraction": 1.0
+    },
+    "population": {
+      "eta_deg": [
+        23.384916430742205,
+        67.95178714113146
+      ],
+      "full_action": {
+        "mean": 314.0578533878718,
+        "n": 128,
+        "se": 13.065824998650692
+      },
+      "law_risk": {
+        "mean": 0.06581583881174527,
+        "n": 128,
+        "se": 0.00021071385858786602
+      },
+      "tangent_action": {
+        "mean": 2.7294111796217893,
+        "n": 128,
+        "se": 0.0479023564029904
+      },
+      "tangent_lower_bound_check": {
+        "checked_trials": 128,
+        "max_violation": 0.0,
+        "tolerance": 1e-06,
+        "violating_trials": 0
+      },
+      "valid_fraction": 1.0
+    },
+    "tangent": {
+      "eta_deg": [
+        24.4396105492577,
+        67.28087707534857
+      ],
+      "full_action": {
+        "mean": 343.9159500434665,
+        "n": 128,
+        "se": 15.178429551986426
+      },
+      "law_risk": {
+        "mean": 0.06580547334688142,
+        "n": 128,
+        "se": 0.000208832644924017
+      },
+      "tangent_action": {
+        "mean": 2.5924223581401864,
+        "n": 128,
+        "se": 0.04534553350652256
+      },
+      "tangent_lower_bound_check": {
+        "checked_trials": 128,
+        "max_violation": 0.0,
+        "tolerance": 1e-06,
+        "violating_trials": 0
+      },
+      "valid_fraction": 1.0
+    }
+  }
+}

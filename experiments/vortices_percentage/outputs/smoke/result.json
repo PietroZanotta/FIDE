@@ -1,0 +1,342 @@
+{
+  "backends": {
+    "full_exact_poisson": "tesseract_cpp",
+    "full_gradient_poisson": "tesseract_cpp",
+    "iprojection": "tesseract_cpp"
+  },
+  "config": {
+    "law": {
+      "epsilon_l": 0.025,
+      "epsilon_r": 0.002,
+      "mmd_bandwidths": [
+        0.05,
+        0.1,
+        0.2,
+        0.4
+      ]
+    },
+    "measurement": {
+      "acquisition_k": 5,
+      "boundary_margin": 0.24,
+      "finite_n": 64,
+      "min_sep": 0.24,
+      "n_sensors": 4,
+      "obs_noise_std": 0.005,
+      "sensor_width": 0.12
+    },
+    "moment_reconstruction": {
+      "internal_knots": 3,
+      "kind": "endpoint_anchored_cubic_penalized_ls",
+      "ridge_rel": 1e-10,
+      "roughness_quadrature_order": 8,
+      "smoothing": 0.0001
+    },
+    "name": "vortices_double_gyre",
+    "optimization": {
+      "constraint_penalty": 10000.0,
+      "exact_batch_trials": 4,
+      "feasibility_tol": 1e-06,
+      "full_exact_audit_candidates": 30,
+      "full_exact_poisson_backend": "tesseract_cpp",
+      "full_exact_rescore_candidates": 8,
+      "full_gradient_cg_maxiter": 360,
+      "full_gradient_cg_tol": 1e-06,
+      "full_gradient_grid_nx": 16,
+      "full_gradient_grid_ny": 8,
+      "full_gradient_poisson_backend": "tesseract_cpp",
+      "full_gradient_time_n": 3,
+      "full_gradient_trials": 1,
+      "full_learning_rate": 0.004,
+      "full_local_scale": 0.06,
+      "full_local_starts": 10,
+      "full_prescreen_trials": 1,
+      "full_start_count": 3,
+      "full_steps": 0,
+      "invalid_penalty": 1000.0,
+      "law_anchor_consistency_tol": 1e-10,
+      "law_anchor_refinement_passes": 2,
+      "law_exact_audit_candidates": 24,
+      "law_gradient_trials": 1,
+      "law_learning_rate": 0.008,
+      "law_min_exact_valid": 8,
+      "law_start_count": 6,
+      "law_steps": 0,
+      "learning_rate": 0.01,
+      "population_exact_audit_candidates": 20,
+      "population_learning_rate": 0.01,
+      "population_min_exact_valid": 6,
+      "population_start_count": 8,
+      "population_steps": 0,
+      "smoke_probe_count": 16,
+      "start_count": 4,
+      "start_oversample": 128,
+      "tangent_exact_audit_candidates": 30,
+      "tangent_exact_rescore_candidates": 10,
+      "tangent_gradient_trials": 1,
+      "tangent_learning_rate": 0.006,
+      "tangent_local_scale": 0.08,
+      "tangent_local_starts": 12,
+      "tangent_start_count": 4,
+      "tangent_steps": 0
+    },
+    "particle_mfsi": {
+      "covariance_ridge": 1e-07,
+      "exact_covariance_min_eig": 1e-08,
+      "exact_covariance_ridge": 0.0,
+      "exact_tangent_ridge": 0.0,
+      "max_tangent_compatibility_residual": 1e-07,
+      "tangent_pinv_rcond": 1e-10,
+      "tangent_ridge": 1e-07
+    },
+    "poisson": {
+      "cg_maxiter": 520,
+      "cg_tol": 1e-07,
+      "gauge_strength": 1.0,
+      "grid_nx": 32,
+      "grid_ny": 16,
+      "operator_floor_rel": 2e-05,
+      "time_n": 5,
+      "x_max": 2.0,
+      "x_min": 0.0,
+      "y_max": 1.0,
+      "y_min": 0.0
+    },
+    "projection": {
+      "fallback_newton_steps": 0,
+      "implicit_ridge": 0.0,
+      "lambda_clip": 1000.0,
+      "lbfgs_maxiter": 800,
+      "max_retries": 2,
+      "max_steps": 300,
+      "newton_ridge": 1e-07,
+      "retry_clip_multiplier": 2.0,
+      "search_line_search_steps": 6,
+      "search_max_steps": 60,
+      "search_residual_tol": 1e-06,
+      "solver_accept_tol": 2e-06,
+      "step_cap": 20.0,
+      "support_certificate_tol": 1e-10,
+      "trajectory_backend": "tesseract_cpp"
+    },
+    "randomness": {
+      "action_trials": 1,
+      "law_trials": 1,
+      "selection_namespace": 9890,
+      "validation_namespace": 9891,
+      "validation_trials": 1
+    },
+    "raster": {
+      "bandwidth": 0.0,
+      "truncate": 4.0
+    },
+    "reference": {
+      "bank_seed_offset": 3001,
+      "endpoint_particles": 2048,
+      "endpoint_seed_offset": 2001,
+      "particles": 1024,
+      "rk4_substeps_per_time_interval": 2
+    },
+    "reference_training": {
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.999,
+      "adam_eps": 1e-08,
+      "batch_size": 128,
+      "bridge_noise_std": 0.0,
+      "bridge_schedule": "linear",
+      "grad_clip_norm": 10.0,
+      "hidden_layers": 2,
+      "hidden_width": 32,
+      "learning_rate": 0.002,
+      "log_every": 5,
+      "min_learning_rate_ratio": 0.05,
+      "seed": 20260815,
+      "train_steps": 10
+    },
+    "seed": 20260815,
+    "truth": {
+      "amplitude": 0.1,
+      "endpoint_rk4_substeps": 32,
+      "epsilon": 0.25,
+      "horizon": 10.0,
+      "initial": {
+        "background_weight": 0.1,
+        "centers": [
+          [
+            0.45,
+            0.25
+          ],
+          [
+            0.78,
+            0.72
+          ],
+          [
+            1.28,
+            0.28
+          ],
+          [
+            1.62,
+            0.68
+          ]
+        ],
+        "mixture_weights": [
+          0.3,
+          0.2,
+          0.25,
+          0.25
+        ],
+        "std_x": 0.07,
+        "std_y": 0.07
+      },
+      "period": 10.0,
+      "rk4_substeps_per_time_interval": 4,
+      "truth_particles": 2048,
+      "truth_seed_offset": 1001
+    },
+    "validity": {
+      "max_finite_calibration_resid": 0.001,
+      "max_poisson_relative_residual": 0.001,
+      "max_population_calibration_resid": 1e-05,
+      "min_ess_fraction": 0.03,
+      "min_in_domain_base_mass": 0.99,
+      "tangent_lower_bound_tol": 1e-06
+    }
+  },
+  "config_hash": "8b0ac1a4c2eea40e83924ed67cd5cba06e3db14e66324fd6df5e290c7c1552cd",
+  "experiment": "vortices_double_gyre",
+  "reference": {
+    "checkpoint": "/home/zanot/projects/tesseract2026/experiments/vortices/outputs/smoke/reference.npz",
+    "metadata": {
+      "bridge": {
+        "independent_endpoint_pairing": true,
+        "noise_std": 0.0,
+        "schedule": "linear"
+      },
+      "coordinate_system": "box-logit latent flow; physical velocity via chain rule",
+      "endpoint_signature": "4f25fa087629921c884c81a5d34486b99be9d63cd62936a918de22e228466876",
+      "experiment": "vortices_double_gyre",
+      "history": [
+        {
+          "conditional_fm_loss": 7.662150678737297,
+          "grad_norm_preclip": 2.294239046675729,
+          "learning_rate": 0.001953503690480396,
+          "step": 1
+        },
+        {
+          "conditional_fm_loss": 7.704653697996091,
+          "grad_norm_preclip": 2.4655196994477766,
+          "learning_rate": 0.0010500000000000002,
+          "step": 5
+        },
+        {
+          "conditional_fm_loss": 7.67618092617418,
+          "grad_norm_preclip": 2.13379954855773,
+          "learning_rate": 0.0001,
+          "step": 10
+        }
+      ],
+      "network": {
+        "hidden_layers": 2,
+        "hidden_width": 32,
+        "parameter_layers": 3
+      },
+      "training": {
+        "batch_size": 128,
+        "seed": 20260815,
+        "steps": 10
+      },
+      "training_signature": "04a24586b6a93b82ccf3aae98b6d4d807d85948bfcaa04bfe99da29d5369b75d",
+      "vortex_reference_box_high": [
+        2.0,
+        1.0
+      ],
+      "vortex_reference_box_low": [
+        0.0,
+        0.0
+      ],
+      "vortex_reference_transform": "box_logit_reference_v1",
+      "vortex_reference_transform_eps": 1e-06
+    },
+    "min_in_domain_base_mass": 1.0
+  },
+  "schema_version": 1,
+  "smoke": true,
+  "smoke_centers": [
+    [
+      0.47678273384495407,
+      0.259795081819971
+    ],
+    [
+      1.513624518748703,
+      0.7296929645741969
+    ],
+    [
+      1.1363654574914235,
+      0.32609322700875043
+    ],
+    [
+      1.7227821104922987,
+      0.4552169238309964
+    ]
+  ],
+  "smoke_design": [
+    0.47678273384495407,
+    0.259795081819971,
+    1.513624518748703,
+    0.7296929645741969,
+    1.1363654574914235,
+    0.32609322700875043,
+    1.7227821104922987,
+    0.4552169238309964
+  ],
+  "smoke_metrics": {
+    "centers": [
+      [
+        0.47678273384495407,
+        0.259795081819971
+      ],
+      [
+        1.513624518748703,
+        0.7296929645741969
+      ],
+      [
+        1.1363654574914235,
+        0.32609322700875043
+      ],
+      [
+        1.7227821104922987,
+        0.4552169238309964
+      ]
+    ],
+    "full_action": 23.895488596280718,
+    "invalid_reason": null,
+    "law_risk": 0.13761594915673764,
+    "max_calibration_residual": 9.992472534662822e-11,
+    "max_poisson_relative_residual": 8.198999755049861e-08,
+    "max_tangent_compatibility_residual": 8.05419985795132e-16,
+    "min_covariance_eigenvalue": 2.605676088753815e-05,
+    "min_empirical_hull_support_gap": 0.0011504821263222907,
+    "min_ess_fraction": 0.2838219612181445,
+    "native_projection_failed_systems": 0,
+    "robust_projection_fallback_systems": 0,
+    "spline_residual_sum_squares": 0.0001535738057207399,
+    "spline_roughness": 13.34639053145057,
+    "tangent_action": 1.029918980196737,
+    "tangent_full_gap": 22.86556961608398,
+    "tangent_lower_bound_violation": 0.0,
+    "trial": 0,
+    "valid": true
+  },
+  "timings_seconds": {
+    "config_hash": "8b0ac1a4c2eea40e83924ed67cd5cba06e3db14e66324fd6df5e290c7c1552cd",
+    "phases_seconds": {
+      "setup_and_cached_inputs": 4.050232124001923,
+      "smoke_exact_path": 6.615682452000328
+    },
+    "schema_version": 1,
+    "total_seconds": 10.666132326001389
+  },
+  "truth": {
+    "min_in_domain_fraction": 1.0,
+    "signature": "7888fda894cad1eb42bb6a15172a6359016e26c57783d2c4e6719365314ef270"
+  }
+}

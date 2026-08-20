@@ -1,0 +1,243 @@
+{
+  "config": {
+    "feasibility": {
+      "directions": 12,
+      "feasibility_tol": 1e-09,
+      "margin": 1e-06
+    },
+    "law": {
+      "epsilon_l": 0.0005,
+      "epsilon_r": 0.0002,
+      "mmd_bandwidth": 0.55
+    },
+    "measurement": {
+      "acquisition_k": 3,
+      "finite_n": 32,
+      "min_sep_deg": 20.0,
+      "obs_noise_std": 0.01,
+      "sensor_radius": 1.5,
+      "sensor_width": 0.45
+    },
+    "moment_reconstruction": {
+      "kind": "endpoint_anchored_quadratic_gls",
+      "ridge_rel": 1e-12,
+      "variance_floor": 1e-10
+    },
+    "name": "toy_example",
+    "optimization": {
+      "constraint_penalty": 10000.0,
+      "feasibility_tol": 1e-06,
+      "full_exact_audit_candidates": 2,
+      "full_exact_poisson_backend": "jax",
+      "full_exact_rescore_candidates": 2,
+      "full_gradient_cg_maxiter": 360,
+      "full_gradient_cg_tol": 1e-06,
+      "full_gradient_grid_n": 41,
+      "full_gradient_poisson_backend": "tesseract_cpp",
+      "full_gradient_time_n": 3,
+      "full_gradient_trials": 1,
+      "full_learning_rate": 0.01,
+      "full_local_starts": 0,
+      "full_min_exact_finalists": 1,
+      "full_min_exact_law_valid": 1,
+      "full_prescreen_trials": 1,
+      "full_random_starts": 1,
+      "full_start_count": 1,
+      "full_start_perturb_deg": 6.0,
+      "full_steps": 0,
+      "invalid_penalty": 10000.0,
+      "jit_objectives": false,
+      "law_exact_audit_candidates": 2,
+      "law_gradient_trials": 1,
+      "law_learning_rate": 0.015,
+      "law_start_count": 4,
+      "law_steps": 0,
+      "learning_rate": 0.02,
+      "population_steps": 0,
+      "start_count": 1,
+      "tangent_exact_audit_candidates": 2,
+      "tangent_exact_rescore_candidates": 2,
+      "tangent_gradient_trials": 1,
+      "tangent_learning_rate": 0.012,
+      "tangent_local_starts": 12,
+      "tangent_min_exact_finalists": 1,
+      "tangent_min_exact_law_valid": 1,
+      "tangent_start_count": 7,
+      "tangent_start_perturb_deg": 5.0,
+      "tangent_steps": 0
+    },
+    "particle_mfsi": {
+      "covariance_ridge": 1e-07,
+      "exact_covariance_min_eig": 1e-12,
+      "exact_covariance_ridge": 0.0,
+      "exact_tangent_ridge": 0.0,
+      "max_tangent_compatibility_residual": 1e-07,
+      "tangent_pinv_rcond": 1e-10,
+      "tangent_ridge": 1e-07
+    },
+    "poisson": {
+      "cg_maxiter": 30,
+      "cg_tol": 1e-08,
+      "gauge_strength": 1.0,
+      "grid_n": 11,
+      "operator_floor_rel": 2e-05,
+      "time_n": 5
+    },
+    "population": {
+      "alpha_max_deg": 60.0,
+      "alpha_min_deg": 30.0,
+      "alpha_quadrature_n": 2,
+      "domain_half_width": 3.2,
+      "radius": 1.5,
+      "sigma": 0.3
+    },
+    "projection": {
+      "implicit_ridge": 0.0,
+      "lambda_clip": 1000.0,
+      "max_steps": 10,
+      "newton_ridge": 1e-07,
+      "search_line_search_steps": 6,
+      "search_max_steps": 10,
+      "search_residual_tol": 1e-06,
+      "solver_accept_tol": 2e-06,
+      "step_cap": 20.0,
+      "trajectory_backend": "tesseract_cpp"
+    },
+    "randomness": {
+      "action_trials": 1,
+      "bootstrap_reps": 50,
+      "law_trials": 1,
+      "selection_namespace": 8890,
+      "validation_namespace": 8891,
+      "validation_trials": 1
+    },
+    "raster": {
+      "bandwidth": 0.0,
+      "truncate": 4.0
+    },
+    "reference": {
+      "bank_mode": "gauss-hermite",
+      "gh_order": 4,
+      "rk4_substeps_per_time_interval": 2
+    },
+    "reference_training": {
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.999,
+      "adam_eps": 1e-08,
+      "batch_size": 128,
+      "bridge_noise_std": 0.15,
+      "bridge_schedule": "linear",
+      "grad_clip_norm": 10.0,
+      "hidden_layers": 2,
+      "hidden_width": 32,
+      "learning_rate": 0.002,
+      "log_every": 5,
+      "min_learning_rate_ratio": 0.05,
+      "reuse_checkpoint": true,
+      "seed": 20260813,
+      "train_steps": 10
+    },
+    "seed": 20260813,
+    "validity": {
+      "max_finite_calibration_resid": 0.001,
+      "max_population_calibration_resid": 1e-05,
+      "min_ess_fraction": 0.03,
+      "min_in_domain_base_mass": 0.995,
+      "tangent_lower_bound_tol": 1e-06
+    }
+  },
+  "config_hash": "b6e0947094fdab2b45a595077600926da506a500fbe40eb8b73fab74859372f4",
+  "experiment": "toy_example",
+  "reference": {
+    "checkpoint": "/home/zanot/projects/tesseract2026/experiments/toy_example/outputs/smoke/reference.npz",
+    "metadata": {
+      "endpoint_source": {
+        "radius": 1.5,
+        "sigma": 0.3
+      },
+      "training": {
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-08,
+        "batch_size": 128,
+        "bridge_noise_std": 0.15,
+        "bridge_schedule": "linear",
+        "grad_clip_norm": 10.0,
+        "hidden_layers": 2,
+        "hidden_width": 32,
+        "history": [
+          {
+            "grad_norm": 7.4081187872334855,
+            "learning_rate": 0.002,
+            "loss": 6.535173150575899,
+            "step": 1
+          },
+          {
+            "grad_norm": 5.424707184373436,
+            "learning_rate": 0.001214965768783584,
+            "loss": 4.840210415606938,
+            "step": 5
+          },
+          {
+            "grad_norm": 5.7160575744171584,
+            "learning_rate": 0.0001,
+            "loss": 5.009038352179884,
+            "step": 10
+          }
+        ],
+        "learning_rate": 0.002,
+        "min_learning_rate_ratio": 0.05,
+        "seed": 20260813,
+        "train_steps": 10
+      }
+    },
+    "min_in_domain_base_mass": 1.0
+  },
+  "schema_version": 2,
+  "smoke": true,
+  "smoke_design_deg": [
+    122.80061376993874,
+    328.3839821383789
+  ],
+  "smoke_feasibility_probe": {
+    "candidate_count": 65,
+    "found_exact_valid_probe": true,
+    "precheck": {
+      "max_calibration_residual": 2.238631732933315e-07,
+      "max_hull_violation": -0.008829295513892792,
+      "min_ess_fraction": 0.6890966639525868
+    },
+    "reason_counts_before_success": {
+      "endpoint_outside_common_hull": 1
+    },
+    "sample_rejections": [
+      {
+        "eta_deg": [
+          25.836561137178435,
+          72.2734356282845
+        ],
+        "index": 0,
+        "reason": "endpoint_outside_common_hull",
+        "violation": 0.08037981202822625
+      }
+    ]
+  },
+  "smoke_metrics": {
+    "full_action": 22.387221993247316,
+    "law_risk": 0.232720629195398,
+    "max_calibration_residual": 2.238631732933315e-07,
+    "max_poisson_relative_residual": 1.9225864230455246e-05,
+    "min_ess_fraction": 0.6890966639525868,
+    "tangent_action": 0.1445646343889521,
+    "valid": true
+  },
+  "timings_seconds": {
+    "config_hash": "b6e0947094fdab2b45a595077600926da506a500fbe40eb8b73fab74859372f4",
+    "phases_seconds": {
+      "setup_and_cached_inputs": 18.484438608000005,
+      "smoke_exact_path": 46.713384131
+    },
+    "schema_version": 1,
+    "total_seconds": 65.19861236999998
+  }
+}
