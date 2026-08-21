@@ -1,4 +1,10 @@
-"""Optional Tesseract-JAX wrapper for batched stage-4 weighted-Poisson solves."""
+"""Optional regularized weighted-Poisson search proxy.
+
+This differentiable/native path deliberately retains the historical
+``q + q_floor`` operator used during optimization.  It is not the authoritative
+scientific Full evaluator; exact reporting uses the physical-q solver in
+``mfsi.poisson.solve_weighted_poisson_physical_direct_batch``.
+"""
 
 from __future__ import annotations
 
@@ -97,7 +103,7 @@ def solve_weighted_poisson_batch_tesseract(
     h: Array,
     cfg: PoissonConfig,
 ) -> Array:
-    """Construct differentiable solver inputs in JAX and return batched potentials."""
+    """Return regularized proxy potentials for differentiable Full search."""
     q = jnp.asarray(q, dtype=jnp.float64)
     h = jnp.asarray(h, dtype=jnp.float64)
     if q.ndim != 3 or h.shape != q.shape:
@@ -127,11 +133,11 @@ def solve_weighted_poisson_batch_tesseract_diagnostics(
     h: Any,
     cfg: PoissonConfig,
 ) -> dict[str, Any]:
-    """Solve a batch and expose native convergence/PDE diagnostics.
+    """Audit the historical regularized search proxy.
 
     This non-differentiable audit path uses the same C++ finite-volume operator,
     no-flux boundary, weighted gauge, and IC(0)-PCG implementation as the
-    Tesseract stage-4 endpoint.  Each physical density is scaled by its maximum
+    Tesseract search endpoint.  Each physical density is scaled by its maximum
     only while solving; the reported Dirichlet action uses the unscaled density.
     The scaling leaves the compatible Poisson equation unchanged and avoids a
     meaningless dependence of the gauge penalty on density units.

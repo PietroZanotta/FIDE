@@ -16,6 +16,10 @@ from experiments.ocean_drifters.experiment import (
 )
 from experiments.ocean_drifters.action import _positive_kernel_reconstruct
 from experiments.ocean_drifters.full_action import _forcing
+from experiments.ocean_drifters.full_action_production import (
+    OceanFullActionProduction,
+)
+from experiments.ocean_drifters.final_evaluation import _validate_release_manifest
 from experiments.ocean_drifters.poisson_backend import (
     OCEAN_VARIATIONAL_POISSON_BACKEND,
     OceanVariationalPoissonConfig,
@@ -46,25 +50,29 @@ def test_ocean_post_dispersion_action_matches_vortex_result_shape() -> None:
     experiment = OceanDriftersExperiment(cfg)
     action = experiment.post_dispersion_action()
 
-    assert action.design_indices == (56, 88, 138, 192, 223, 241)
+    assert action.design_indices == (216,)
     assert action.start_day == 12.0
     assert action.end_day == 45.0
     np.testing.assert_allclose(action.normalized_times[[0, -1]], [0.0, 1.0])
     np.testing.assert_allclose(action.time_weights.sum(), 1.0)
     np.testing.assert_allclose(action.action_density_scale, (33.0 / 45.0) ** 2)
 
-    tangent = action.exact_tangent_result(56)
-    full = action.exact_full_result(56)
+    tangent = action.exact_tangent_result(216)
+    full = action.exact_full_result(216)
     assert tangent["valid"] and full["valid"]
     assert set(("valid", "value", "rows")).issubset(tangent)
     assert set(("valid", "value", "rows")).issubset(full)
-    assert len(tangent["rows"]) == len(full["rows"]) == 7
+    assert len(tangent["rows"]) == len(full["rows"]) == 133
+    assert tangent["value"] == pytest.approx(153061.76319751356)
+    assert full["value"] == pytest.approx(481208.82166242064)
     assert tangent["value"] <= full["value"]
 
     layouts = action.evaluate_layouts_exact()
-    assert len(layouts) == 6
+    assert len(layouts) == 1
     assert all(row["valid"] for row in layouts)
     assert all(row["tangent_lower_bound_valid"] for row in layouts)
+    assert layouts[0]["regularization_diagnostic_time_node_count"] == 7
+    assert layouts[0]["integrated_regularization_bias"] < 0.05
 
 
 def test_ocean_post_dispersion_stage_writes_canonical_result(
@@ -76,6 +84,11 @@ def test_ocean_post_dispersion_stage_writes_canonical_result(
     assert payload["stage"] == "post_dispersion_action"
     assert payload["post_dispersion_action"]["window_days"] == [12.0, 45.0]
     assert payload["post_dispersion_action"]["all_layouts_valid"] is True
+    assert payload["post_dispersion_action"][
+        "temporal_quadrature_refinement_certified"
+    ] is True
+    assert payload["post_dispersion_action"]["production_run"] is True
+    assert payload["post_dispersion_action"]["full_action_production_valid"] is True
     assert payload["statuses"]["post_dispersion_action_valid"] is True
     assert payload["statuses"]["full_action_valid"] is True
     assert payload["statuses"]["full_horizon_action_valid"] is False
@@ -101,6 +114,8 @@ def test_ocean_post_dispersion_window_is_ocean_local() -> None:
 
 def test_ocean_risk_api_uses_complete_validation_ids() -> None:
     cfg = load_config(CONFIG, smoke=True)
+    assert cfg["law"]["max_relative_risk_violation"] == 0.05
+    assert "frozen_additive_epsilon" not in cfg["law"]
     experiment = OceanDriftersExperiment(cfg)
     result = experiment.scientific_risk(
         design_indices=np.asarray([216]),
@@ -112,6 +127,10 @@ def test_ocean_risk_api_uses_complete_validation_ids() -> None:
     assert result["bootstrap_risk"].shape == (1, 4)
     assert np.isfinite(result["risk"]).all()
     assert result["summary"]["bootstrap_unit"] == "complete validation drifter ID"
+    assert result["summary"]["relative_risk_allowance"] == 0.05
+    assert result["summary"]["risk_ceiling"] == pytest.approx(
+        1.05 * result["summary"]["R_star"]
+    )
     assert result["summary"]["final_test_accessed"] is False
 
 
@@ -121,6 +140,53 @@ def test_ocean_final_evaluation_remains_locked(tmp_path: Path) -> None:
         run_experiment(cfg, tmp_path, stage="final_evaluation")
     manifest = json.loads((tmp_path / "numerical_admissibility_manifest.json").read_text())
     assert manifest["final_test_accessed"] is False
+
+
+def test_ocean_final_evaluation_dry_run_reproduces_validation_risk(
+    tmp_path: Path,
+) -> None:
+    cfg = load_config(CONFIG)
+    payload = run_experiment(cfg, tmp_path, stage="final_evaluation_dry_run")
+    result = payload["final_evaluation_dry_run"]
+
+    assert result["status"] == "ready_for_explicit_one_shot_authorization"
+    assert result["selected_design_id"] == "design_000216"
+    assert result["validation_id_count"] == 70
+    assert result["evaluation_time_count"] == 19
+    assert result["reproduced_validation_risk"] == pytest.approx(
+        0.006490757661634413, abs=2e-12
+    )
+    assert result["acceptance_upper_bound"] == pytest.approx(
+        0.023351205336727864, abs=2e-15
+    )
+    assert result["locked_cohort_path_resolved"] is False
+    assert result["locked_cohort_hashed"] is False
+    assert result["locked_cohort_opened"] is False
+    assert result["split_manifest_opened"] is False
+    assert payload["final_test_accessed"] is False
+    assert (tmp_path / "result.json").is_file()
+
+
+def test_ocean_final_evaluation_requires_both_authorization_keys() -> None:
+    cfg = load_config(CONFIG)
+    cfg["scientific"]["final_test_access_allowed"] = True
+    with pytest.raises(FrozenArtifactError, match="two-key authorization"):
+        OceanDriftersExperiment(cfg)
+
+    cfg = load_config(CONFIG)
+    cfg["final_evaluation"][
+        "authorization_status"
+    ] = "explicit_user_authorization_recorded"
+    with pytest.raises(FrozenArtifactError, match="two-key authorization"):
+        OceanDriftersExperiment(cfg)
+
+
+def test_ocean_final_evaluation_release_manifest_is_hash_anchored() -> None:
+    cfg = load_config(CONFIG)
+    cfg["final_evaluation"]["release_manifest_expected_sha256"] = "0" * 64
+    experiment = OceanDriftersExperiment(cfg)
+    with pytest.raises(FrozenArtifactError, match="release manifest hash changed"):
+        _validate_release_manifest(experiment)
 
 
 def test_positive_kernel_reconstruction_is_convex_and_has_analytic_derivative() -> None:
@@ -298,11 +364,12 @@ def test_ocean_soft_projection_contract_is_ocean_only_and_inference_scaled() -> 
 def test_ocean_full_action_production_contract_is_ocean_local() -> None:
     cfg = load_config(CONFIG)
     production = cfg["action"]["full_action_production"]
-    assert production["layout_count"] == 68
+    assert production["layout_count"] == 1
     assert production["time_count"] == 181
     assert production["grid_resolution"] == [511, 273]
     assert production["adaptive_through_source_index"] == 9
     assert production["minimum_valid_layout_fraction"] == 0.95
+    assert production["production_run_authorized"] is False
     assert cfg["scientific"]["final_test_access_allowed"] is False
 
     for relative in (
@@ -311,3 +378,12 @@ def test_ocean_full_action_production_contract_is_ocean_local() -> None:
     ):
         other = json.loads((ROOT / relative).read_text(encoding="utf-8"))
         assert "full_action_production" not in other.get("action", {})
+
+
+def test_ocean_production_runner_is_locked_after_relative_risk_change(
+    tmp_path: Path,
+) -> None:
+    cfg = load_config(CONFIG)
+    experiment = OceanDriftersExperiment(cfg)
+    with pytest.raises(RuntimeError, match="production is not authorized"):
+        OceanFullActionProduction(experiment, tmp_path, tmp_path)

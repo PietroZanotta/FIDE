@@ -152,12 +152,15 @@ def test_variational_and_existing_strong_solver_converge_on_same_smooth_problem(
         * np.cos(np.pi * yy / (ny * dx))
     )
     eigenvalue = (2.0 * np.pi / (nx * dx)) ** 2 + (np.pi / (ny * dx)) ** 2
-    forcing = -eigenvalue * expected
+    # The physical strong form is K psi = q h, whereas this legacy Ritz helper
+    # accepts the opposite-sign forcing convention.
+    physical_source = eigenvalue * expected
+    variational_forcing = -eigenvalue * expected
     q_density = np.full_like(expected, 1.0 / (nx * ny * dx * dx))
 
     strong = solve_weighted_poisson(
         q_density,
-        forcing,
+        physical_source,
         PoissonConfig(
             dx=dx,
             operator_floor_rel=0.0,
@@ -167,7 +170,7 @@ def test_variational_and_existing_strong_solver_converge_on_same_smooth_problem(
     )
     weak = solve_variational_poisson_batch_native(
         np.full((1, ny, nx), -np.log(nx * ny)),
-        forcing[None],
+        variational_forcing[None],
         VariationalPoissonConfig(dx=dx, maximum_mode=3),
     )
 

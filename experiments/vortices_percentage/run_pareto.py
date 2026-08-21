@@ -109,11 +109,25 @@ def _audited_full_action(result: dict[str, Any], selected: list[float]) -> float
     raise RuntimeError("design is missing its exact Full-action audit row")
 
 
+def _candidate_summary_action(result_path: Path, design: str, column: str) -> float:
+    """Read an authoritative post-selection score without stage-crossing assumptions."""
+    path = result_path.with_name("result.candidate_summary.csv")
+    with path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("design") == design:
+                value = float(row[column])
+                if math.isfinite(value):
+                    return value
+    raise RuntimeError(f"{design} is missing {column} in {path}")
+
+
 def _row(result: dict[str, Any], percent: float, result_path: Path) -> dict[str, Any]:
     screens = result["law_screens"]
     full = result["selection_certificates"]["full"]
+    tangent = result["selection_certificates"]["tangent"]
     validation = result["validation"]
     law_validation = validation["law"]
+    tangent_validation = validation["tangent"]
     full_validation = validation["full"]
     contrast = result.get("contrasts", {}).get("full_vs_law_full_action_reduction", {})
     return {
@@ -127,6 +141,13 @@ def _row(result: dict[str, Any], percent: float, result_path: Path) -> dict[str,
         "full_R_slack_selection": full.get("R_slack_to_max"),
         "full_A_selection": _audited_full_action(result, result["selection"]["full_optimum"]),
         "law_A_selection": _audited_full_action(result, result["selection"]["law_optimum"]),
+        "tangent_R_selection": tangent["R_selection"],
+        "tangent_R_excess_selection": tangent["R_excess_from_star"],
+        "tangent_L_selection": tangent["L_selection"],
+        "tangent_A_selection": _candidate_summary_action(
+            result_path, "tangent", "full_action_selection"
+        ),
+        "tangent_certified": tangent["certified"],
         "full_certified": full["certified"],
         "anchor_refinement_passes": result.get("law_anchor", {}).get("anchor_refinement_passes", 0),
         "law_R_validation": law_validation["law_risk"]["mean"],
@@ -134,12 +155,19 @@ def _row(result: dict[str, Any], percent: float, result_path: Path) -> dict[str,
         "law_A_validation": law_validation["full_action"]["mean"],
         "law_A_validation_se": law_validation["full_action"]["se"],
         "law_valid_fraction": law_validation["valid_fraction"],
+        "tangent_R_validation": tangent_validation["law_risk"]["mean"],
+        "tangent_R_validation_se": tangent_validation["law_risk"]["se"],
+        "tangent_A_validation": tangent_validation["full_action"]["mean"],
+        "tangent_A_validation_se": tangent_validation["full_action"]["se"],
+        "tangent_valid_fraction": tangent_validation["valid_fraction"],
         "full_R_validation": full_validation["law_risk"]["mean"],
         "full_R_validation_se": full_validation["law_risk"]["se"],
         "full_A_validation": full_validation["full_action"]["mean"],
         "full_A_validation_se": full_validation["full_action"]["se"],
         "full_valid_fraction": full_validation["valid_fraction"],
         "validation_action_reduction": contrast.get("ratio_of_means_reduction"),
+        "law_centers": json.dumps(result["selection_centers"]["law"]),
+        "tangent_centers": json.dumps(result["selection_centers"]["tangent"]),
         "full_centers": json.dumps(result["selection_centers"]["full"]),
         "result": str(result_path),
     }
@@ -304,11 +332,20 @@ def main() -> None:
         _print_point_summary(index, total, row)
         print(f"[pareto {index}/{total}] checkpointed table and refreshed figure", flush=True)
 
+    try:
+        from visualize_pareto import save_pareto_suite
+
+        save_pareto_suite(rows, args.output, args.output)
+    except Exception as exc:
+        print(f"[pareto] extended post-processing skipped: {exc}", flush=True)
+
     print("=" * 88, flush=True)
     print(f"[pareto] complete: {total}/{total} percentage allowances", flush=True)
     print(f"[pareto] table: {args.output / 'pareto.csv'}", flush=True)
     print(f"[pareto] data:  {args.output / 'pareto.json'}", flush=True)
     print(f"[pareto] plot:  {args.output / 'pareto.png'}", flush=True)
+    print(f"[pareto] methods: {args.output / 'pareto_methods.png'}", flush=True)
+    print(f"[pareto] sensors: {args.output / 'pareto_sensor_layouts.png'}", flush=True)
 
 
 if __name__ == "__main__":

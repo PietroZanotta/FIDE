@@ -25,6 +25,7 @@ class RasterResult(NamedTuple):
     h: Array
     source_mass_before_center: Array
     source_mass_after_center: Array
+    source: Array | None = None
 
 
 def gaussian_kernel_2d(sigma_cells: float, truncate: float) -> Array:
@@ -79,7 +80,82 @@ def rasterize_projected_particles(
     occupied = mass > 1.0e-300
     safe_mass = jnp.where(occupied, mass, 1.0)
     h = jnp.where(occupied, source / safe_mass, 0.0)
-    return RasterResult(q, mass, h, source_before, source_after)
+    return RasterResult(q, mass, h, source_before, source_after, source / grid.cell_area)
+
+
+def _bilinear_cell_center_deposition(
+    x: Array,
+    values: Array,
+    grid: CartesianGrid2D,
+) -> Array:
+    """Deposit values onto cell centers with mass-preserving bilinear weights."""
+    coordinate = (x + float(grid.half_width)) / float(grid.dx) - 0.5
+    lower = jnp.floor(coordinate).astype(jnp.int32)
+    fraction = coordinate - lower.astype(jnp.float64)
+    ix0 = jnp.clip(lower[:, 0], 0, grid.n - 1)
+    iy0 = jnp.clip(lower[:, 1], 0, grid.n - 1)
+    ix1 = jnp.clip(lower[:, 0] + 1, 0, grid.n - 1)
+    iy1 = jnp.clip(lower[:, 1] + 1, 0, grid.n - 1)
+    fx = fraction[:, 0]
+    fy = fraction[:, 1]
+    flat = jnp.zeros(grid.n * grid.n, dtype=jnp.float64)
+    flat = flat.at[iy0 * grid.n + ix0].add(values * (1.0 - fx) * (1.0 - fy))
+    flat = flat.at[iy0 * grid.n + ix1].add(values * fx * (1.0 - fy))
+    flat = flat.at[iy1 * grid.n + ix0].add(values * (1.0 - fx) * fy)
+    flat = flat.at[iy1 * grid.n + ix1].add(values * fx * fy)
+    return flat.reshape((grid.n, grid.n))
+
+
+def _full_support_gaussian_matrix(grid: CartesianGrid2D, bandwidth: float) -> Array:
+    """Boundary-normalized 1-D Gaussian map from source to target cell centers."""
+    if not float(bandwidth) > 0.0:
+        raise ValueError("positive-support rasterization requires bandwidth > 0")
+    centers = grid.centers_1d()
+    displacement = centers[:, None] - centers[None, :]
+    kernel = jnp.exp(-0.5 * (displacement / float(bandwidth)) ** 2)
+    # Each source-cell column integrates to one on the truncated computational
+    # domain.  The 2-D separable map therefore preserves deposited mass exactly.
+    return kernel / jnp.maximum(jnp.sum(kernel, axis=0, keepdims=True), 1.0e-300)
+
+
+def rasterize_projected_particles_positive(
+    x: Array,
+    weights: Array,
+    forcing: Array,
+    grid: CartesianGrid2D,
+    *,
+    bandwidth: float,
+) -> RasterResult:
+    """Positive full-support common-kernel density/source deposition.
+
+    Particle locations are first represented to subcell accuracy by a
+    mass-preserving bilinear deposit.  A full-domain Gaussian map is then applied
+    identically to the mass and signed source deposits.  Column normalization is
+    the declared boundary treatment and preserves both totals before the optional
+    global floating-point source centering.  No density floor is introduced.
+    """
+    x = jnp.asarray(x, dtype=jnp.float64)
+    weights = jnp.asarray(weights, dtype=jnp.float64)
+    forcing = jnp.asarray(forcing, dtype=jnp.float64)
+    raw_mass = _bilinear_cell_center_deposition(x, weights, grid)
+    raw_source = _bilinear_cell_center_deposition(x, weights * forcing, grid)
+    kernel = _full_support_gaussian_matrix(grid, float(bandwidth))
+    mass = kernel @ raw_mass @ kernel.T
+    source_mass = kernel @ raw_source @ kernel.T
+
+    normalization = jnp.maximum(jnp.sum(mass), 1.0e-300)
+    mass = mass / normalization
+    source_mass = source_mass / normalization
+    source_before = jnp.sum(source_mass)
+    # The particle forcing is analytically centered.  Remove only its residual
+    # global floating-point mean, distributed in the already deposited density.
+    source_mass = source_mass - mass * source_before
+    source_after = jnp.sum(source_mass)
+
+    q = mass / float(grid.cell_area)
+    source = source_mass / float(grid.cell_area)
+    h = source / q
+    return RasterResult(q, mass, h, source_before, source_after, source)
 
 
 def gaussian_kernel_2d_rect(
@@ -144,4 +220,4 @@ def rasterize_projected_particles_rect(
     occupied = mass > 1.0e-300
     safe_mass = jnp.where(occupied, mass, 1.0)
     h = jnp.where(occupied, source / safe_mass, 0.0)
-    return RasterResult(q, mass, h, source_before, source_after)
+    return RasterResult(q, mass, h, source_before, source_after, source / float(grid.cell_area))

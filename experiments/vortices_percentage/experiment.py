@@ -24,7 +24,13 @@ from mfsi.measurements import GaussianPointSensors2D
 from mfsi.metrics import gaussian_mmd2_grid_mass, multiscale_gaussian_mmd_kernel_rect
 from mfsi.moments import AnchoredCubicSplineConfig, AnchoredCubicSplineReconstructor
 from mfsi.particles import ParticleMFSIConfig, particle_mfsi_state
-from mfsi.poisson import PoissonConfig, solve_weighted_poisson, weighted_laplacian
+from mfsi.poisson import (
+    PoissonConfig,
+    solve_weighted_poisson,
+    solve_weighted_poisson_physical_direct_batch,
+    weighted_laplacian,
+)
+from mfsi.decomposition import correction_decomposition, raster_tangent_projection
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
 from mfsi.raster import RasterConfig, rasterize_projected_particles_rect
 from mfsi.reference import MLPReferenceFlow, save_npz_checkpoint
@@ -956,6 +962,20 @@ class VortexExperiment:
         backend: str,
     ) -> tuple[Array, Array]:
         """Return `[B,T]` physical actions/residuals from one flattened batch."""
+        actions, residuals, _ = self._poisson_batch_with_potential(
+            q, h, cfg=cfg, backend=backend
+        )
+        return actions, residuals
+
+    def _poisson_batch_with_potential(
+        self,
+        q: Array,
+        h: Array,
+        *,
+        cfg: PoissonConfig,
+        backend: str,
+    ) -> tuple[Array, Array, Array]:
+        """Return physical actions, residuals, and potentials for one batch."""
         leading_shape = q.shape[:2]
         q_flat = q.reshape((-1,) + q.shape[-2:])
         h_flat = h.reshape((-1,) + h.shape[-2:])
@@ -971,12 +991,26 @@ class VortexExperiment:
                 operator_floor_rel=float(cfg.operator_floor_rel),
                 gauge_strength=float(cfg.gauge_strength),
             )
+        elif backend == "physical_direct":
+            physical = solve_weighted_poisson_physical_direct_batch(
+                q_flat, h_flat, cfg
+            )
+            actions = jnp.asarray(physical.action, dtype=jnp.float64)
+            residuals = jnp.asarray(
+                physical.relative_residual, dtype=jnp.float64
+            )
+            psi = jnp.asarray(physical.potential, dtype=jnp.float64)
         else:
             solved = jax.vmap(lambda q_one, h_one: solve_weighted_poisson(q_one, h_one, cfg))(
                 q_flat, h_flat
             )
             actions, residuals = solved.action, solved.relative_residual
-        return actions.reshape(leading_shape), residuals.reshape(leading_shape)
+            psi = solved.potential
+        return (
+            actions.reshape(leading_shape),
+            residuals.reshape(leading_shape),
+            psi.reshape(leading_shape + q.shape[-2:]),
+        )
 
     def _validity(self, max_resid: Array, min_ess: Array, poisson_rel: Array | None = None) -> Array:
         v = self.cfg.get("validity", {})
@@ -1201,7 +1235,7 @@ class VortexExperiment:
             rasters.q,
             rasters.h,
             cfg=self.poisson_cfg,
-            backend=self.full_exact_poisson_backend,
+            backend="physical_direct",
         )
         values = jnp.sum(actions * self.time_w[None, :], axis=1)
         max_resid = jnp.max(jnp.linalg.norm(projection.residual, axis=-1), axis=1)
@@ -1281,6 +1315,8 @@ class VortexExperiment:
         compute_law: bool,
         compute_tangent: bool,
         compute_full: bool,
+        compute_decomposition: bool = False,
+        compute_common_decomposition: bool = False,
     ) -> list[dict[str, Any]]:
         """Authoritative metrics with native batched tilts and robust fallbacks.
 
@@ -1299,6 +1335,8 @@ class VortexExperiment:
                 compute_law,
                 compute_tangent,
                 compute_full,
+                compute_decomposition,
+                compute_common_decomposition,
             )
             for trial in trial_indices
         ]
@@ -1412,6 +1450,7 @@ class VortexExperiment:
                 np.asarray(self.reference_velocity, dtype=np.float64),
             )
             mean_advective = np.einsum("btn,tnm->btm", weights, advective)
+        tangent_coeff = None
         if compute_tangent:
             tangent_residual = mean_advective - np.asarray(rec.c_dot, dtype=np.float64)
             tangent_gram = np.einsum(
@@ -1486,6 +1525,18 @@ class VortexExperiment:
         law_values = np.full((batch, time_count), np.nan, dtype=np.float64)
         full_values = np.full((batch, time_count), np.nan, dtype=np.float64)
         max_poisson = np.zeros(batch, dtype=np.float64)
+        poisson_residuals_by_time = np.full(
+            (batch, time_count), np.nan, dtype=np.float64
+        )
+        compatibility_residuals_by_time = np.full(
+            (batch, time_count), np.nan, dtype=np.float64
+        )
+        conductive_components_by_time = np.zeros(
+            (batch, time_count), dtype=np.int32
+        )
+        physical_solver_converged_by_time = np.zeros(
+            (batch, time_count), dtype=bool
+        )
         if compute_law or compute_full:
             all_times = jnp.arange(time_count, dtype=jnp.int32)
             rasters = self._raster_trajectory(
@@ -1499,16 +1550,37 @@ class VortexExperiment:
                     self._law_risk_rows(rasters.mass), dtype=np.float64
                 )
             if compute_full:
-                actions, poisson_residuals = self._poisson_batch(
-                    rasters.q,
-                    rasters.h,
-                    cfg=self.poisson_cfg,
-                    backend=self.full_exact_poisson_backend,
+                leading_shape = rasters.q.shape[:2]
+                physical = solve_weighted_poisson_physical_direct_batch(
+                    rasters.q.reshape((-1,) + rasters.q.shape[-2:]),
+                    rasters.h.reshape((-1,) + rasters.h.shape[-2:]),
+                    self.poisson_cfg,
+                    compatibility_tolerance=float(
+                        self.cfg.get("validity", {}).get(
+                            "physical_poisson_component_compatibility_tol", 1.0e-10
+                        )
+                    ),
                 )
-                full_values = np.asarray(actions, dtype=np.float64)
-                max_poisson = np.max(
-                    np.asarray(poisson_residuals, dtype=np.float64), axis=1
+                full_values = np.asarray(physical.action, dtype=np.float64).reshape(
+                    leading_shape
                 )
+                poisson_residuals_by_time = np.asarray(
+                    physical.relative_residual, dtype=np.float64
+                ).reshape(leading_shape)
+                compatibility_residuals_by_time = np.asarray(
+                    physical.maximum_component_compatibility_residual,
+                    dtype=np.float64,
+                ).reshape(leading_shape)
+                conductive_components_by_time = np.asarray(
+                    physical.component_count, dtype=np.int32
+                ).reshape(leading_shape)
+                physical_solver_converged_by_time = np.asarray(
+                    physical.solver_converged, dtype=bool
+                ).reshape(leading_shape)
+                full_potential = jnp.asarray(
+                    physical.potential, dtype=jnp.float64
+                ).reshape(rasters.q.shape)
+                max_poisson = np.max(poisson_residuals_by_time, axis=1)
 
         time_w = np.asarray(self.time_w, dtype=np.float64)
         law = np.sum(law_values * time_w[None, :], axis=1) if compute_law else np.full(batch, np.nan)
@@ -1530,15 +1602,81 @@ class VortexExperiment:
                     "max_tangent_compatibility_residual", 1.0e-7
                 )
             )
+        max_full_moment_residual = np.zeros(batch, dtype=np.float64)
         if compute_full:
             valid &= min_cov_eig > float(
                 self.cfg.get("particle_mfsi", {}).get(
                     "exact_covariance_min_eig", 1.0e-8
                 )
             )
-            poisson_gate = self.cfg["validity"].get("max_poisson_relative_residual")
-            if poisson_gate is not None:
-                valid &= max_poisson <= float(poisson_gate)
+            poisson_gate = float(
+                self.cfg["validity"].get(
+                    "max_poisson_relative_residual",
+                    max(10.0 * float(self.poisson_cfg.cg_tol), 1.0e-7),
+                )
+            )
+            valid &= max_poisson <= poisson_gate
+            component_compatibility_gate = float(
+                self.cfg["validity"].get(
+                    "physical_poisson_component_compatibility_tol", 1.0e-10
+                )
+            )
+            valid &= np.max(compatibility_residuals_by_time, axis=1) <= (
+                component_compatibility_gate
+            )
+            valid &= np.all(physical_solver_converged_by_time, axis=1)
+
+        decomposition = None
+        if compute_decomposition:
+            if tangent_coeff is None:
+                raise RuntimeError("decomposition requires the Tangent coefficients")
+            grid_features = self.family.features(self.grid.points(), eta)
+            tangent_potential = jnp.einsum(
+                "btm,yxm->btyx", jnp.asarray(tangent_coeff), grid_features
+            )
+            decomposition = correction_decomposition(
+                full_potential,
+                tangent_potential,
+                rasters.q,
+                dx=float(self.poisson_cfg.dx),
+                cell_area=float(self.grid.cell_area),
+            )
+
+        common_decomposition = None
+        if compute_full:
+            grid_features = self.family.features(self.grid.points(), eta)
+            common_decomposition = raster_tangent_projection(
+                full_potential,
+                rasters.q,
+                rasters.h,
+                grid_features,
+                dx=float(self.poisson_cfg.dx),
+                cell_area=float(self.grid.cell_area),
+                pinv_rcond=float(
+                    self.cfg.get("particle_mfsi", {}).get(
+                        "tangent_pinv_rcond", 1.0e-10
+                    )
+                ),
+                operator_floor_rel=0.0,
+                gauge_strength=0.0,
+            )
+            max_full_moment_residual = np.max(
+                np.linalg.norm(
+                    np.asarray(
+                        common_decomposition.full_moment_residual,
+                        dtype=np.float64,
+                    ),
+                    axis=-1,
+                ),
+                axis=1,
+            )
+            moment_gate = float(
+                self.cfg["validity"].get(
+                    "max_full_moment_rate_residual",
+                    self.cfg["validity"].get("tangent_lower_bound_tol", 1.0e-6),
+                )
+            )
+            valid &= max_full_moment_residual <= moment_gate
 
         rec_rss = np.asarray(rec.residual_sum_squares, dtype=np.float64)
         rec_roughness = np.asarray(rec.roughness, dtype=np.float64)
@@ -1561,9 +1699,28 @@ class VortexExperiment:
                     None
                     if valid[local]
                     else (
-                        "target_outside_empirical_moment_hull"
-                        if support_gap[local] < -support_tol
-                        else "calibration_ess_identifiability_or_numerical_gate"
+                        "physical_q_poisson_residual_gate"
+                        if compute_full and max_poisson[local] > poisson_gate
+                        else (
+                            "physical_q_poisson_compatibility_or_convergence_gate"
+                            if compute_full
+                            and (
+                                np.max(compatibility_residuals_by_time[local])
+                                > component_compatibility_gate
+                                or not np.all(
+                                    physical_solver_converged_by_time[local]
+                                )
+                            )
+                            else (
+                            "physical_q_full_moment_rate_gate"
+                            if compute_full
+                            and max_full_moment_residual[local] > moment_gate
+                            else (
+                                "target_outside_empirical_moment_hull"
+                                if support_gap[local] < -support_tol
+                                else "calibration_ess_identifiability_or_numerical_gate"
+                            ))
+                        )
                     )
                 ),
                 "law_risk": float(law[local]) if valid[local] else float("nan"),
@@ -1572,6 +1729,32 @@ class VortexExperiment:
                 "max_calibration_residual": float(max_resid[local]),
                 "min_ess_fraction": float(min_ess[local]),
                 "max_poisson_relative_residual": float(max_poisson[local]) if compute_full else float("nan"),
+                "max_full_moment_rate_residual": (
+                    float(max_full_moment_residual[local])
+                    if compute_full else float("nan")
+                ),
+                "full_moment_rate_tolerance": (
+                    moment_gate if compute_full else float("nan")
+                ),
+                "physical_poisson_tolerance": (
+                    poisson_gate if compute_full else float("nan")
+                ),
+                "physical_poisson_relative_residual_by_time": (
+                    poisson_residuals_by_time[local].tolist()
+                    if compute_full else None
+                ),
+                "component_compatibility_residual_by_time": (
+                    compatibility_residuals_by_time[local].tolist()
+                    if compute_full else None
+                ),
+                "conductive_component_count_by_time": (
+                    conductive_components_by_time[local].tolist()
+                    if compute_full else None
+                ),
+                "physical_solver_converged_by_time": (
+                    physical_solver_converged_by_time[local].tolist()
+                    if compute_full else None
+                ),
                 "max_tangent_compatibility_residual": float(max_compat[local]) if compute_tangent else float("nan"),
                 "min_covariance_eigenvalue": float(min_cov_eig[local]) if compute_full else float("nan"),
                 "spline_residual_sum_squares": float(rec_rss[local]),
@@ -1585,7 +1768,42 @@ class VortexExperiment:
                     if np.isfinite(support_gap[local])
                     else float("nan")
                 ),
+                # Raw per-time values from this exact shared-weight evaluation.
+                # Keep them unmodified for hierarchy auditing.
+                "tangent_action_by_time": (
+                    tangent_values[local].tolist() if compute_tangent else None
+                ),
+                "full_action_by_time": (
+                    full_values[local].tolist() if compute_full else None
+                ),
             }
+            if decomposition is not None:
+                direct_full = np.asarray(decomposition.full_energy)[local]
+                direct_tangent = np.asarray(decomposition.tangent_energy)[local]
+                direct_hidden = np.asarray(decomposition.hidden_energy)[local]
+                direct_cross = np.asarray(
+                    decomposition.tangent_hidden_inner_product
+                )[local]
+                row["decomposition_by_time"] = {
+                    "direct_full_field_energy": direct_full.tolist(),
+                    "direct_tangent_field_energy": direct_tangent.tolist(),
+                    "direct_hidden_field_energy": direct_hidden.tolist(),
+                    "direct_tangent_hidden_inner_product": direct_cross.tolist(),
+                    "reported_identity_residual": (
+                        full_values[local] - tangent_values[local] - direct_hidden
+                    ).tolist(),
+                    "discrete_polarization_residual": np.asarray(
+                        decomposition.discrete_polarization_residual
+                    )[local].tolist(),
+                }
+            if compute_common_decomposition and common_decomposition is not None:
+                row["common_discretization_decomposition_by_time"] = {
+                    name: np.asarray(
+                        getattr(common_decomposition, name)[local],
+                        dtype=np.float64,
+                    ).tolist()
+                    for name in common_decomposition._fields
+                }
             self._exact_cache[cache_keys[local]] = row
             rows.append(dict(row))
         return rows
@@ -1601,6 +1819,8 @@ class VortexExperiment:
         trial_count: int | None = None,
         progress_desc: str | None = None,
         stop_on_invalid: bool = False,
+        compute_decomposition: bool = False,
+        compute_common_decomposition: bool = False,
     ) -> list[dict[str, Any]]:
         count = int(bank.sample_indices.shape[0])
         if trial_count is not None:
@@ -1622,6 +1842,8 @@ class VortexExperiment:
                 compute_law=compute_law,
                 compute_tangent=compute_tangent,
                 compute_full=compute_full,
+                compute_decomposition=compute_decomposition,
+                compute_common_decomposition=compute_common_decomposition,
             )
             rows.extend(chunk_rows)
             if stop_on_invalid and any(not row["valid"] for row in chunk_rows):
@@ -1770,6 +1992,14 @@ class VortexExperiment:
             "spline_residual_sum_squares": float(rec.residual_sum_squares),
             "spline_roughness": float(rec.roughness),
             "tangent_full_gap": gap, "tangent_lower_bound_violation": lbv,
+            "tangent_action_by_time": (
+                np.asarray(tan_vals, dtype=np.float64).tolist()
+                if compute_tangent else None
+            ),
+            "full_action_by_time": (
+                np.asarray(full_vals, dtype=np.float64).tolist()
+                if compute_full else None
+            ),
         }
         self._exact_cache[cache_key] = out
         return dict(out)
@@ -1830,6 +2060,42 @@ class VortexExperiment:
         for row in out:
             row["centers"] = centers
         return out
+
+    def evaluate_decomposition_exact(
+        self,
+        eta: Array,
+        bank: ObservationTrialBank,
+        *,
+        progress_desc: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Exact Full/Tangent evaluation retaining direct correction-field checks."""
+        return self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=True,
+            compute_tangent=True,
+            compute_full=True,
+            compute_decomposition=True,
+            progress_desc=progress_desc,
+        )
+
+    def evaluate_common_discretization_decomposition_exact(
+        self,
+        eta: Array,
+        bank: ObservationTrialBank,
+        *,
+        progress_desc: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Audit Full and minimum-norm Tangent fields in one raster space."""
+        return self._evaluate_exact_batched(
+            eta,
+            bank,
+            compute_law=True,
+            compute_tangent=False,
+            compute_full=True,
+            compute_common_decomposition=True,
+            progress_desc=progress_desc,
+        )
 
 
 def _paired_reduction(full_values: list[float], law_values: list[float]) -> dict[str, float | int]:

@@ -168,6 +168,33 @@ def _candidate_pool(family, *groups) -> list[Array]:
     return list(out.values())
 
 
+def _finite_law_risk_budget(law_cfg: dict[str, Any], r_star: float) -> tuple[float, float]:
+    """Return the additive risk budget and ceiling for the configured policy.
+
+    Existing experiments use an additive ``epsilon_r``.  Percentage-budget
+    variants instead declare ``max_relative_risk_violation`` so the ceiling is
+    derived from the exact Law anchor selected in the current run.
+    """
+    relative_key = "max_relative_risk_violation"
+    has_additive = "epsilon_r" in law_cfg
+    has_relative = relative_key in law_cfg
+    if has_additive == has_relative:
+        raise KeyError(
+            "law config must define exactly one of additive epsilon_r or "
+            f"relative {relative_key}"
+        )
+    if has_relative:
+        fraction = float(law_cfg[relative_key])
+        if not math.isfinite(fraction) or fraction < 0.0:
+            raise ValueError(f"law.{relative_key} must be finite and nonnegative")
+        epsilon_r = fraction * abs(float(r_star))
+    else:
+        epsilon_r = float(law_cfg["epsilon_r"])
+        if not math.isfinite(epsilon_r) or epsilon_r < 0.0:
+            raise ValueError("law.epsilon_r must be finite and nonnegative")
+    return epsilon_r, float(r_star) + epsilon_r
+
+
 def optimize_population_and_law(
     *,
     exp,
@@ -191,11 +218,12 @@ def optimize_population_and_law(
     cfg = exp.cfg
     opt = cfg["optimization"]
     law_cfg = cfg["law"]
-    if "epsilon_l" not in law_cfg or "epsilon_r" not in law_cfg:
+    if "epsilon_l" not in law_cfg:
         raise KeyError(
-            "law config must define additive epsilon_l and epsilon_r; "
-            "multiplicative tau_l/tau_r are no longer used"
+            "law config must define additive epsilon_l"
         )
+    # Validate the downstream risk-budget policy before starting expensive work.
+    _finite_law_risk_budget(law_cfg, 1.0)
     output_dir = Path(output_dir)
     fast = build_fast_law_evaluator(exp, dense_selection_bank)
     full_trial_count = int(dense_selection_bank.masses.shape[0])
@@ -218,13 +246,14 @@ def optimize_population_and_law(
     min_sep = math.radians(float(cfg["measurement"]["min_sep_deg"]))
     sep_constraint = (projective_separation_violation(min_sep), 0.0)
 
-    # Stage 1/2 do not depend on epsilon_r: epsilon_r is only the downstream
+    # Stage 1/2 do not depend on the R budget: it is only the downstream
     # admissible risk slack used by tangent/full selection.  Excluding it from
     # the stage-1/2 cache signature makes Pareto sweeps over epsilon_r reuse the
     # expensive population/Law solution safely.  R_max is recomputed from the
-    # cached R_star and the *current* epsilon_r below.
+    # cached R_star and the *current* risk policy below.
     stage12_cfg = copy.deepcopy(cfg)
     stage12_cfg.setdefault("law", {})["epsilon_r"] = "<downstream-only>"
+    stage12_cfg["law"].pop("max_relative_risk_violation", None)
     # Numerical backend choice does not change the law objective and must not
     # invalidate an already certified population/Law cache.
     stage12_cfg.setdefault("projection", {}).pop("trajectory_backend", None)
@@ -411,10 +440,11 @@ def optimize_population_and_law(
             raise RuntimeError("No scientifically valid population-feasible finite-law candidate")
         best = min(valid_rows, key=lambda r: r["exact_R"])
         R_star = float(best["exact_R"])
+        epsilon_r, R_max = _finite_law_risk_budget(law_cfg, R_star)
         law_cached = {
             "eta": np.asarray(best["eta"]).tolist(),
             "R_star": R_star,
-            "R_max": R_star + float(law_cfg["epsilon_r"]),
+            "R_max": R_max,
             "audited_candidate_count": len(exact_rows),
             "valid_candidate_count": len(valid_rows),
             "rescored": [
@@ -433,13 +463,17 @@ def optimize_population_and_law(
     else:
         print("[2/4] reusing cached finite-resource law optimum", flush=True)
 
+    R_star = float(law_cached["R_star"])
+    epsilon_r, R_max = _finite_law_risk_budget(law_cfg, R_star)
+
     return {
         "population_eta": population_eta,
         "law_eta": jnp.asarray(law_cached["eta"], dtype=jnp.float64),
         "L_star": L_star,
         "L_max": L_max,
-        "R_star": float(law_cached["R_star"]),
-        "R_max": float(law_cached["R_star"]) + float(law_cfg["epsilon_r"]),
+        "R_star": R_star,
+        "R_max": R_max,
+        "epsilon_r": epsilon_r,
         "fast_evaluator": fast,
         "gradient_evaluator": gradient_fast,
         "law_gradient_trials": law_gradient_trials,

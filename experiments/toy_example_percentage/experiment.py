@@ -59,15 +59,29 @@ from mfsi.moments import (
 )
 from mfsi.particles import ParticleMFSIConfig, particle_mfsi_state
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
-from mfsi.raster import RasterConfig, rasterize_projected_particles
+from mfsi.raster import (
+    RasterConfig,
+    rasterize_projected_particles,
+    rasterize_projected_particles_positive,
+)
 from mfsi.reference import MLPReferenceFlow, save_npz_checkpoint, velocity_mlp
 
+from mfsi.decomposition import correction_decomposition, raster_tangent_projection
+
 try:
-    from mfsi.poisson import PoissonConfig, solve_weighted_poisson, weighted_laplacian
+    from mfsi.poisson import (
+        PoissonConfig,
+        solve_weighted_poisson,
+        solve_weighted_poisson_physical_direct_batch,
+        solve_weighted_poisson_source_physical_direct_batch,
+        weighted_laplacian,
+    )
 except ImportError:  # compatibility with the earlier name used in the cleanup
     from mfsi.poisson import (
         WeightedPoissonConfig as PoissonConfig,
         solve_weighted_poisson,
+        solve_weighted_poisson_physical_direct_batch,
+        solve_weighted_poisson_source_physical_direct_batch,
         weighted_laplacian,
     )
 
@@ -897,6 +911,31 @@ class ToyExperiment:
         masked = jnp.where(self.reference_in_domain, self.reference_weights, 0.0)
         self.reference_weights = masked / jnp.maximum(jnp.sum(masked, axis=-1, keepdims=True), 1e-300)
 
+        # Authoritative Full rasterization uses a frozen-reference Scott rule in
+        # two dimensions.  The median across time avoids candidate/trial-dependent
+        # bandwidth selection; the grid floor guarantees that the KDE is resolved.
+        reference_nodes_np = np.asarray(self.reference_nodes, dtype=np.float64)
+        reference_weights_np = np.asarray(self.reference_weights, dtype=np.float64)
+        reference_mean = np.sum(
+            reference_weights_np[..., None] * reference_nodes_np, axis=1
+        )
+        reference_variance = np.sum(
+            reference_weights_np[..., None]
+            * (reference_nodes_np - reference_mean[:, None, :]) ** 2,
+            axis=1,
+        )
+        isotropic_scale = np.sqrt(np.mean(reference_variance, axis=1))
+        effective_sample_size = 1.0 / np.sum(reference_weights_np**2, axis=1)
+        scott_by_time = isotropic_scale * effective_sample_size ** (-1.0 / 6.0)
+        positive_cfg = raster_cfg.get("authoritative_positive", {})
+        self.authoritative_raster_bandwidth_rule = "median_reference_scott_2d"
+        self.authoritative_raster_bandwidth = max(
+            float(positive_cfg.get("minimum_bandwidth_cells", 1.5))
+            * float(self.grid.dx),
+            float(positive_cfg.get("bandwidth_scale", 1.0))
+            * float(np.median(scott_by_time)),
+        )
+
         # NumPy/SciPy exact geometry is cached only for authoritative rescoring and
         # validation. It never enters a differentiated objective.
         self._exact_geometry_cache: dict[tuple[float, float], dict[str, Any]] = {}
@@ -1630,12 +1669,31 @@ class ToyExperiment:
         compute_law: bool,
         compute_tangent: bool,
         compute_full: bool,
+        compute_decomposition: bool = False,
+        compute_common_decomposition: bool = False,
+        authoritative_grid: CartesianGrid2D | None = None,
+        authoritative_bandwidth: float | None = None,
     ) -> dict[str, Any]:
         """One authoritative finite/noisy trial with exact common-hull reconstruction."""
         eta = self.family.canonicalize(eta)
+        full_grid = self.grid if authoritative_grid is None else authoritative_grid
+        full_bandwidth = (
+            self.authoritative_raster_bandwidth
+            if authoritative_bandwidth is None
+            else float(authoritative_bandwidth)
+        )
+        full_poisson_cfg = PoissonConfig(
+            dx=float(full_grid.dx),
+            operator_floor_rel=float(self.poisson_cfg.operator_floor_rel),
+            cg_tol=float(self.poisson_cfg.cg_tol),
+            cg_maxiter=int(self.poisson_cfg.cg_maxiter),
+            gauge_strength=float(self.poisson_cfg.gauge_strength),
+        )
         trial_cache_key = (
             self._exact_key(eta), id(bank), int(trial),
             bool(compute_law), bool(compute_tangent), bool(compute_full),
+            bool(compute_decomposition), bool(compute_common_decomposition),
+            int(full_grid.n), round(float(full_bandwidth), 14),
         )
         cached_trial = self._exact_trial_result_cache.get(trial_cache_key)
         if cached_trial is not None:
@@ -1683,12 +1741,21 @@ class ToyExperiment:
         tangent_vals: list[float] = []
         full_vals: list[float] = []
         full_q_rows: list[Array] = []
-        full_h_rows: list[Array] = []
+        full_source_rows: list[Array] = []
+        tangent_coeff_rows: list[np.ndarray] = []
+        full_psi_rows: list[Array] = []
         lam = np.zeros(2, dtype=np.float64)
         max_resid = 0.0
         min_ess = np.inf
         max_hull = -np.inf
         max_poisson = 0.0
+        poisson_residuals_by_time: list[float] = []
+        compatibility_residuals_by_time: list[float] = []
+        conductive_components_by_time: list[int] = []
+        physical_solver_converged_by_time: list[bool] = []
+        minimum_q_by_time: list[float] = []
+        mass_error_by_time: list[float] = []
+        source_compatibility_error_by_time: list[float] = []
         max_tangent_compat = 0.0
         min_cov_eig = np.inf
         all_valid = bool(base_mass_ok and rec["endpoint_feasibility_violation"] <= hull_tol)
@@ -1735,76 +1802,162 @@ class ToyExperiment:
                 compat = float(np.linalg.norm(G @ coeff - r))
                 max_tangent_compat = max(max_tangent_compat, compat)
                 tangent_vals.append(float(r @ coeff))
+                if compute_decomposition:
+                    tangent_coeff_rows.append(np.asarray(coeff, dtype=np.float64))
 
-            need_raster = compute_full or (compute_law and t_idx in held_set)
-            ras = None
-            if need_raster:
-                if compute_full:
-                    gg = m @ st.lam
-                    mean_g = float(np.sum(st.weights * gg))
-                    centered_phi = g["phi_nodes"][t_idx] - st.moments[None, :]
-                    cov_phi_g = np.sum(
-                        st.weights[:, None] * centered_phi * (gg - mean_g)[:, None], axis=0
-                    )
-                    exact_cov_ridge = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_ridge", 0.0))
-                    cov = st.covariance + exact_cov_ridge * np.eye(st.covariance.shape[0])
-                    eig_min = float(np.min(np.linalg.eigvalsh(0.5 * (cov + cov.T))))
-                    min_cov_eig = min(min_cov_eig, eig_min)
-                    rhs = rec["c_dot"][t_idx] - mean_m - cov_phi_g
-                    cov_floor = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_min_eig", 1.0e-12))
-                    if eig_min <= cov_floor:
-                        all_valid = False
-                        lam_dot = np.linalg.lstsq(cov, rhs, rcond=None)[0]
-                    else:
-                        lam_dot = np.linalg.solve(cov, rhs)
-                    forcing = centered_phi @ lam_dot + gg - mean_g
-                    forcing = forcing - float(np.sum(st.weights * forcing))
+            if compute_full:
+                gg = m @ st.lam
+                mean_g = float(np.sum(st.weights * gg))
+                centered_phi = g["phi_nodes"][t_idx] - st.moments[None, :]
+                cov_phi_g = np.sum(
+                    st.weights[:, None] * centered_phi * (gg - mean_g)[:, None], axis=0
+                )
+                exact_cov_ridge = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_ridge", 0.0))
+                cov = st.covariance + exact_cov_ridge * np.eye(st.covariance.shape[0])
+                eig_min = float(np.min(np.linalg.eigvalsh(0.5 * (cov + cov.T))))
+                min_cov_eig = min(min_cov_eig, eig_min)
+                rhs = rec["c_dot"][t_idx] - mean_m - cov_phi_g
+                cov_floor = float(self.cfg.get("particle_mfsi", {}).get("exact_covariance_min_eig", 1.0e-12))
+                if eig_min <= cov_floor:
+                    all_valid = False
+                    lam_dot = np.linalg.lstsq(cov, rhs, rcond=None)[0]
                 else:
-                    forcing = np.zeros_like(st.weights)
-                ras = rasterize_projected_particles(
+                    lam_dot = np.linalg.solve(cov, rhs)
+                forcing = centered_phi @ lam_dot + gg - mean_g
+                forcing = forcing - float(np.sum(st.weights * forcing))
+                full_ras = rasterize_projected_particles_positive(
                     self.reference_nodes[t_idx],
                     jnp.asarray(st.weights, dtype=jnp.float64),
                     jnp.asarray(forcing, dtype=jnp.float64),
-                    self.grid,
-                    self.raster_cfg,
+                    full_grid,
+                    bandwidth=full_bandwidth,
                 )
 
             if compute_law and t_idx in held_set:
+                law_ras = rasterize_projected_particles(
+                    self.reference_nodes[t_idx],
+                    jnp.asarray(st.weights, dtype=jnp.float64),
+                    jnp.zeros_like(jnp.asarray(st.weights, dtype=jnp.float64)),
+                    self.grid,
+                    self.raster_cfg,
+                )
                 law_vals.append(float(gaussian_mmd2_grid_mass(
-                    ras.mass,
+                    law_ras.mass,
                     jnp.asarray(truth[t_idx].reshape((self.grid.n, self.grid.n))),
                     self.mmd_kernel,
                 )))
             if compute_full:
-                if self.full_exact_poisson_backend == "tesseract_cpp":
-                    full_q_rows.append(ras.q)
-                    full_h_rows.append(ras.h)
-                else:
-                    pois = solve_weighted_poisson(ras.q, ras.h, self.poisson_cfg)
-                    full_vals.append(float(pois.action))
-                    max_poisson = max(max_poisson, float(pois.relative_residual))
+                # All exact/scientific evaluations use the same host-side
+                # physical-q operator.  The configured JAX/C++ backends remain
+                # available only to the differentiable search proxy.
+                full_q_rows.append(full_ras.q)
+                full_source_rows.append(full_ras.source)
+                minimum_q_by_time.append(float(jnp.min(full_ras.q)))
+                mass_error_by_time.append(abs(float(jnp.sum(full_ras.mass)) - 1.0))
+                source_compatibility_error_by_time.append(
+                    abs(float(jnp.sum(full_ras.source) * full_grid.cell_area))
+                )
 
-        if compute_full and self.full_exact_poisson_backend == "tesseract_cpp":
+        if compute_full:
             # The exact tilt remains sequential in time so its multiplier warm
-            # starts and all scientific validity checks are unchanged. Once q/h
+            # starts and all scientific validity checks are unchanged. Once q/s
             # are known, the independent systems belong in one native call.
-            from mfsi.poisson_tesseract import solve_weighted_poisson_batch_tesseract
-
             q_batch = jnp.stack(full_q_rows)
-            h_batch = jnp.stack(full_h_rows)
-            psi_batch = solve_weighted_poisson_batch_tesseract(
-                q_batch, h_batch, self.poisson_cfg
-            )
-            actions, residuals = _batched_poisson_diagnostics(
-                psi_batch,
+            source_batch = jnp.stack(full_source_rows)
+            physical = solve_weighted_poisson_source_physical_direct_batch(
                 q_batch,
-                h_batch,
-                dx=float(self.poisson_cfg.dx),
-                operator_floor_rel=float(self.poisson_cfg.operator_floor_rel),
-                gauge_strength=float(self.poisson_cfg.gauge_strength),
+                source_batch,
+                full_poisson_cfg,
+                compatibility_tolerance=float(
+                    self.cfg.get("validity", {}).get(
+                        "physical_poisson_component_compatibility_tol", 1.0e-10
+                    )
+                ),
             )
-            full_vals = np.asarray(actions, dtype=np.float64).tolist()
-            max_poisson = float(np.max(np.asarray(residuals, dtype=np.float64)))
+            full_vals = np.asarray(physical.action, dtype=np.float64).tolist()
+            full_psi_rows = list(jnp.asarray(physical.potential, dtype=jnp.float64))
+            poisson_residuals_by_time = np.asarray(
+                physical.relative_residual, dtype=np.float64
+            ).tolist()
+            compatibility_residuals_by_time = np.asarray(
+                physical.maximum_component_compatibility_residual,
+                dtype=np.float64,
+            ).tolist()
+            conductive_components_by_time = np.asarray(
+                physical.component_count, dtype=np.int32
+            ).tolist()
+            physical_solver_converged_by_time = np.asarray(
+                physical.solver_converged, dtype=bool
+            ).tolist()
+            max_poisson = float(np.max(np.asarray(physical.relative_residual)))
+
+        decomposition_by_time = None
+        if compute_decomposition:
+            grid_features = self.family.features(full_grid.points(), eta)
+            tangent_potential = jnp.einsum(
+                "tm,yxm->tyx", jnp.asarray(tangent_coeff_rows), grid_features
+            )
+            decomposition = correction_decomposition(
+                jnp.stack(full_psi_rows),
+                tangent_potential,
+                jnp.stack(full_q_rows),
+                dx=float(full_poisson_cfg.dx),
+                cell_area=float(full_grid.cell_area),
+            )
+            direct_hidden = np.asarray(decomposition.hidden_energy, dtype=np.float64)
+            decomposition_by_time = {
+                "direct_full_field_energy": np.asarray(
+                    decomposition.full_energy, dtype=np.float64
+                ).tolist(),
+                "direct_tangent_field_energy": np.asarray(
+                    decomposition.tangent_energy, dtype=np.float64
+                ).tolist(),
+                "direct_hidden_field_energy": direct_hidden.tolist(),
+                "direct_tangent_hidden_inner_product": np.asarray(
+                    decomposition.tangent_hidden_inner_product, dtype=np.float64
+                ).tolist(),
+                "reported_identity_residual": (
+                    np.asarray(full_vals, dtype=np.float64)
+                    - np.asarray(tangent_vals, dtype=np.float64)
+                    - direct_hidden
+                ).tolist(),
+                "discrete_polarization_residual": np.asarray(
+                    decomposition.discrete_polarization_residual, dtype=np.float64
+                ).tolist(),
+            }
+
+        common_decomposition_by_time = None
+        max_full_moment_residual = 0.0
+        if compute_full:
+            grid_features = self.family.features(full_grid.points(), eta)
+            common = raster_tangent_projection(
+                jnp.stack(full_psi_rows),
+                jnp.stack(full_q_rows),
+                jnp.stack(full_source_rows),
+                grid_features,
+                dx=float(full_poisson_cfg.dx),
+                cell_area=float(full_grid.cell_area),
+                pinv_rcond=float(
+                    self.cfg.get("particle_mfsi", {}).get(
+                        "tangent_pinv_rcond", 1.0e-10
+                    )
+                ),
+                operator_floor_rel=0.0,
+                gauge_strength=0.0,
+                source_is_density=True,
+            )
+            common_decomposition_by_time = {
+                name: np.asarray(getattr(common, name), dtype=np.float64).tolist()
+                for name in common._fields
+            }
+            max_full_moment_residual = float(
+                np.max(
+                    np.linalg.norm(
+                        np.asarray(common.full_moment_residual, dtype=np.float64),
+                        axis=-1,
+                    )
+                )
+            )
 
         all_valid = bool(
             all_valid
@@ -1815,9 +1968,41 @@ class ToyExperiment:
         if compute_tangent:
             all_valid = all_valid and max_tangent_compat <= tangent_compat_gate
 
-        poisson_gate = valid_cfg.get("max_poisson_relative_residual")
-        if compute_full and poisson_gate is not None:
-            all_valid = all_valid and max_poisson <= float(poisson_gate)
+        poisson_gate = float(
+            valid_cfg.get(
+                "max_poisson_relative_residual",
+                max(10.0 * float(self.poisson_cfg.cg_tol), 1.0e-7),
+            )
+        )
+        moment_gate = float(
+            valid_cfg.get(
+                "max_full_moment_rate_residual",
+                valid_cfg.get("tangent_lower_bound_tol", 1.0e-6),
+            )
+        )
+        minimum_q_gate = float(valid_cfg.get("minimum_positive_raster_density", 0.0))
+        mass_error_gate = float(valid_cfg.get("max_raster_mass_error", 1.0e-12))
+        source_compatibility_gate = float(
+            valid_cfg.get("max_raster_source_compatibility_error", 1.0e-12)
+        )
+        if compute_full:
+            all_valid = bool(
+                all_valid
+                and min(minimum_q_by_time, default=-float("inf"))
+                > minimum_q_gate
+                and max(mass_error_by_time, default=float("inf")) <= mass_error_gate
+                and max(source_compatibility_error_by_time, default=float("inf"))
+                <= source_compatibility_gate
+                and max_poisson <= poisson_gate
+                and max_full_moment_residual <= moment_gate
+                and max(compatibility_residuals_by_time, default=float("inf"))
+                <= float(
+                    valid_cfg.get(
+                        "physical_poisson_component_compatibility_tol", 1.0e-10
+                    )
+                )
+                and all(physical_solver_converged_by_time)
+            )
 
         law = float(np.sum(held_w * np.asarray(law_vals))) if compute_law and law_vals else float("nan")
         tangent = float(np.sum(np.asarray(self.time_w) * np.asarray(tangent_vals))) if compute_tangent else float("nan")
@@ -1827,11 +2012,36 @@ class ToyExperiment:
         if not all_valid:
             law = tangent = full = float("nan")
             tangent_full_gap = lower_bound_violation = float("nan")
+        invalid_reason = None
+        if not all_valid:
+            if compute_full and (
+                min(minimum_q_by_time, default=-float("inf")) <= minimum_q_gate
+                or max(mass_error_by_time, default=float("inf")) > mass_error_gate
+                or max(source_compatibility_error_by_time, default=float("inf"))
+                > source_compatibility_gate
+            ):
+                invalid_reason = "positive_raster_density_mass_or_source_gate"
+            elif compute_full and max_poisson > poisson_gate:
+                invalid_reason = "physical_q_poisson_residual_gate"
+            elif compute_full and (
+                max(compatibility_residuals_by_time, default=float("inf"))
+                > float(
+                    valid_cfg.get(
+                        "physical_poisson_component_compatibility_tol", 1.0e-10
+                    )
+                )
+                or not all(physical_solver_converged_by_time)
+            ):
+                invalid_reason = "physical_q_poisson_compatibility_or_convergence_gate"
+            elif compute_full and max_full_moment_residual > moment_gate:
+                invalid_reason = "physical_q_full_moment_rate_gate"
+            else:
+                invalid_reason = "calibration_ess_hull_or_identifiability_gate"
         result = {
             "trial": int(trial),
             "alpha": float(bank.alphas[trial]),
             "valid": all_valid,
-            "invalid_reason": None if all_valid else "calibration_ess_hull_or_identifiability_gate",
+            "invalid_reason": invalid_reason,
             "law_risk": law,
             "tangent_action": tangent,
             "full_action": full,
@@ -1840,11 +2050,67 @@ class ToyExperiment:
             "max_hull_violation": float(max_hull),
             "feasibility_projection_distance": float(rec["projection_distance"]),
             "max_poisson_relative_residual": float(max_poisson) if compute_full else float("nan"),
+            "max_full_moment_rate_residual": (
+                float(max_full_moment_residual) if compute_full else float("nan")
+            ),
+            "full_moment_rate_tolerance": moment_gate,
+            "physical_poisson_tolerance": poisson_gate,
+            "authoritative_raster_grid_n": int(full_grid.n),
+            "authoritative_raster_bandwidth": float(full_bandwidth),
+            "authoritative_raster_bandwidth_rule": (
+                self.authoritative_raster_bandwidth_rule
+            ),
+            "minimum_positive_raster_density": (
+                min(minimum_q_by_time) if compute_full else float("nan")
+            ),
+            "maximum_raster_mass_error": (
+                max(mass_error_by_time) if compute_full else float("nan")
+            ),
+            "maximum_raster_source_compatibility_error": (
+                max(source_compatibility_error_by_time)
+                if compute_full else float("nan")
+            ),
+            "minimum_positive_raster_density_by_time": (
+                minimum_q_by_time if compute_full else None
+            ),
+            "raster_mass_error_by_time": mass_error_by_time if compute_full else None,
+            "raster_source_compatibility_error_by_time": (
+                source_compatibility_error_by_time if compute_full else None
+            ),
+            "physical_poisson_relative_residual_by_time": (
+                poisson_residuals_by_time if compute_full else None
+            ),
+            "component_compatibility_residual_by_time": (
+                compatibility_residuals_by_time if compute_full else None
+            ),
+            "conductive_component_count_by_time": (
+                conductive_components_by_time if compute_full else None
+            ),
+            "physical_solver_converged_by_time": (
+                physical_solver_converged_by_time if compute_full else None
+            ),
             "max_tangent_compatibility_residual": float(max_tangent_compat) if compute_tangent else float("nan"),
             "min_covariance_eigenvalue": float(min_cov_eig) if compute_full else float("nan"),
             "tangent_full_gap": float(tangent_full_gap),
             "tangent_lower_bound_violation": float(lower_bound_violation),
+            # Raw per-time values from the same exact projection/Poisson pass.
+            # These are intentionally not clipped so post-processing can audit
+            # the tangent <= full hierarchy at its finest available resolution.
+            "tangent_action_by_time": (
+                np.asarray(tangent_vals, dtype=np.float64).tolist()
+                if compute_tangent else None
+            ),
+            "full_action_by_time": (
+                np.asarray(full_vals, dtype=np.float64).tolist()
+                if compute_full else None
+            ),
         }
+        if decomposition_by_time is not None:
+            result["decomposition_by_time"] = decomposition_by_time
+        if compute_common_decomposition and common_decomposition_by_time is not None:
+            result["common_discretization_decomposition_by_time"] = (
+                common_decomposition_by_time
+            )
         self._exact_trial_result_cache[trial_cache_key] = result
         return dict(result)
 
@@ -1916,6 +2182,83 @@ class ToyExperiment:
         for r in trial_indices:
             row = self._exact_trial_result(
                 eta, bank, r, compute_law=True, compute_tangent=True, compute_full=True
+            )
+            row["theta1_deg"] = float(eta_deg[0])
+            row["theta2_deg"] = float(eta_deg[1])
+            out.append(row)
+        return out
+
+    def evaluate_decomposition_exact(
+        self,
+        eta: Array,
+        bank: TrialBank,
+        *,
+        progress_desc: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Exact Full/Tangent evaluation retaining direct correction-field checks."""
+        eta = self.family.canonicalize(eta)
+        eta_deg = _canonical_deg(eta)
+        out = []
+        trial_indices = range(int(bank.masses.shape[0]))
+        if progress_desc is not None:
+            trial_indices = _progress_iter(
+                trial_indices, desc=progress_desc, total=int(bank.masses.shape[0])
+            )
+        for trial in trial_indices:
+            row = self._exact_trial_result(
+                eta,
+                bank,
+                trial,
+                compute_law=True,
+                compute_tangent=True,
+                compute_full=True,
+                compute_decomposition=True,
+            )
+            row["theta1_deg"] = float(eta_deg[0])
+            row["theta2_deg"] = float(eta_deg[1])
+            out.append(row)
+        return out
+
+    def evaluate_common_discretization_decomposition_exact(
+        self,
+        eta: Array,
+        bank: TrialBank,
+        *,
+        progress_desc: str | None = None,
+        grid_n: int | None = None,
+        bandwidth_scale: float = 1.0,
+        trial_count: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Audit Full and minimum-norm Tangent fields in one raster space."""
+        eta = self.family.canonicalize(eta)
+        eta_deg = _canonical_deg(eta)
+        out = []
+        count = int(bank.masses.shape[0]) if trial_count is None else min(
+            int(trial_count), int(bank.masses.shape[0])
+        )
+        audit_grid = CartesianGrid2D(
+            half_width=float(self.grid.half_width),
+            n=int(self.grid.n if grid_n is None else grid_n),
+        )
+        audit_bandwidth = float(self.authoritative_raster_bandwidth) * float(
+            bandwidth_scale
+        )
+        trial_indices = range(count)
+        if progress_desc is not None:
+            trial_indices = _progress_iter(
+                trial_indices, desc=progress_desc, total=count
+            )
+        for trial in trial_indices:
+            row = self._exact_trial_result(
+                eta,
+                bank,
+                trial,
+                compute_law=False,
+                compute_tangent=False,
+                compute_full=True,
+                compute_common_decomposition=True,
+                authoritative_grid=audit_grid,
+                authoritative_bandwidth=audit_bandwidth,
             )
             row["theta1_deg"] = float(eta_deg[0])
             row["theta2_deg"] = float(eta_deg[1])
@@ -2437,7 +2780,8 @@ class ToyExperiment:
         Geometry is computed once per eta, trials are vmapped, Newton multipliers
         are warm-started through the selected time nodes, and the Poisson solve uses
         the configured gradient-only tolerance.  Final selection/validation never
-        reports this proxy; they use ``full_action`` at full fidelity.
+        reports this proxy; they use ``exact_full_result`` and
+        ``evaluate_trials_exact`` with positive-support source deposition.
         """
         eta = self.family.canonicalize(eta)
         phi_grid, phi_nodes, grad_nodes = self._geometry(eta)
@@ -2534,6 +2878,7 @@ class ToyExperiment:
         return self.tangent_action(eta, bank)
 
     def full_action(self, eta: Array, bank: TrialBank) -> Array:
+        """Legacy full-grid JAX proxy; exact reporting uses the positive raster."""
         eta = self.family.canonicalize(eta)
         phi_grid, phi_nodes, grad_nodes = self._geometry(eta)
         reconstruction_polytope, endpoint_violation = (

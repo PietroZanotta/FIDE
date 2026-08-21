@@ -83,6 +83,7 @@ def _row(result: dict[str, Any], percent: float, point_dir: Path) -> dict[str, A
     certificates = result.get("selection_certificates", {})
     full = certificates.get("full", {})
     law = certificates.get("law", {})
+    tangent = certificates.get("tangent", {})
     validation = result.get("validation", {})
     contrast = result.get("contrasts", {}).get("full_vs_law_full_action_reduction", {})
     bootstrap = result.get("contrasts", {}).get("full_vs_law_ratio_of_means_bootstrap_95", {})
@@ -98,6 +99,8 @@ def _row(result: dict[str, Any], percent: float, point_dir: Path) -> dict[str, A
         "full_theta2_deg": result["selection"]["full_optimum_deg"][1],
         "law_theta1_deg": result["selection"]["law_optimum_deg"][0],
         "law_theta2_deg": result["selection"]["law_optimum_deg"][1],
+        "tangent_theta1_deg": result["selection"]["tangent_optimum_deg"][0],
+        "tangent_theta2_deg": result["selection"]["tangent_optimum_deg"][1],
         "full_R_selection": full.get("R_selection"),
         "full_R_excess_selection": full.get("R_excess_from_star"),
         "full_R_slack_selection": full.get("R_slack_to_max"),
@@ -106,10 +109,20 @@ def _row(result: dict[str, Any], percent: float, point_dir: Path) -> dict[str, A
         "law_L_selection": law.get("L_selection"),
         "law_R_selection": law.get("R_selection"),
         "law_A_selection": law.get("full_action_selection"),
+        "tangent_R_selection": tangent.get("R_selection"),
+        "tangent_R_excess_selection": tangent.get("R_excess_from_star"),
+        "tangent_L_selection": tangent.get("L_selection"),
+        "tangent_A_selection": tangent.get("full_action_selection"),
+        "tangent_T_selection": tangent.get("tangent_action_selection"),
+        "tangent_certified": tangent.get("certified"),
         "full_A_selection": full.get("full_action_selection"),
         "law_R_validation": validation.get("law", {}).get("law_risk", {}).get("mean"),
         "full_R_validation": validation.get("full", {}).get("law_risk", {}).get("mean"),
         "law_A_validation": validation.get("law", {}).get("full_action", {}).get("mean"),
+        "tangent_R_validation": validation.get("tangent", {}).get("law_risk", {}).get("mean"),
+        "tangent_A_validation": validation.get("tangent", {}).get("full_action", {}).get("mean"),
+        "tangent_A_validation_se": validation.get("tangent", {}).get("full_action", {}).get("se"),
+        "tangent_valid_fraction": validation.get("tangent", {}).get("valid_fraction"),
         "full_A_validation": validation.get("full", {}).get("full_action", {}).get("mean"),
         "validation_action_reduction": contrast.get("ratio_of_means_reduction"),
         "validation_ci_lower": bootstrap.get("lower"),
@@ -253,11 +266,20 @@ def main() -> None:
         _print_point_summary(index, total, row)
         print(f"[pareto {index}/{total}] checkpointed table and refreshed figure", flush=True)
 
+    try:
+        from visualize_pareto import save_pareto_suite
+
+        save_pareto_suite(rows, args.output, args.output)
+    except Exception as exc:
+        print(f"[pareto] extended post-processing skipped: {exc}", flush=True)
+
     print("=" * 88, flush=True)
     print(f"[pareto] complete: {total}/{total} percentage allowances", flush=True)
     print(f"[pareto] table: {args.output / 'pareto.csv'}", flush=True)
     print(f"[pareto] data:  {args.output / 'pareto.json'}", flush=True)
     print(f"[pareto] plot:  {args.output / 'pareto.png'}", flush=True)
+    print(f"[pareto] methods: {args.output / 'pareto_methods.png'}", flush=True)
+    print(f"[pareto] sensors: {args.output / 'pareto_sensor_layouts.png'}", flush=True)
 
 
 if __name__ == "__main__":

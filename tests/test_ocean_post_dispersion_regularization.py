@@ -9,6 +9,10 @@ from experiments.ocean_drifters.post_dispersion_regularization import (
     post_dispersion_source_indices,
     solve_conductivity_regularized_ritz,
 )
+from experiments.ocean_drifters.temporal_refinement import (
+    nested_source_grids,
+    summarize_temporal_levels,
+)
 
 
 def _prepared_problem() -> tuple[object, np.ndarray, np.ndarray]:
@@ -50,6 +54,34 @@ def test_window_trapezoid_weights_match_vortices_convention() -> None:
     weights = normalized_trapezoid_weights(times)
     np.testing.assert_allclose(weights, [0.125, 0.5, 0.375])
     np.testing.assert_allclose(weights.sum(), 1.0)
+
+
+def test_temporal_refinement_ladder_is_nested_and_certifies_stable_rows() -> None:
+    cfg = {
+        "window_start_source_index": 48,
+        "window_end_source_index": 180,
+        "source_horizon_days": 45.0,
+        "source_steps": [12, 6, 3, 1],
+        "node_counts": [12, 23, 45, 133],
+        "maximum_consecutive_relative_action_change": 0.05,
+        "tangent_full_relative_tolerance": 1e-8,
+        "production_authorized_if_certified": True,
+    }
+    grids = nested_source_grids(48, 180, cfg["source_steps"])
+    assert [len(grid) for grid in grids] == cfg["node_counts"]
+    rows = [
+        {
+            "source_time_index": int(source),
+            "tangent_action": 2.0,
+            "direct_action_qr": 3.0,
+            "local_valid": True,
+        }
+        for source in grids[-1]
+    ]
+    summary = summarize_temporal_levels(rows, cfg)
+    assert summary["temporal_quadrature_refinement_certified"] is True
+    assert summary["production_authorized"] is True
+    assert summary["maximum_consecutive_relative_action_change_observed"] < 1e-14
 
 
 def test_regularized_ritz_matches_explicit_dense_equation() -> None:
