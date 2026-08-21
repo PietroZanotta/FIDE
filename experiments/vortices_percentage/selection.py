@@ -308,7 +308,12 @@ def _audit_action(
     law_valid = []
     audited = 0
     for violation, proxy, eta in _progress_iter(ordered, desc=f"{name}: exact law screen"):
-        if audited >= int(audit_limit) and len(law_valid) >= int(finalist_count):
+        is_mandatory = _key(exp, eta) in mandatory_keys
+        if (
+            not is_mandatory
+            and audited >= int(audit_limit)
+            and len(law_valid) >= int(finalist_count)
+        ):
             break
         audited += 1
         pop = exp.exact_population_result(eta)
@@ -530,6 +535,11 @@ def optimize_vortex_designs(
         "tangent_seed_etas",
         parameter_count=parameter_count,
     )
+    tangent_audit_seed_values = _configured_stage_seeds(
+        opt,
+        "tangent_audit_seed_etas",
+        parameter_count=parameter_count,
+    )
     grad_tan_bank = _prefix_bank(action_bank, int(opt.get("tangent_gradient_trials", min(4, int(action_bank.sample_indices.shape[0])))))
     local = _local_cloud(
         exp, [law_eta, population_eta] + tangent_seed_values,
@@ -560,7 +570,12 @@ def optimize_vortex_designs(
         vectorize_starts=False,
         progress_callback=_optimizer_progress("stage 3 tangent"),
     ) if tan_cfg.steps > 0 else []
-    tan_pool = _dedupe(exp, list(tangent_starts) + [r.eta for r in tan_candidates])
+    tan_pool = _dedupe(
+        exp,
+        list(tangent_starts)
+        + tangent_audit_seed_values
+        + [r.eta for r in tan_candidates],
+    )
     tan_ranked = _rank_pool(exp, tan_pool, tangent_obj_raw, action_constraints)
     tangent_eta, tangent_rows, tangent_law_screen = _audit_action(
         "tangent", exp, tan_ranked, law_bank, action_bank,
@@ -568,7 +583,9 @@ def optimize_vortex_designs(
         exact_action=lambda eta: exp.exact_tangent_result(eta, action_bank),
         audit_limit=int(opt.get("tangent_exact_audit_candidates", 24)),
         finalist_count=int(opt.get("tangent_exact_rescore_candidates", 8)),
-        mandatory=[law_eta, population_eta] + tangent_seed_values,
+        mandatory=[law_eta, population_eta]
+        + tangent_seed_values
+        + tangent_audit_seed_values,
     )
     stage_finished("stage_3_tangent", stage_3_started)
 
@@ -584,6 +601,11 @@ def optimize_vortex_designs(
     full_seed_values = _configured_stage_seeds(
         opt,
         "full_seed_etas",
+        parameter_count=parameter_count,
+    )
+    full_audit_seed_values = _configured_stage_seeds(
+        opt,
+        "full_audit_seed_etas",
         parameter_count=parameter_count,
     )
     pareto_incumbent = opt.get("pareto_incumbent_full_eta")
@@ -622,7 +644,12 @@ def optimize_vortex_designs(
         project_iterate=project_iterate,
         progress_callback=_optimizer_progress("stage 4 full"),
     ) if full_cfg.steps > 0 else []
-    full_pool = _dedupe(exp, list(full_starts) + [r.eta for r in full_candidates])
+    full_pool = _dedupe(
+        exp,
+        list(full_starts)
+        + full_audit_seed_values
+        + [r.eta for r in full_candidates],
+    )
     full_ranked = _rank_pool(exp, full_pool, full_raw, action_constraints)
     prescreen_trials = int(opt.get("full_prescreen_trials", min(4, int(action_bank.sample_indices.shape[0]))))
     full_eta, full_rows, full_law_screen = _audit_action(
@@ -634,6 +661,7 @@ def optimize_vortex_designs(
         finalist_count=int(opt.get("full_exact_rescore_candidates", 10)),
         mandatory=[law_eta, tangent_eta, population_eta]
         + full_seed_values
+        + full_audit_seed_values
         + incumbent_values,
     )
     stage_finished("stage_4_full", stage_4_started)

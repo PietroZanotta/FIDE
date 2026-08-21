@@ -156,6 +156,34 @@ def main() -> None:
     if checkpoint.get("identity") != identity:
         raise RuntimeError("method-evaluation checkpoint identity mismatch")
 
+    validation_risk_cache = checkpoint.setdefault("validation_risks", {})
+
+    def evaluate_validation_risk(degrees: list[float]) -> dict[str, Any]:
+        """Evaluate only finite-law risk on the frozen validation bank."""
+        geometry = np.deg2rad(np.asarray(degrees, dtype=np.float64)).tolist()
+        key = geometry_key(geometry)
+        if key not in validation_risk_cache:
+            result = exp.exact_finite_result(
+                jnp.asarray(geometry, dtype=jnp.float64), validation_bank
+            )
+            rows = result["rows"]
+            values = [
+                float(row["law_risk"])
+                for row in rows
+                if bool(row["valid"]) and math.isfinite(float(row["law_risk"]))
+            ]
+            if not bool(result["valid"]) or len(values) != len(rows):
+                raise RuntimeError(
+                    f"Full validation-risk evaluation failed for geometry {degrees}"
+                )
+            mean, se = _mean_se(values)
+            validation_risk_cache[key] = {
+                "summary": {"mean": mean, "se": se, "n": len(values)},
+                "trial_law_risks": values,
+            }
+            _write_json(checkpoint_path, checkpoint)
+        return validation_risk_cache[key]
+
     def evaluate(degrees: list[float], bank_name: str) -> dict[str, Any]:
         geometry = np.deg2rad(np.asarray(degrees, dtype=np.float64)).tolist()
         key = f"{bank_name}:{geometry_key(geometry)}"
@@ -203,6 +231,10 @@ def main() -> None:
         {**row, "method": "full"}
         for row in nested.get("validation_trials", [])
     ]
+    full_validation_trial_index = {
+        (float(row["allowance_percent"]), int(row["trial"])): row
+        for row in validation_trial_rows
+    }
     diagnostics: list[dict[str, Any]] = []
     previous_corrected = None
     if args.previous_corrected is not None and args.previous_corrected.is_file():
@@ -218,6 +250,7 @@ def main() -> None:
         stage_audit = json.loads((output / _tag(allowance) / "audit.json").read_text(encoding="utf-8"))["stage"]
         full_selection = stage_audit["selection"]
         full_validation = stage_audit["validation"]
+        full_validation_risk = evaluate_validation_risk(full_row["geometry_deg"])
         methods: dict[str, dict[str, Any]] = {}
         for method in ("law", "tangent"):
             degrees = old["selection"][f"{method}_optimum_deg"]
@@ -242,9 +275,12 @@ def main() -> None:
             "selection": full_selection,
             "validation": full_validation,
             "validation_se": float(full_row["validation_A_full_h_se"]),
-            "validation_risk": {},
+            "validation_risk": full_validation_risk["summary"],
+            "validation_risk_trials": full_validation_risk["trial_law_risks"],
             "validation_trials": [],
         }
+        for trial, risk in enumerate(methods["full"]["validation_risk_trials"]):
+            full_validation_trial_index[(allowance, trial)]["law_risk"] = risk
         law_validation_action = float(methods["law"]["validation"]["A_full_h"])
         result = {
             "schema_version": 1,
@@ -321,6 +357,8 @@ def main() -> None:
                 "A_tan_h": val["A_tan_h"],
                 "A_hid_h": val["A_hid_h"],
                 "Gamma_h": val["Gamma_h"],
+                "law_risk_mean": method_data["validation_risk"].get("mean"),
+                "law_risk_se": method_data["validation_risk"].get("se"),
                 "Full_vs_Law_reduction": (
                     law_validation_action - float(val["A_full_h"])
                 ) / law_validation_action,
@@ -366,6 +404,10 @@ def main() -> None:
             "full_A_selection": float(full_row["selection_A_full_h"]),
             "full_A_validation_mean": float(full_row["validation_A_full_h_mean"]),
             "full_A_validation_se": float(full_row["validation_A_full_h_se"]),
+            "law_R_validation": float(methods["law"]["validation_risk"]["mean"]),
+            "full_R_validation": float(methods["full"]["validation_risk"]["mean"]),
+            "law_A_validation": law_validation_action,
+            "full_A_validation": float(full_row["validation_A_full_h_mean"]),
             "Full_vs_Law_validation_reduction": reduction,
             "full_certified": bool(result["selection_certificates"]["full"]["certified"]),
             "result": str((point_dir / "result.json").resolve()),

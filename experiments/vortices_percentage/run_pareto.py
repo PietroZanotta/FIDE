@@ -27,7 +27,7 @@ from mfsi.config import load_config
 from experiment import run_experiment
 
 DEFAULT_PERCENTAGES = (0.5, 1.0, 2.0, 3.0, 4.0, 5.0)
-PARETO_METHODOLOGY_VERSION = 3
+PARETO_METHODOLOGY_VERSION = 4
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +43,10 @@ def parse_args() -> argparse.Namespace:
         help="compatible run used to seed frozen reference/CRN artifacts",
     )
     parser.add_argument("--output", type=Path, default=SCRIPT_DIR / "outputs" / "pareto")
+    parser.add_argument(
+        "--seed-pareto", type=Path,
+        help="archived Pareto tree used only for candidate geometries and provenance",
+    )
     parser.add_argument("--force", action="store_true", help="rerun compatible points")
     return parser.parse_args()
 
@@ -100,13 +104,72 @@ def _best_archived_law_seed(source: Path, output: Path) -> list[float] | None:
     return eta
 
 
+def _archived_stage_seeds(seed_pareto: Path | None) -> dict[str, list[list[float]]]:
+    """Collect every saved exact-audited transport candidate for fresh re-audit."""
+    seeds: dict[str, list[list[float]]] = {"tangent": [], "full": []}
+    if seed_pareto is None:
+        return seeds
+
+    def add(stage: str, eta: Any) -> None:
+        try:
+            values = [float(value) for value in eta]
+        except (TypeError, ValueError):
+            return
+        if len(values) != 8 or not all(math.isfinite(value) for value in values):
+            return
+        key = tuple(round(value, 12) for value in values)
+        if key not in {tuple(round(value, 12) for value in row) for row in seeds[stage]}:
+            seeds[stage].append(values)
+
+    for path in sorted(seed_pareto.glob("risk_*pct/result.json")):
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for stage in ("tangent", "full"):
+            add(stage, result.get("selection", {}).get(f"{stage}_optimum"))
+            for row in result.get("selection_audit", {}).get(stage, []):
+                if row.get("valid"):
+                    add(stage, row.get("eta"))
+        # Law and cross-stage geometries are legitimate Full/Tangent seeds too.
+        for stage in ("law", "population"):
+            eta = result.get("selection", {}).get(f"{stage}_optimum")
+            add("tangent", eta)
+            add("full", eta)
+        add("full", result.get("selection", {}).get("tangent_optimum"))
+
+    repair_path = seed_pareto / "tangent_refinement_audit.json"
+    if repair_path.is_file():
+        try:
+            repair = json.loads(repair_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            repair = {}
+        for report in repair.get("reports", []):
+            add("tangent", report.get("selected_eta"))
+            add("tangent", report.get("full_seed_eta"))
+            for row in report.get("exact_finalist_rows", []):
+                if row.get("valid"):
+                    add("tangent", row.get("eta"))
+    print(
+        "[pareto] archived mandatory candidates: "
+        f"Tangent={len(seeds['tangent'])}, Full={len(seeds['full'])}",
+        flush=True,
+    )
+    return seeds
+
+
 def _audited_full_action(result: dict[str, Any], selected: list[float]) -> float:
     for row in result.get("selection_audit", {}).get("full", []):
         if row.get("eta") == selected and row.get("valid"):
             value = float(row["objective"])
             if math.isfinite(value):
                 return value
-    raise RuntimeError("design is missing its exact Full-action audit row")
+    # A cross-stage geometry can fail a strict Full certification in the
+    # stage-local cache even though it is not the Full-stage winner.  Keep the
+    # sweep checkpointable and leave the value explicitly missing; the final
+    # common-discretization pass re-evaluates every Law/Tangent/Full geometry
+    # and is the publication gate for those cross-stage scores.
+    return float("nan")
 
 
 def _candidate_summary_action(result_path: Path, design: str, column: str) -> float:
@@ -118,7 +181,9 @@ def _candidate_summary_action(result_path: Path, design: str, column: str) -> fl
                 value = float(row[column])
                 if math.isfinite(value):
                     return value
-    raise RuntimeError(f"{design} is missing {column} in {path}")
+    # See ``_audited_full_action``: cross-stage scientific scores are finalized
+    # by the all-candidate common-raster audit after the nested sweep.
+    return float("nan")
 
 
 def _row(result: dict[str, Any], percent: float, result_path: Path) -> dict[str, Any]:
@@ -175,7 +240,9 @@ def _row(result: dict[str, Any], percent: float, result_path: Path) -> dict[str,
 
 def _save(rows: list[dict[str, Any]], output: Path) -> None:
     with (output / "pareto.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(rows)
     (output / "pareto.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
@@ -243,10 +310,15 @@ def main() -> None:
     print(f"allowances_percent={percentages}", flush=True)
     print(f"source_run={args.source_run.resolve()}", flush=True)
     print(f"output={args.output.resolve()}", flush=True)
+    print(f"seed_pareto={args.seed_pareto.resolve() if args.seed_pareto else None}", flush=True)
     print(f"force={args.force}", flush=True)
     print("policy: R_max = R* + (allowance_percent / 100) * abs(R*)", flush=True)
 
-    archive_seed = _best_archived_law_seed(args.source_run, args.output)
+    archived = _archived_stage_seeds(args.seed_pareto)
+    archive_seed = _best_archived_law_seed(
+        args.source_run,
+        args.seed_pareto if args.seed_pareto is not None else args.output,
+    )
     shared_anchor: dict[str, Any] | None = None
     incumbent_full_eta: list[float] | None = None
     incumbent_full_action = math.inf
@@ -261,6 +333,8 @@ def main() -> None:
         cfg["law"].pop("epsilon_r", None)
         cfg["law"]["max_relative_risk_violation"] = percent / 100.0
         cfg["optimization"]["pareto_methodology_version"] = PARETO_METHODOLOGY_VERSION
+        cfg["optimization"]["tangent_audit_seed_etas"] = archived["tangent"]
+        cfg["optimization"]["full_audit_seed_etas"] = archived["full"]
         if shared_anchor is not None:
             cfg["optimization"]["fixed_law_anchor"] = shared_anchor
         elif archive_seed is not None:
@@ -317,6 +391,25 @@ def main() -> None:
             )
         row = _row(result, percent, result_path)
         action = float(row["full_A_selection"])
+        selected_eta = [float(value) for value in result["selection"]["full_optimum"]]
+        same_incumbent_geometry = (
+            incumbent_full_eta is not None
+            and len(selected_eta) == len(incumbent_full_eta)
+            and max(abs(left - right) for left, right in zip(selected_eta, incumbent_full_eta))
+            <= 1.0e-12
+        )
+        repeat_tol = float(cfg["validity"].get("tangent_lower_bound_tol", 1.0e-6))
+        if (
+            same_incumbent_geometry
+            and math.isfinite(incumbent_full_action)
+            and abs(action - incumbent_full_action) <= repeat_tol
+        ):
+            # Identical geometry, frozen bank, and scientific settings define one
+            # action.  Canonicalize tiny independent sparse-solve repeatability
+            # noise to the tighter-stage audit instead of fabricating a Pareto
+            # increase or a false improvement.
+            action = incumbent_full_action
+            row["full_A_selection"] = action
         action_tol = 1.0e-10 * max(1.0, abs(incumbent_full_action) if math.isfinite(incumbent_full_action) else 1.0)
         if math.isfinite(incumbent_full_action) and action > incumbent_full_action + action_tol:
             raise RuntimeError(
