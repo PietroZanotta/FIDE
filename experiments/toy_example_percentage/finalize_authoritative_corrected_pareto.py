@@ -196,7 +196,13 @@ def main() -> None:
     selection_rows: list[dict[str, Any]] = []
     validation_rows: list[dict[str, Any]] = []
     pareto_rows: list[dict[str, Any]] = []
-    validation_trial_rows: list[dict[str, Any]] = []
+    # The nested sweep already contains the independently evaluated Full trials.
+    # Preserve those rows when adding the freshly rescored Law/Tangent trials so
+    # the authoritative validation table covers every published design.
+    validation_trial_rows: list[dict[str, Any]] = [
+        {**row, "method": "full"}
+        for row in nested.get("validation_trials", [])
+    ]
     diagnostics: list[dict[str, Any]] = []
     previous_corrected = None
     if args.previous_corrected is not None and args.previous_corrected.is_file():

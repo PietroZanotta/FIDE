@@ -1,0 +1,378 @@
+{
+  "schema_version": 1,
+  "experiment": "toy_example",
+  "authoritative_corrected": true,
+  "risk_allowance_percent": 5.0,
+  "config": {
+    "feasibility": {
+      "directions": 96,
+      "feasibility_tol": 1e-09,
+      "margin": 1e-06
+    },
+    "law": {
+      "epsilon_l": 0.0005,
+      "max_relative_risk_violation": 0.005,
+      "mmd_bandwidth": 0.55
+    },
+    "measurement": {
+      "acquisition_k": 11,
+      "finite_n": 100,
+      "min_sep_deg": 20.0,
+      "obs_noise_std": 0.01,
+      "sensor_radius": 1.5,
+      "sensor_width": 0.45
+    },
+    "moment_reconstruction": {
+      "kind": "endpoint_anchored_quadratic_gls",
+      "ridge_rel": 1e-12,
+      "variance_floor": 1e-10
+    },
+    "name": "toy_example",
+    "optimization": {
+      "constraint_penalty": 10000.0,
+      "feasibility_tol": 1e-06,
+      "full_exact_audit_candidates": 30,
+      "full_exact_poisson_backend": "tesseract_cpp",
+      "full_exact_rescore_candidates": 10,
+      "full_gradient_cg_maxiter": 360,
+      "full_gradient_cg_tol": 1e-06,
+      "full_gradient_grid_n": 41,
+      "full_gradient_poisson_backend": "tesseract_cpp",
+      "full_gradient_time_n": 7,
+      "full_gradient_trials": 4,
+      "full_learning_rate": 0.01,
+      "full_local_starts": 16,
+      "full_min_exact_finalists": 10,
+      "full_min_exact_law_valid": 12,
+      "full_prescreen_trials": 12,
+      "full_random_starts": 8,
+      "full_start_count": 7,
+      "full_start_perturb_deg": 6.0,
+      "full_steps": 40,
+      "invalid_penalty": 10000.0,
+      "jit_objectives": true,
+      "law_exact_audit_candidates": 8,
+      "law_gradient_trials": 4,
+      "law_learning_rate": 0.015,
+      "law_start_count": 4,
+      "law_steps": 50,
+      "learning_rate": 0.02,
+      "population_steps": 120,
+      "start_count": 12,
+      "tangent_exact_audit_candidates": 16,
+      "tangent_exact_rescore_candidates": 8,
+      "tangent_gradient_trials": 4,
+      "tangent_learning_rate": 0.012,
+      "tangent_local_starts": 12,
+      "tangent_min_exact_finalists": 6,
+      "tangent_min_exact_law_valid": 8,
+      "tangent_start_count": 7,
+      "tangent_start_perturb_deg": 5.0,
+      "tangent_steps": 40
+    },
+    "particle_mfsi": {
+      "covariance_ridge": 1e-07,
+      "exact_covariance_min_eig": 1e-12,
+      "exact_covariance_ridge": 0.0,
+      "exact_tangent_ridge": 0.0,
+      "max_tangent_compatibility_residual": 1e-07,
+      "tangent_pinv_rcond": 1e-10,
+      "tangent_ridge": 1e-07
+    },
+    "poisson": {
+      "cg_maxiter": 520,
+      "cg_tol": 1e-08,
+      "gauge_strength": 1.0,
+      "grid_n": 51,
+      "operator_floor_rel": 2e-05,
+      "time_n": 21
+    },
+    "population": {
+      "alpha_max_deg": 60.0,
+      "alpha_min_deg": 30.0,
+      "alpha_quadrature_n": 5,
+      "domain_half_width": 3.2,
+      "radius": 1.5,
+      "sigma": 0.3
+    },
+    "projection": {
+      "implicit_ridge": 0.0,
+      "lambda_clip": 1000.0,
+      "max_steps": 300,
+      "newton_ridge": 1e-07,
+      "search_line_search_steps": 6,
+      "search_max_steps": 80,
+      "search_residual_tol": 1e-07,
+      "solver_accept_tol": 2e-06,
+      "step_cap": 20.0,
+      "trajectory_backend": "tesseract_cpp"
+    },
+    "randomness": {
+      "action_trials": 64,
+      "bootstrap_reps": 5000,
+      "law_trials": 32,
+      "selection_namespace": 8890,
+      "validation_namespace": 8891,
+      "validation_trials": 128
+    },
+    "raster": {
+      "bandwidth": 0.0,
+      "truncate": 4.0
+    },
+    "reference": {
+      "bank_mode": "gauss-hermite",
+      "gh_order": 36,
+      "rk4_substeps_per_time_interval": 16
+    },
+    "reference_training": {
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.999,
+      "adam_eps": 1e-08,
+      "batch_size": 2048,
+      "bridge_noise_std": 0.15,
+      "bridge_schedule": "linear",
+      "grad_clip_norm": 10.0,
+      "hidden_layers": 4,
+      "hidden_width": 128,
+      "learning_rate": 0.001,
+      "log_every": 500,
+      "min_learning_rate_ratio": 0.05,
+      "reuse_checkpoint": true,
+      "seed": 20260813,
+      "train_steps": 12000
+    },
+    "seed": 20260813,
+    "validity": {
+      "max_finite_calibration_resid": 0.001,
+      "max_population_calibration_resid": 1e-05,
+      "min_ess_fraction": 0.03,
+      "min_in_domain_base_mass": 0.995,
+      "tangent_lower_bound_tol": 1e-06
+    }
+  },
+  "law_screens": {
+    "L_max": 0.0692360118546043,
+    "L_star": 0.0687360118546043,
+    "R_max": 0.06949502355704645,
+    "R_star": 0.06618573672099662,
+    "epsilon_l": 0.0005000000000000004,
+    "epsilon_r": 0.003309286836049831
+  },
+  "randomness": {
+    "action_trials_effective": 64,
+    "law_trials_effective": 32,
+    "selection_bank": "selection_bank.npz",
+    "selection_namespace": 8890,
+    "validation_bank": "validation_bank.npz",
+    "validation_namespace": 8891,
+    "validation_trials_effective": 128
+  },
+  "selection": {
+    "law_optimum_deg": [
+      23.3849164307422,
+      67.95178714113145
+    ],
+    "tangent_optimum_deg": [
+      25.165658284936548,
+      64.14644523213042
+    ],
+    "full_optimum_deg": [
+      21.67554865808905,
+      72.55820222382813
+    ]
+  },
+  "selection_certificates": {
+    "law": {
+      "L_selection": 0.0687360118546043,
+      "R_selection": 0.06618573672099663,
+      "L_max": 0.0692360118546043,
+      "R_max": 0.06949502355704645,
+      "full_action_selection": 30.201589389286397,
+      "tangent_action_selection": 0.6812904616289339,
+      "hidden_action_selection": 29.520298927657464,
+      "Gamma_h_selection": 0.9774419003964536,
+      "certified": true,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    },
+    "tangent": {
+      "L_selection": 0.06900219255134002,
+      "R_selection": 0.06637372448652676,
+      "L_max": 0.0692360118546043,
+      "R_max": 0.06949502355704645,
+      "full_action_selection": 38.32483626673544,
+      "tangent_action_selection": 0.5549870957547843,
+      "hidden_action_selection": 37.76984917098067,
+      "Gamma_h_selection": 0.9855188658369696,
+      "certified": true,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    },
+    "full": {
+      "L_selection": 0.06923211092821376,
+      "R_selection": 0.06667240605105532,
+      "L_max": 0.0692360118546043,
+      "R_max": 0.06949502355704645,
+      "full_action_selection": 19.370318986899875,
+      "tangent_action_selection": 0.8732471810839454,
+      "hidden_action_selection": 18.497071805815924,
+      "Gamma_h_selection": 0.9549182859779167,
+      "certified": true,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    }
+  },
+  "validation": {
+    "law": {
+      "law_risk": {
+        "mean": 0.06581583881174527,
+        "n": 128,
+        "se": 0.0002107138585878655
+      },
+      "full_action": {
+        "mean": 29.013979671903794,
+        "se": 1.033466369459283
+      },
+      "A_tan_h": 0.6902284349372492,
+      "A_hid_h": 28.323751236966526,
+      "Gamma_h": 0.9762104874015038,
+      "valid_fraction": 1.0,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    },
+    "tangent": {
+      "law_risk": {
+        "mean": 0.0660450680215592,
+        "n": 128,
+        "se": 0.00020834843565699094
+      },
+      "full_action": {
+        "mean": 36.57695597501567,
+        "se": 1.537346339671095
+      },
+      "A_tan_h": 0.5586682127832056,
+      "A_hid_h": 36.01828776223247,
+      "Gamma_h": 0.9847262245342447,
+      "valid_fraction": 1.0,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    },
+    "full": {
+      "law_risk": {},
+      "full_action": {
+        "mean": 19.013148590318956,
+        "se": 0.42527760780344037
+      },
+      "A_tan_h": 0.8919513288972025,
+      "A_hid_h": 18.12119726142176,
+      "Gamma_h": 0.9530876580141304,
+      "valid_fraction": 1.0,
+      "numerical_flags": {
+        "positive_q": true,
+        "mass": true,
+        "source": true,
+        "component_compatibility": true,
+        "solver_convergence": true,
+        "trial_validity": true,
+        "poisson": true,
+        "full_moment": true,
+        "tangent_moment": true,
+        "hidden_nullspace": true,
+        "orthogonality": true,
+        "pythagorean": true,
+        "hierarchy": true,
+        "all": true
+      }
+    }
+  },
+  "contrasts": {
+    "full_vs_law_full_action_reduction": {
+      "ratio_of_means_reduction": 0.3446900837002144
+    }
+  },
+  "authoritative_full_rule": {
+    "grid_n": 101,
+    "time_n": 21,
+    "bandwidth": 0.41753010655193434,
+    "bandwidth_scale": 1.0,
+    "selection_trials": 64,
+    "validation_trials": 128,
+    "physical_q": true,
+    "direct_signed_source": true,
+    "density_floor_in_scientific_operator": false,
+    "mass_tolerance": 1e-12,
+    "source_and_component_tolerance": 1e-12,
+    "moment_and_energy_tolerance": 1e-06
+  },
+  "frozen_input_manifest": "/home/zanot/projects/tesseract2026/experiments/toy_example_percentage/outputs/pareto/frozen_inputs/manifest.json"
+}
