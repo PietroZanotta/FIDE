@@ -294,17 +294,48 @@ def _solve_weighted_poisson_physical_source_batch(
             if len(local_nodes) == 1:
                 continue
             component_matrix = matrix[local_nodes][:, local_nodes].tocsc()
-            # Remove one row/column to fix the component constant without changing
-            # any conductive-edge equation.
-            reduced = component_matrix[:-1, :-1]
+            # Pin the best-scaled node, rather than whichever node happens to be
+            # last in raster order.  This is only a gauge choice and therefore
+            # leaves every physical edge equation and the action unchanged.
+            component_diagonal = np.asarray(
+                component_matrix.diagonal(), dtype=np.float64
+            )
+            pin = int(np.argmax(component_diagonal))
+            free = np.arange(len(local_nodes), dtype=np.int64) != pin
+            reduced = component_matrix[free][:, free].tocsc()
+            reduced_rhs = component_rhs[free]
+            diagonal = np.asarray(reduced.diagonal(), dtype=np.float64)
+            # Symmetric Jacobi scaling is an equation-equivalent change of
+            # variables.  It prevents an accepted-but-inaccurate SuperLU result
+            # on physical q fields spanning many orders of magnitude.
+            inverse_sqrt_diagonal = 1.0 / np.sqrt(
+                np.maximum(diagonal, np.finfo(np.float64).tiny)
+            )
+            scaling = sparse.diags(inverse_sqrt_diagonal, format="csc")
+            scaled_reduced = (scaling @ reduced @ scaling).tocsc()
+            scaled_rhs = inverse_sqrt_diagonal * reduced_rhs
             try:
-                factor = splu(reduced)
-                component_solution = factor.solve(component_rhs[:-1])
+                factor = splu(scaled_reduced)
+
+                def direct_solve(vector: np.ndarray) -> np.ndarray:
+                    return inverse_sqrt_diagonal * factor.solve(
+                        inverse_sqrt_diagonal * vector
+                    )
+
+                component_solution = direct_solve(reduced_rhs)
+                # SuperLU can finish without an exception while losing accuracy
+                # on a severely ill-scaled component.  Residual-based refinement
+                # uses the same factorization and does not alter the equation.
+                reduced_scale = max(float(np.linalg.norm(reduced_rhs)), 1.0e-14)
+                for _ in range(6):
+                    refinement_residual = reduced_rhs - reduced @ component_solution
+                    if float(np.linalg.norm(refinement_residual)) <= 1.0e-12 * reduced_scale:
+                        break
+                    component_solution += direct_solve(refinement_residual)
             except RuntimeError:
                 # SuperLU can reject an exactly representable but extremely
                 # ill-scaled physical component.  Fall back to equation-preserving
                 # PCG; the density floor enters only its diagonal preconditioner.
-                diagonal = np.asarray(reduced.diagonal(), dtype=np.float64)
                 floor_diagonal = float(cfg.operator_floor_rel) * inv_dx2
                 preconditioner_diagonal = diagonal + floor_diagonal
                 preconditioner = LinearOperator(
@@ -315,7 +346,7 @@ def _solve_weighted_poisson_physical_source_batch(
                 )
                 component_solution, info = cg(
                     reduced,
-                    component_rhs[:-1],
+                    reduced_rhs,
                     M=preconditioner,
                     rtol=float(cfg.cg_tol),
                     atol=0.0,
@@ -326,7 +357,7 @@ def _solve_weighted_poisson_physical_source_batch(
                     component_solution = np.nan_to_num(
                         component_solution, nan=0.0, posinf=0.0, neginf=0.0
                     )
-            solution_active[local_nodes[:-1]] = component_solution
+            solution_active[local_nodes[free]] = component_solution
 
         psi_flat = np.zeros(size, dtype=np.float64)
         psi_flat[active_indices] = solution_active

@@ -14,7 +14,9 @@ from experiments.active_nematic_unbalance_percentage.eval import (
     _selected_full_audit,
 )
 from experiments.active_nematic_unbalance_percentage.percentage_selection import (
+    _explicit_candidate,
     _audit_full,
+    _risk_passes,
     percentage_risk_budget,
 )
 
@@ -88,6 +90,31 @@ def test_full_audit_always_rescores_mandatory_incumbent() -> None:
     )
     assert float(best[0].eta[0]) == 0.0
     assert {float(row[0].eta[0]) for row in rows} == {0.0, 2.0}
+
+
+def test_explicit_incumbent_is_not_changed_by_optimizer_semantics() -> None:
+    class Sensors:
+        @staticmethod
+        def canonicalize(eta):
+            return jnp.asarray(eta)
+
+    class Experiment:
+        sensors = Sensors()
+
+    candidate = _explicit_candidate(Experiment(), jnp.asarray([3.0, 4.0]))
+    assert candidate.feasible
+    assert tuple(candidate.violations) == ()
+    assert candidate.eta.tolist() == [3.0, 4.0]
+
+
+def test_robust_risk_screen_requires_every_view_to_pass() -> None:
+    maxima = [1.05, 2.10]
+    assert _risk_passes(
+        {"value": 2.0, "view_values": [1.04, 2.0]}, 2.10, maxima
+    )
+    assert not _risk_passes(
+        {"value": 2.0, "view_values": [1.06, 2.0]}, 2.10, maxima
+    )
 
 
 def test_production_manifest_has_exact_five_percent_ceilings_if_present() -> None:

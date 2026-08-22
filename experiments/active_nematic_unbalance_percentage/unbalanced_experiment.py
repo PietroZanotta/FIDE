@@ -1114,7 +1114,7 @@ class UnbalancedActiveNematicExperiment:
             risk_star=float(result["risk_star"]),
             risk_max=float(result["risk_max"]),
             candidates=result["candidates"],
-            certified=True,
+            certified=bool(result["certified"]),
         )
 
     def _legacy_refinement_heavy_optimize_designs(

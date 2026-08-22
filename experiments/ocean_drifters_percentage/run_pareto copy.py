@@ -45,15 +45,15 @@ from direct_qr_ritz import (  # noqa: E402
     prepare_direct_ritz_basis,
     solve_prepared_direct_ritz,
 )
-from experiment import OceanDriftersExperiment  # noqa: E402
-from full_action import OceanWeightedPoissonPilot  # noqa: E402
-from full_action_repair import (  # noqa: E402
+from experiments.ocean_drifters.experiment import OceanDriftersExperiment  # noqa: E402
+from experiments.ocean_drifters.full_action import OceanWeightedPoissonPilot  # noqa: E402
+from experiments.ocean_drifters.full_action_repair import (  # noqa: E402
     cell_centers,
     enriched_basis,
     fixed_physical_gram,
     normalized_weights,
 )
-from temporal_refinement import (  # noqa: E402
+from experiments.ocean_drifters.temporal_refinement import (  # noqa: E402
     nested_source_grids,
     summarize_temporal_levels,
 )

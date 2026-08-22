@@ -238,7 +238,7 @@ def save_method_tables(records: list[dict[str, Any]], output_dir: Path) -> list[
     ]
     for path, fields in zip(paths, (selection_fields, validation_fields), strict=True):
         with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
             writer.writeheader()
             writer.writerows(
                 {field: _csv_value(record.get(field)) for field in fields} for record in records
