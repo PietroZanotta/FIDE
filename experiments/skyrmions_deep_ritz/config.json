@@ -1,0 +1,190 @@
+{
+  "name": "skyrmions_many_body_deep_ritz",
+  "execution_profile": "authoritative",
+  "seed": 20260822,
+  "physics": {
+    "n_particles": 16,
+    "box": [2.0, 1.0],
+    "interaction_strength": 0.035,
+    "interaction_length": 0.16,
+    "pinning_strength": 0.055,
+    "pinning_width": 0.10,
+    "pinning_centers": [[0.36, 0.24], [0.72, 0.74], [1.05, 0.46], [1.43, 0.78], [1.72, 0.25]],
+    "drive_start": 0.015,
+    "drive_end": 0.13,
+    "drive_transverse": 0.018,
+    "dissipation": 1.0,
+    "magnus": 0.32,
+    "initial_jitter": 0.035,
+    "noise_std": 0.006,
+    "time_nodes": 13,
+    "truth_substeps": 24
+  },
+  "measurement": {
+    "n_sensors": 4,
+    "sensor_width": 0.12,
+    "min_separation": 0.20,
+    "acquisition_count": 7,
+    "finite_configurations": 512,
+    "observation_noise_std": 0.002
+  },
+  "moment_reconstruction": {
+    "internal_knots": 3,
+    "smoothing": 0.0001,
+    "ridge_rel": 1e-10,
+    "roughness_quadrature_order": 8
+  },
+  "banks": {
+    "endpoint_samples": 12000,
+    "truth_design_samples": 6000,
+    "truth_validation_samples": 5000,
+    "projection_samples": 8192,
+    "ritz_train_samples": 8192,
+    "ritz_audit_samples": 4096,
+    "validation_fit_samples": 16384,
+    "validation_audit_samples": 16384,
+    "reference_substeps": 14,
+    "seed_offsets": {
+      "endpoints": 101,
+      "truth_design": 211,
+      "truth_validation": 307,
+      "projection": 401,
+      "ritz_train": 503,
+      "ritz_audit": 601,
+      "validation_fit": 701,
+      "validation_audit": 809,
+      "observation": 907,
+      "candidate_pool": 1009
+    }
+  },
+  "reference_training": {
+    "seed": 20260822,
+    "hidden_width": 64,
+    "hidden_layers": 3,
+    "train_steps": 6000,
+    "batch_size": 512,
+    "learning_rate": 0.0008,
+    "min_learning_rate_ratio": 0.08,
+    "grad_clip_norm": 8.0,
+    "bridge_noise_std": 0.01,
+    "log_every": 250
+  },
+  "projection": {
+    "trajectory_backend": "tesseract_cpp",
+    "max_steps": 300,
+    "residual_tol": 1e-10,
+    "newton_ridge": 1e-9,
+    "step_cap": 20.0,
+    "lambda_clip": 1000.0,
+    "line_search_steps": 8
+  },
+  "forcing": {
+    "projection_tolerance": 2e-6,
+    "minimum_ess_fraction": 0.05,
+    "covariance_ridge": 1e-8,
+    "max_covariance_condition": 10000000000.0,
+    "forcing_mean_tolerance": 2e-7
+  },
+  "deep_ritz": {
+    "seed": 20260822,
+    "hidden_width": 48,
+    "hidden_layers": 2,
+    "adam_steps": 1800,
+    "adam_batch_size": 512,
+    "adam_learning_rate": 0.0008,
+    "adam_min_learning_rate_ratio": 0.05,
+    "gradient_clip_norm": 20.0,
+    "lbfgs_iterations": 160,
+    "lbfgs_batch_size": 512,
+    "lbfgs_history": 12,
+    "lbfgs_gradient_tolerance": 2e-7,
+    "lbfgs_line_search_steps": 16,
+    "authoritative_restarts": 2,
+    "log_every": 100
+  },
+  "certificates": {
+    "maximum_weak_residual": 0.12,
+    "maximum_energy_residual": 0.08,
+    "maximum_gauge_residual": 1e-9,
+    "maximum_moment_rate_residual": 0.10
+  },
+  "search": {
+    "candidate_count": 48,
+    "authoritative_candidates": 6,
+    "law_refinement_rounds": 4,
+    "law_refinement_max_rounds": 24,
+    "law_refinement_stable_rounds": 2,
+    "law_refinement_relative_tolerance": 0.001,
+    "law_refinement_centers": 6,
+    "law_local_count_per_center": 8,
+    "law_local_scale": 0.08,
+    "full_refinement_rounds": 3,
+    "full_refinement_centers": 6,
+    "full_local_count_per_center": 8,
+    "full_local_scale": 0.06,
+    "full_refinement_risk_multiplier": 2.0,
+    "risk_allowance_percent": 3.0,
+    "risk_anchor_consistency_tolerance": 0.0001,
+    "minimum_action_reduction_fraction": 0.01,
+    "validation_relative_slack": 0.05,
+    "validation_authoritative_restarts": 4,
+    "validation_polish_iterations": 320,
+    "validation_independent_time_nodes": 13,
+    "selection_polish_iterations": 320,
+    "mandatory_etas": [
+      [
+        0.894186393941062,
+        0.22457930733518838,
+        1.3019441515792158,
+        0.8588814497776313,
+        0.7960980865591195,
+        0.5230811604338702,
+        1.572536397578899,
+        0.6314908042460579
+      ]
+    ]
+  },
+  "preflight": {
+    "execution_profile": "preflight",
+    "physics": {"time_nodes": 7, "truth_substeps": 8},
+    "measurement": {"acquisition_count": 5, "finite_configurations": 256, "observation_noise_std": 0.001},
+    "moment_reconstruction": {"internal_knots": 1},
+    "banks": {
+      "endpoint_samples": 2048,
+      "truth_design_samples": 1024,
+      "truth_validation_samples": 768,
+      "projection_samples": 2048,
+      "ritz_train_samples": 4096,
+      "ritz_audit_samples": 4096,
+      "validation_fit_samples": 4096,
+      "validation_audit_samples": 4096,
+      "reference_substeps": 8
+    },
+    "reference_training": {"hidden_width": 48, "hidden_layers": 2, "train_steps": 3000, "batch_size": 256, "log_every": 250},
+    "deep_ritz": {"hidden_width": 40, "hidden_layers": 2, "adam_steps": 800, "adam_batch_size": 512, "lbfgs_iterations": 100, "lbfgs_batch_size": 512, "lbfgs_history": 10, "authoritative_restarts": 2, "log_every": 50},
+    "search": {"candidate_count": 32, "authoritative_candidates": 5, "law_refinement_rounds": 4, "law_refinement_max_rounds": 6, "law_refinement_centers": 4, "law_local_count_per_center": 6, "full_refinement_rounds": 2, "full_refinement_centers": 4, "full_local_count_per_center": 6}
+  },
+  "smoke": {
+    "execution_profile": "smoke",
+    "physics": {"n_particles": 4, "time_nodes": 3, "truth_substeps": 2, "pinning_strength": 0.01, "drive_end": 0.04, "drive_transverse": 0.005, "noise_std": 0.002},
+    "measurement": {"n_sensors": 2, "sensor_width": 0.35, "min_separation": 0.30, "acquisition_count": 3, "finite_configurations": 96, "observation_noise_std": 0.0},
+    "moment_reconstruction": {"internal_knots": 0, "smoothing": 0.001},
+    "banks": {
+      "endpoint_samples": 512,
+      "truth_design_samples": 256,
+      "truth_validation_samples": 256,
+      "projection_samples": 512,
+      "ritz_train_samples": 512,
+      "ritz_audit_samples": 512,
+      "validation_fit_samples": 512,
+      "validation_audit_samples": 512,
+      "reference_substeps": 2
+    },
+    "reference_training": {"hidden_width": 24, "hidden_layers": 2, "train_steps": 500, "batch_size": 64, "log_every": 100},
+    "projection": {"trajectory_backend": "jax", "max_steps": 120, "residual_tol": 1e-9},
+    "forcing": {"projection_tolerance": 0.002, "minimum_ess_fraction": 0.001, "forcing_mean_tolerance": 0.002, "max_covariance_condition": 1e14},
+    "deep_ritz": {"hidden_width": 10, "hidden_layers": 1, "adam_steps": 12, "adam_batch_size": 512, "lbfgs_iterations": 3, "lbfgs_history": 3, "authoritative_restarts": 1, "log_every": 4},
+    "certificates": {"maximum_weak_residual": 1.0, "maximum_energy_residual": 1.0, "maximum_moment_rate_residual": 10.0},
+    "search": {"candidate_count": 4, "authoritative_candidates": 2, "law_refinement_rounds": 0, "law_refinement_max_rounds": 0, "full_refinement_rounds": 0}
+  }
+}
