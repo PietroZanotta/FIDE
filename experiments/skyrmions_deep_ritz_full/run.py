@@ -59,6 +59,9 @@ from .fast_workflow import (
     run_gradient_convergence,
     run_local_gradient_audit,
 )
+from .authoritative_stability import (
+    run_authoritative_solver_benchmark, run_authoritative_stability,
+)
 
 
 def _deep_update(base: dict, override: dict) -> dict:
@@ -99,6 +102,8 @@ def _default_output(mode: str, smoke: bool) -> Path:
         "production-refine-3pct": "trajectories",
         "production-multistart-3pct": "multistart",
         "production-authoritative-3pct": "authoritative",
+        "benchmark-authoritative-solver": "authoritative_acceleration",
+        "production-authoritative-stability": "authoritative_stability",
         "production-validate-3pct": "validation",
     }
     if mode in fast_leaves:
@@ -151,6 +156,8 @@ def _parser() -> argparse.ArgumentParser:
             "production-refine-3pct",
             "production-multistart-3pct",
             "production-authoritative-3pct",
+            "benchmark-authoritative-solver",
+            "production-authoritative-stability",
             "production-validate-3pct",
         ),
     )
@@ -173,6 +180,10 @@ def _parser() -> argparse.ArgumentParser:
         "--eta", type=float, nargs=8,
         help="explicit sensor coordinates for certify mode",
     )
+    parser.add_argument(
+        "--restart-count", type=int, default=3,
+        help="number of common initializations for authoritative-stability mode",
+    )
     return parser
 
 
@@ -192,6 +203,8 @@ def main() -> None:
         "benchmark-production-galerkin", "production-gradient-convergence",
         "production-local-gradient-audit", "production-refine-3pct",
         "production-multistart-3pct", "production-authoritative-3pct",
+        "benchmark-authoritative-solver",
+        "production-authoritative-stability",
         "production-validate-3pct",
     }:
         artifact_dir = PRODUCTION_ROOT / "artifacts"
@@ -224,6 +237,22 @@ def main() -> None:
             print(f"result={output_dir / 'result.json'}")
             print(f"passed={result.get('ran', False)}")
             if not result.get("ran", False):
+                raise SystemExit(2)
+            return
+        if args.mode == "production-authoritative-stability":
+            result = run_authoritative_stability(
+                cfg, artifact_dir, output_dir, restart_count=args.restart_count
+            )
+            print(f"result={output_dir / 'result.json'}")
+            print(f"passed={result['ordering']['passed']}")
+            if not result["ordering"]["passed"]:
+                raise SystemExit(2)
+            return
+        if args.mode == "benchmark-authoritative-solver":
+            result = run_authoritative_solver_benchmark(cfg, artifact_dir, output_dir)
+            print(f"result={output_dir / 'result.json'}")
+            print(f"passed={result['passed']}")
+            if not result["passed"]:
                 raise SystemExit(2)
             return
         result = runners[args.mode](cfg, artifact_dir, output_dir)

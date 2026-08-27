@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "name": "vortices_prospective_v1",
+  "mode": "production",
+  "seed": 20260826,
+  "risk_allowance": 0.02,
+  "supported_risk_allowances": [0.005, 0.01, 0.02, 0.03, 0.04, 0.05],
+  "truth": {
+    "amplitude": 0.1,
+    "epsilon": 0.25,
+    "horizon": 10.0,
+    "period": 10.0,
+    "initial": {
+      "background_weight": 0.1,
+      "mixture_weights": [0.3, 0.2, 0.25, 0.25],
+      "centers": [[0.45, 0.25], [0.78, 0.72], [1.28, 0.28], [1.62, 0.68]],
+      "std_x": 0.07,
+      "std_y": 0.07
+    },
+    "endpoint_particles": 50000,
+    "prospective_particles": 50000,
+    "hidden_validation_particles": 50000,
+    "endpoint_seed_offset": 2001,
+    "prospective_seed_offset": 4001,
+    "hidden_validation_seed_offset": 7001,
+    "rk4_substeps_per_interval": 32,
+    "endpoint_rk4_substeps": 512
+  },
+  "time": {"scientific_nodes": 21, "acquisition_nodes": 9},
+  "measurement": {
+    "n_sensors": 4,
+    "sensor_width": 0.12,
+    "boundary_margin": 0.24,
+    "min_separation": 0.24,
+    "finite_n": 2000,
+    "noise_std": 0.005
+  },
+  "aggregate_predictor": {"grid_nx": 129, "grid_ny": 65, "particle_chunk": 4096},
+  "qoi": {
+    "names": ["x_centroid", "y_centroid", "x_second", "y_second", "xy_cross"],
+    "scale_floor": 0.02
+  },
+  "moment_reconstruction": {
+    "internal_knots": 3,
+    "smoothing": 0.0001,
+    "ridge_rel": 1e-10,
+    "roughness_quadrature_order": 8,
+    "clip_margin": 0.002
+  },
+  "reference_training": {
+    "hidden_width": 128,
+    "hidden_layers": 4,
+    "train_steps": 12000,
+    "batch_size": 2048,
+    "learning_rate": 0.001,
+    "min_learning_rate_ratio": 0.05,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_eps": 1e-8,
+    "grad_clip_norm": 10.0,
+    "bridge_schedule": "linear",
+    "bridge_noise_std": 0.0,
+    "log_every": 500
+  },
+  "reference": {"particles": 32768, "seed_offset": 3001, "rk4_substeps_per_interval": 16},
+  "projection": {
+    "backend": "tesseract_cpp",
+    "max_steps": 300,
+    "residual_tol": 1e-7,
+    "newton_ridge": 1e-7,
+    "step_cap": 20.0,
+    "lambda_clip": 1000.0,
+    "line_search_steps": 6
+  },
+  "particle_mfsi": {"covariance_ridge": 1e-7},
+  "poisson": {"grid_nx": 128, "grid_ny": 64, "cg_tol": 1e-7, "cg_maxiter": 520},
+  "validity": {
+    "max_projection_residual": 2e-6,
+    "min_ess_fraction": 0.03,
+    "max_poisson_relative_residual": 2e-7,
+    "risk_constraint_tolerance": 1e-10
+  },
+  "search": {
+    "global_candidates": 256,
+    "law_local_candidates": 64,
+    "local_scales": [0.004, 0.008, 0.016, 0.032],
+    "law_refinement_passes": 2,
+    "full_shortlist": 32,
+    "authoritative_full_candidates": 8,
+    "full_proxy_trials": 4,
+    "full_proxy_time_nodes": 7,
+    "full_proxy_grid_nx": 64,
+    "full_proxy_grid_ny": 32,
+    "selection_trials": 24,
+    "validation_trials": 64
+  }
+}

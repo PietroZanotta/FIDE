@@ -298,3 +298,72 @@ class EmpiricalIProjector:
             covariance=covariance,
             ess_fraction=ess_fraction,
         )
+
+    def project_candidate_trajectories(
+        self,
+        phi: Array,
+        base_weights: Array,
+        targets: Array,
+    ) -> IProjectionTrajectoryState:
+        """Project candidate-specific feature and target trajectories.
+
+        ``phi`` is ``[C,T,N,M]``, common quadrature weights are ``[T,N]``,
+        and targets are ``[C,T,M]``.  Candidate trajectories are independent;
+        each multiplier is warm-started only from its own preceding time node.
+        """
+        phi = jnp.asarray(phi, dtype=jnp.float64)
+        base_weights = jnp.asarray(base_weights, dtype=jnp.float64)
+        targets = jnp.asarray(targets, dtype=jnp.float64)
+        if phi.ndim != 4 or base_weights.shape != phi.shape[1:3]:
+            raise ValueError(
+                "phi/base_weights must have shapes [C,T,N,M]/[T,N]"
+            )
+        if targets.shape != (phi.shape[0], phi.shape[1], phi.shape[3]):
+            raise ValueError("targets must have shape [C,T,M]")
+
+        base_weights = base_weights / jnp.maximum(
+            jnp.sum(base_weights, axis=-1, keepdims=True), 1.0e-300
+        )
+        log_base = jnp.where(base_weights > 0.0, jnp.log(base_weights), -jnp.inf)
+
+        if self.trajectory_backend == "tesseract_cpp":
+            from .projection_tesseract import (
+                solve_i_projection_candidate_trajectories_tesseract,
+            )
+
+            lam = solve_i_projection_candidate_trajectories_tesseract(
+                phi, log_base, targets, self.cfg
+            )
+        else:
+            def one_candidate(phi_candidate, target_candidate):
+                state = self.project_trajectory(
+                    phi_candidate, base_weights, target_candidate[None, ...]
+                )
+                return state.lam[0]
+
+            lam = jax.vmap(one_candidate)(phi, targets)
+
+        logits = log_base[None, :, :] + jnp.einsum(
+            "ctnm,ctm->ctn", phi, lam
+        )
+        weights = jax.nn.softmax(logits, axis=-1)
+        projected_moments = jnp.einsum("ctn,ctnm->ctm", weights, phi)
+        centered = phi - projected_moments[:, :, None, :]
+        covariance = jnp.einsum(
+            "ctn,ctni,ctnj->ctij", weights, centered, centered
+        )
+        residual = projected_moments - targets
+        ess_projected = 1.0 / jnp.maximum(
+            jnp.sum(weights**2, axis=-1), 1.0e-300
+        )
+        ess_base = 1.0 / jnp.maximum(
+            jnp.sum(base_weights**2, axis=-1), 1.0e-300
+        )
+        return IProjectionTrajectoryState(
+            lam=lam,
+            weights=weights,
+            moments=projected_moments,
+            residual=residual,
+            covariance=covariance,
+            ess_fraction=ess_projected / ess_base[None, :],
+        )

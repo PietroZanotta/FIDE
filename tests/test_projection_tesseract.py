@@ -8,6 +8,7 @@ import pytest
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
 from mfsi.projection_tesseract import (
     is_tesseract_iprojection_available,
+    solve_i_projection_candidate_trajectories_tesseract_forward,
     solve_i_projection_trajectory_tesseract_forward,
     solve_soft_i_projection_trajectory_tesseract_forward,
 )
@@ -143,3 +144,108 @@ def test_soft_forward_solves_penalized_moment_stationarity():
         atol=1e-12,
     )
     assert np.all(result["converged"])
+
+
+def _candidate_inputs():
+    phi, base, _ = _inputs()
+    candidate_phi = jnp.stack(
+        (phi, 0.85 * phi + 0.1 * jnp.sin(phi), 1.1 * phi - 0.05 * jnp.cos(phi))
+    )
+    key = jax.random.PRNGKey(20260825)
+    target_weights = jax.nn.softmax(
+        jax.random.normal(key, candidate_phi.shape[:3], dtype=jnp.float64), axis=-1
+    )
+    targets = jnp.einsum("ctn,ctnm->ctm", target_weights, candidate_phi)
+    return candidate_phi, base, targets
+
+
+def test_candidate_batch_matches_independent_trajectories_and_is_deterministic():
+    phi, base, targets = _candidate_inputs()
+    cfg = IProjectionConfig(
+        max_steps=100,
+        residual_tol=1.0e-9,
+        newton_ridge=1.0e-9,
+        line_search_steps=6,
+    )
+    log_base = np.log(np.asarray(base))
+    actual = solve_i_projection_candidate_trajectories_tesseract_forward(
+        np.asarray(phi), log_base, np.asarray(targets), cfg
+    )
+    repeated = solve_i_projection_candidate_trajectories_tesseract_forward(
+        np.asarray(phi), log_base, np.asarray(targets), cfg
+    )
+    expected = np.stack(
+        [
+            solve_i_projection_trajectory_tesseract_forward(
+                np.asarray(phi[c]), log_base, np.asarray(targets[c : c + 1]), cfg
+            )["lambda_values"][0]
+            for c in range(phi.shape[0])
+        ]
+    )
+    np.testing.assert_array_equal(actual["lambda_values"], repeated["lambda_values"])
+    np.testing.assert_allclose(actual["lambda_values"], expected, rtol=0.0, atol=0.0)
+    assert np.all(actual["converged"])
+    assert np.max(actual["residual_norm"]) <= cfg.residual_tol
+
+
+def test_candidate_tesseract_matches_jax_values_vjp_and_jvp():
+    phi, base, targets = _candidate_inputs()
+    cfg = IProjectionConfig(
+        max_steps=100,
+        residual_tol=1.0e-9,
+        newton_ridge=1.0e-9,
+        line_search_steps=6,
+    )
+    reference = EmpiricalIProjector(cfg, trajectory_backend="jax")
+    native = EmpiricalIProjector(cfg, trajectory_backend="tesseract_cpp")
+    expected = reference.project_candidate_trajectories(phi, base, targets)
+    actual = native.project_candidate_trajectories(phi, base, targets)
+    for actual_leaf, expected_leaf in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(actual_leaf, expected_leaf, rtol=2e-6, atol=2e-8)
+
+    particle_cotangent = jnp.linspace(-0.2, 0.3, phi.shape[2])
+
+    def loss(projector, p, b, target):
+        state = projector.project_candidate_trajectories(p, b, target)
+        return (
+            jnp.mean(state.weights * particle_cotangent[None, None, :])
+            + 0.03 * jnp.mean(state.lam**2)
+        )
+
+    expected_grad = jax.grad(
+        lambda p, b, t: loss(reference, p, b, t), argnums=(0, 1, 2)
+    )(phi, base, targets)
+    actual_grad = jax.grad(
+        lambda p, b, t: loss(native, p, b, t), argnums=(0, 1, 2)
+    )(phi, base, targets)
+    for actual_leaf, expected_leaf in zip(actual_grad, expected_grad, strict=True):
+        np.testing.assert_allclose(actual_leaf, expected_leaf, rtol=3e-6, atol=3e-8)
+
+    phi_dot = 0.005 * jnp.cos(phi)
+    base_dot = 0.002 * jnp.sin(base)
+    target_dot = 0.005 * jnp.sin(targets)
+    base_sum = jnp.sum(base, axis=-1, keepdims=True)
+    normalized_base = base / base_sum
+    normalized_base_dot = (
+        base_dot / base_sum
+        - base * jnp.sum(base_dot, axis=-1, keepdims=True) / base_sum**2
+    )
+    log_base_dot = normalized_base_dot / normalized_base
+    centered = phi - actual.moments[:, :, None, :]
+    mean_phi_dot = jnp.einsum("ctn,ctnm->ctm", actual.weights, phi_dot)
+    score_dot = log_base_dot[None, :, :] + jnp.einsum(
+        "ctnm,ctm->ctn", phi_dot, actual.lam
+    )
+    tilt_phi_dot = jnp.einsum(
+        "ctn,ctn,ctnm->ctm", actual.weights, score_dot, centered
+    )
+    expected_jvp = jax.vmap(jax.vmap(jnp.linalg.solve))(
+        actual.covariance,
+        target_dot - mean_phi_dot - tilt_phi_dot,
+    )
+    actual_jvp = jax.jvp(
+        lambda p, b, t: native.project_candidate_trajectories(p, b, t).lam,
+        (phi, base, targets),
+        (phi_dot, base_dot, target_dot),
+    )[1]
+    np.testing.assert_allclose(actual_jvp, expected_jvp, rtol=3e-6, atol=3e-8)

@@ -1,6 +1,41 @@
 # Continuous Full skyrmion sensor optimization
 
-This is an isolated experimental variant of `skyrmions_deep_ritz`. It continuously refines the four periodic sensor centers with a fixed-theta Deep Ritz envelope gradient. It imports shared numerical primitives only from `src/mfsi`; it does not import or write to the production skyrmion experiment.
+This is an isolated experimental variant of `skyrmions_deep_ritz`. For all new
+continuous selection and validation work, its Full solver is the fixed-feature
+Galerkin discretization of the weighted-Poisson weak problem. It imports shared
+numerical primitives only from `src/mfsi`; it does not import or write to the
+production skyrmion experiment.
+
+The Galerkin method solves the same weighted-Poisson weak problem directly in a
+finite, fixed, eta-independent, permutation-invariant trial space. The
+historical nonlinear fixed-theta Deep Ritz envelope route is not validated and
+is no longer used for continuous selection. Historical fixed-design Deep Ritz
+code, checkpoints, results, and reports remain available only for comparison;
+they do not rank candidates, certify ordering, select a winner, or validate a
+winner in the Galerkin-only study.
+
+The completed GPU-first Galerkin-only 3% study is documented in
+`GALERKIN_ONLY_3PCT_EVALUATION.md`. It selected K=280 as a practical finite
+discretization, froze a certified selection winner with a `0.2587%` lower
+Galerkin action, and then performed one sealed validation. Validation Galerkin
+action was also lower, but the frozen winner failed the unchanged validation
+risk ceiling. The final classification is **B. GALERKIN-ONLY 3% SELECTION
+IMPROVED, VALIDATION DID NOT**. No Deep Ritz result entered that decision.
+
+Run the bounded Galerkin-only workflow in order:
+
+```bash
+python -m experiments.skyrmions_deep_ritz_full.galerkin_only_run --mode benchmark
+python -m experiments.skyrmions_deep_ritz_full.galerkin_only_run --mode convergence
+python -m experiments.skyrmions_deep_ritz_full.galerkin_only_run --mode profile-selected-K
+python -m experiments.skyrmions_deep_ritz_full.galerkin_only_run --mode optimize-3pct
+python -m experiments.skyrmions_deep_ritz_full.galerkin_only_run --mode validate-3pct \
+  --selection-result experiments/skyrmions_deep_ritz_full/outputs/galerkin_only_3pct/selection/result.json
+python -m unittest experiments.skyrmions_deep_ritz_full.test_galerkin_only -v
+```
+
+These modes prefer CUDA with JAX float64, fall back cleanly to CPU, and write
+only below `outputs/galerkin_only_3pct/`.
 
 It also contains two separate deterministic fixed-feature Galerkin studies. The
 historical smoke study used frozen DeepSets coordinates and is documented in
@@ -8,6 +43,48 @@ historical smoke study used frozen DeepSets coordinates and is documented in
 hybrid Fourier/pairwise dictionary and is documented in
 `PRODUCTION_GALERKIN_EVALUATION.md`. Both keep the nonlinear Deep Ritz route and
 historical outputs intact.
+
+The accelerated 3% continuation is documented in
+`FAST_PRODUCTION_3PCT_EVALUATION.md`. Its cached K=160 value+gradient path is
+numerically equivalent and 4.06x faster in steady CPU measurements. Gradient
+convergence and nearby-point audits passed. Four-start refinement found no
+further authoritative improvement beyond the prior tiny update; that frozen
+winner then failed disjoint validation risk and energy gates. The validation
+reversal is retained and was not used to retune selection.
+
+The follow-up authoritative GPU checkpoint is documented in
+`AUTHORITATIVE_GPU_ACCELERATION.md`. A fresh fixed-design solve was `2.315x`
+faster on the available NVIDIA GPU, and fixed CPU/GPU checkpoint evaluations
+agreed to about `1e-15`. However, paired CPU and GPU optimization reversed the
+eta0/tiny-update ordering, while no solve declared L-BFGS convergence. GPU
+evaluation is therefore numerically validated, but a single optimized rescore
+is not a stable candidate-ordering oracle. The new resumable common-restart gate
+caches each initialization separately and fails closed on mixed ordering.
+
+That gate has now run and is documented in
+`AUTHORITATIVE_STABILITY_EVALUATION.md`. The hash-reused warm pair was valid and
+favored eta0 by `0.00337637`. A new common-seed pair also had eta0's raw action
+lower, but both members failed the unchanged held-out energy certificate and
+neither optimizer converged. The decision is `indeterminate`; further eta
+refinement is blocked pending a stationary, restart-robust inner-solver study.
+
+Run its gates in order:
+
+```bash
+python -m experiments.skyrmions_deep_ritz_full.run --mode benchmark-production-galerkin --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-gradient-convergence --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-local-gradient-audit --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-refine-3pct --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-multistart-3pct --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-authoritative-3pct --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-validate-3pct --frozen-source PATH --input-result experiments/skyrmions_deep_ritz_full/outputs/fast_production_3pct/selection/result.json
+python -m experiments.skyrmions_deep_ritz_full.run --mode benchmark-authoritative-solver --frozen-source PATH
+python -m experiments.skyrmions_deep_ritz_full.run --mode production-authoritative-stability --restart-count 3 --frozen-source PATH
+```
+
+The last two commands require a JAX environment with GPU access to reproduce
+the reported acceleration. The stability command reuses compatible completed
+restarts by hashes and writes a partial `result.json` after every pair.
 
 ## Status
 
@@ -24,6 +101,15 @@ This does not validate the nonlinear derivative. The subsequent fresh
 fixed-design cross-check passed all hard certificates and found the tiny update's
 Deep Ritz action lower by `0.00445154` at the declared `1e-6` comparison
 tolerance; no production incumbent was modified or replaced.
+
+Methodological status from this point forward:
+
+- historical nonlinear Deep Ritz envelope: not validated and retired from
+  continuous selection;
+- production fixed-feature Galerkin route: validated and the primary Full
+  solver for this isolated study;
+- historical fixed-design Deep Ritz results: retained for history only and not
+  an optimization or validation oracle.
 
 The earlier permissive smoke result is retained below as historical evidence only. It did not show an epsilon-convergence regime and is not an acceptance test. The new rigorous command uses a mandatory stationary-center gate, deterministic full-bank theta polishing, optimized-value finite differences, consecutive-epsilon criteria, five fixed directions, and a conditional kinetic-action stage.
 
@@ -238,8 +324,10 @@ Fresh selection actions were `316.978478385` for the incumbent and `880.67221104
 `test_production_galerkin.py` implements the 27 requested production-workflow
 checks, including read-only discovery, path isolation, both invariant feature
 families, nested normalization, rank-aware algebra, held-out residual formulas,
-and the fixed-coefficient eta derivative contract. Together with the unchanged
-17 Galerkin tests and 12 continuous-gradient tests, all 56 tests pass.
+and the fixed-coefficient eta derivative contract. `test_fast_production.py`
+adds six acceleration, cache, periodic-geometry, numerical-equivalence, and
+restart-consensus checks. Together with the unchanged 17 Galerkin tests and 12
+continuous-gradient tests, all 62 tests pass.
 
 ## Files in this experiment
 
@@ -254,6 +342,10 @@ and the fixed-coefficient eta derivative contract. Together with the unchanged
 - `gradient_check.py`
 - `measurements.py`
 - `production_artifacts.py`
+- `authoritative_platform.py`
+- `authoritative_stability.py`
+- `fast_production.py`
+- `fast_workflow.py`
 - `production_authoritative.py`
 - `production_basis.py`
 - `production_galerkin.py`
@@ -266,12 +358,16 @@ and the fixed-coefficient eta derivative contract. Together with the unchanged
 - `run.py`
 - `selection.py`
 - `test_full_gradient.py`
+- `test_fast_production.py`
 - `test_galerkin.py`
 - `test_production_galerkin.py`
 - `workflow.py`
 - `README.md`
 - `GALERKIN_EVALUATION.md`
 - `PRODUCTION_GALERKIN_EVALUATION.md`
+- `FAST_PRODUCTION_3PCT_EVALUATION.md`
+- `AUTHORITATIVE_GPU_ACCELERATION.md`
+- `AUTHORITATIVE_STABILITY_EVALUATION.md`
 
 The copied files are local implementations and use relative imports. No production experiment module is imported.
 
@@ -292,10 +388,8 @@ Established separately for the fixed-feature production Galerkin route:
 - a certified fixed-design authoritative action improvement for the prior tiny
   update, recorded only in this isolated experiment.
 
-Still not established for the continuous 3% research program:
-
-- independent-validation success of a frozen continuous-refinement winner;
-- a full Pareto sweep (intentionally not run).
+For the Galerkin-only continuous 3% program, independent validation is complete
+and records a risk-gate reversal. A full Pareto sweep was intentionally not run.
 
 Files modified for the rigorous follow-up were `config.json`, `run.py`, `workflow.py`, `test_full_gradient.py`, and this README; `rigorous_gradient_check.py` was added. Every one is inside this isolated directory.
 

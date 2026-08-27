@@ -550,6 +550,7 @@ def authoritative_evaluate(
                 "periodic_branch_distance": float(periodic_branch_distance(eta, problem.family)),
                 "inner_finite": bool(inner.result.finite),
                 "inner_lbfgs_converged": bool(inner.result.lbfgs_converged),
+                "inner_solver": _inner_solver_payload(inner),
                 "envelope_diagnostics": _envelope_payload(inner.diagnostics),
                 "train_forcing_audit": train_forcing_audit,
                 "audit_forcing_audit": audit_forcing_audit,
