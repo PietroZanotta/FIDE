@@ -239,3 +239,18 @@ The finalizer fails closed if nesting, exact candidate certification, or common-
 | `outputs/old/pareto_pre_corrected_full/` | immutable historical sweep |
 
 Core implementation files are `experiment.py` (experiment/evaluators), `selection.py` (candidate generation and exact selection), `run_pareto.py` (nested sweep), `finalize_authoritative_corrected_pareto.py` (publication audit), and `src/mfsi/poisson.py` (weighted-Poisson solvers).
+
+## Read-only saved-result evaluation
+
+From the repository root:
+
+```bash
+.venv/bin/python experiments/vortices_percentage/eval.py
+.venv/bin/python experiments/vortices_percentage/eval_pareto.py
+```
+
+The first command displays the tracked saved run. The second displays and
+hash-verifies the corrected authoritative Pareto sweep. Neither command runs
+the experiment or writes outputs. Both use the repository-wide saved-evaluator
+table style, include Law/Tangent/Full, and report sample SDs from the saved
+independent validation trials (or from a saved ordinary SE and `n`).

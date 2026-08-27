@@ -173,3 +173,20 @@ Core implementation files are `percentage_selection.py` (exact candidate
 selection), `robust_selection.py` (physical/reference aggregation),
 `run_pareto.py` (nested sweep and validation ordering), and
 `finalize_authoritative_pareto.py` (publication gate).
+
+## Read-only saved-result evaluation
+
+From the repository root:
+
+```bash
+.venv/bin/python experiments/active_nematic_unbalance_percentage/eval.py
+.venv/bin/python experiments/active_nematic_unbalance_percentage/eval_pareto.py
+```
+
+These commands only read `published_results.json` and print the saved result.
+They do not generate banks, train references, optimize designs, validate new
+geometries, write figures, or modify outputs. The compact snapshot transcribes
+the authoritative tracked tables because the original ignored production tree
+is no longer present in this checkout. Both commands use the repository-wide
+saved-evaluator table style and include Law, Tangent, Full, and the available
+SD/SE uncertainty. Normal output contains no gate-status labels.

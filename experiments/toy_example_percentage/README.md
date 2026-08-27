@@ -237,3 +237,18 @@ All three commands are checkpointed. `--fresh-evaluations` prevents archived cor
 | `outputs/pareto/*.png` | current Pareto, method, experiment, and sensor-layout figures |
 
 The active frozen files are `reference.npz`, `reference_bank.npz`, `selection_bank.npz`, and `validation_bank.npz`. Their SHA-256 hashes match their source-run counterparts. Historical artifacts were moved, not deleted, to `outputs/old/pareto_pre_corrected_full/`; `.gitignore` excludes `outputs/old/` so the archive remains local provenance rather than current tracked output.
+
+## Read-only saved-result evaluation
+
+From the repository root:
+
+```bash
+.venv/bin/python experiments/toy_example_percentage/eval.py
+.venv/bin/python experiments/toy_example_percentage/eval_pareto.py
+```
+
+The first command displays the tracked saved run. The second displays and
+hash-verifies the corrected authoritative Pareto sweep. Neither command runs
+the experiment or writes outputs. Both use the repository-wide saved-evaluator
+table style, include Law/Tangent/Full, and report sample SDs from the saved
+independent validation trials (or from a saved ordinary SE and `n`).

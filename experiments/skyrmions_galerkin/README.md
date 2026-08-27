@@ -46,3 +46,19 @@ Focused tests:
 Historical and superseded study documents are preserved, without modification,
 under [`old_stuff/`](old_stuff/). Production code, sealed artifacts, and output
 directories remain in their original locations.
+
+## Read-only saved-result evaluation
+
+From the repository root:
+
+```bash
+.venv/bin/python experiments/skyrmions_galerkin/eval.py
+.venv/bin/python experiments/skyrmions_galerkin/eval_pareto.py
+```
+
+These commands read the exact published copies of the official final summary
+and selection cross-evaluation. They verify the authoritative SHA-256 digests
+and do not import or run simulation, training, optimization, or validation.
+Both use the repository-wide saved-evaluator table style and include Law,
+Tangent, Full, and the saved empirical audit-sample SEs. The receipts do not
+retain enough information to recover SD, which is shown as unavailable.

@@ -1265,3 +1265,18 @@ Risk is richer than sensor outputs but remains a chosen scientific summary. Diff
    with the analogous constrained problem for Tangent.
 
 The defining outcome is not merely a smaller optimizer output. It is that a small, explicit loss in held-out many-body fidelity buys a large reduction in certified correction action, and that this reduction survives disjoint validation.
+
+## Read-only saved-result evaluation
+
+From the repository root:
+
+```bash
+.venv/bin/python experiments/skyrmions_deep_ritz/eval.py
+.venv/bin/python experiments/skyrmions_deep_ritz/eval_pareto.py
+```
+
+Both commands read the tracked authoritative JSON files and print existing
+results. They do not train, optimize, simulate, validate, or write outputs.
+Both use the repository-wide saved-evaluator table style and include Law,
+Tangent, Full, and the saved Monte Carlo SEs. The receipts do not retain enough
+information to recover SD, which is shown explicitly as unavailable.
