@@ -25,6 +25,67 @@ except ImportError:  # pragma: no cover - direct script execution
 Array = jax.Array
 
 
+class ExactAuditCache:
+    """Memoize exact audits only for byte-identical canonical geometries/banks."""
+
+    def __init__(self, *, enabled: bool = True):
+        self.enabled = bool(enabled)
+        self._values: dict[tuple[int, str, tuple[int, ...], bytes], dict[str, Any]] = {}
+        # Retain bank objects so their ids cannot be recycled while cache entries
+        # exist.  This avoids hashing large JAX observation arrays on every lookup.
+        self._banks: dict[int, Any] = {}
+        self.hits = 0
+        self.misses = 0
+
+    def evaluate(self, exp, eta: Array, bank, name: str) -> dict[str, Any]:
+        if not self.enabled:
+            return exp.audit_metric(eta, bank, name)
+        canonical = np.ascontiguousarray(
+            np.asarray(
+                exp.sensors.canonicalize(jnp.asarray(eta, dtype=jnp.float64)),
+                dtype=np.float64,
+            )
+        )
+        bank_id = id(bank)
+        self._banks[bank_id] = bank
+        key = (bank_id, str(name), canonical.shape, canonical.tobytes())
+        if key in self._values:
+            self.hits += 1
+            return self._values[key]
+        self.misses += 1
+        value = exp.audit_metric(eta, bank, name)
+        self._values[key] = value
+        return value
+
+    def store(self, exp, eta: Array, bank, name: str, value: dict[str, Any]) -> None:
+        """Seed a cache entry from an already certified receipt."""
+        if not self.enabled:
+            return
+        canonical = np.ascontiguousarray(
+            np.asarray(
+                exp.sensors.canonicalize(jnp.asarray(eta, dtype=jnp.float64)),
+                dtype=np.float64,
+            )
+        )
+        bank_id = id(bank)
+        self._banks[bank_id] = bank
+        key = (bank_id, str(name), canonical.shape, canonical.tobytes())
+        self._values.setdefault(key, value)
+
+    def stats(self) -> dict[str, int]:
+        return {
+            "hits": int(self.hits),
+            "misses": int(self.misses),
+            "entries": int(len(self._values)),
+        }
+
+
+def _exact_audit(exp, eta, bank, name: str, cache: ExactAuditCache | None):
+    return exp.audit_metric(eta, bank, name) if cache is None else cache.evaluate(
+        exp, eta, bank, name
+    )
+
+
 def percentage_risk_budget(risk_star: float, relative: float) -> tuple[float, float]:
     """Return the additive allowance and ceiling for a relative risk budget."""
     risk_star = float(risk_star)
@@ -40,6 +101,39 @@ def percentage_risk_budget(risk_star: float, relative: float) -> tuple[float, fl
 def _prefix_bank(bank, count: int):
     count = max(1, min(int(count), int(bank.plus_sample_indices.shape[0])))
     return type(bank)(*(value[:count] for value in bank))
+
+
+class ObservationBankPrefixCache:
+    """Retain exact prefix-bank objects across Pareto allowances."""
+
+    def __init__(self, *, enabled: bool = True):
+        self.enabled = bool(enabled)
+        self._roots: dict[int, Any] = {}
+        self._values: dict[tuple[int, int], Any] = {}
+        self.hits = 0
+        self.misses = 0
+
+    def prefix(self, bank, count: int):
+        count = max(1, min(int(count), int(bank.plus_sample_indices.shape[0])))
+        if not self.enabled:
+            return _prefix_bank(bank, count)
+        bank_id = id(bank)
+        self._roots[bank_id] = bank
+        key = (bank_id, count)
+        if key in self._values:
+            self.hits += 1
+            return self._values[key]
+        self.misses += 1
+        value = _prefix_bank(bank, count)
+        self._values[key] = value
+        return value
+
+    def stats(self) -> dict[str, int]:
+        return {
+            "hits": int(self.hits),
+            "misses": int(self.misses),
+            "entries": int(len(self._values)),
+        }
 
 
 def _optimizer_config(opt: dict[str, Any], stage: str) -> OptimizerConfig:
@@ -89,6 +183,18 @@ def _progress(stage: str):
         f"percentage design stage={stage} optimized={completed}/{total}",
         flush=True,
     )
+
+
+def _multistart_execution(backend: str, workers: int) -> dict[str, Any]:
+    """Map the requested execution backend onto the shared optimizer controls."""
+    backend = str(backend).lower()
+    if backend == "serial":
+        return {"vectorize_starts": False}
+    if backend == "threaded":
+        if int(workers) < 2:
+            raise ValueError("multistart_workers must be >= 2 for the threaded backend")
+        return {"vectorize_starts": False, "start_workers": int(workers)}
+    raise ValueError("multistart_backend must be 'serial' or 'threaded'")
 
 
 def _local_cloud(exp, centers, *, count: int, scale: float, seed: int) -> list[Array]:
@@ -145,13 +251,17 @@ def _normalized_risk_constraint(exp, bank, anchor_eta: Array, relative: float):
     return (slack, 0.0), anchor, maximum, scale
 
 
-def _audit_law(exp, bank, candidates, limit: int):
+def _audit_law(
+    exp, bank, candidates, limit: int, audit_cache: ExactAuditCache | None = None
+):
     ordered = sorted(_dedupe(exp, candidates), key=lambda row: row.value)
     rows = []
     for candidate in ordered[: max(1, int(limit))]:
         if not candidate.feasible:
             continue
-        exact = exp.audit_metric(candidate.eta, bank, "law_risk")
+        exact = _exact_audit(
+            exp, candidate.eta, bank, "law_risk", audit_cache
+        )
         rows.append((candidate, exact, exact))
     valid = [row for row in rows if row[1]["valid"] and np.isfinite(row[1]["value"])]
     if not valid:
@@ -168,7 +278,8 @@ def _risk_passes(risk: dict[str, Any], risk_max: float, risk_view_maxima) -> boo
 
 
 def _law_screen(
-    exp, bank, candidates, *, risk_max: float, risk_view_maxima, limit: int, mandatory
+    exp, bank, candidates, *, risk_max: float, risk_view_maxima, limit: int,
+    mandatory, audit_cache: ExactAuditCache | None = None,
 ):
     mandatory_keys = {
         tuple(np.round(np.asarray(exp.sensors.canonicalize(eta)), 10))
@@ -187,7 +298,9 @@ def _law_screen(
     for candidate in (first + rest)[: max(len(first), int(limit))]:
         if not candidate.feasible:
             continue
-        risk = exp.audit_metric(candidate.eta, bank, "law_risk")
+        risk = _exact_audit(
+            exp, candidate.eta, bank, "law_risk", audit_cache
+        )
         if risk["valid"] and _risk_passes(risk, risk_max, risk_view_maxima):
             screened.append((candidate, risk))
     if not screened:
@@ -195,10 +308,14 @@ def _law_screen(
     return screened
 
 
-def _audit_tangent(exp, bank, screened):
+def _audit_tangent(
+    exp, bank, screened, audit_cache: ExactAuditCache | None = None
+):
     rows = []
     for candidate, risk in screened:
-        action = exp.audit_metric(candidate.eta, bank, "tangent_action")
+        action = _exact_audit(
+            exp, candidate.eta, bank, "tangent_action", audit_cache
+        )
         rows.append((candidate, action, risk))
     valid = [row for row in rows if row[1]["valid"] and np.isfinite(row[1]["value"])]
     if not valid:
@@ -214,11 +331,19 @@ def _audit_full(
     prescreen_trials: int,
     finalists: int,
     mandatory,
+    audit_cache: ExactAuditCache | None = None,
+    prefix_cache: ObservationBankPrefixCache | None = None,
 ):
-    small_bank = _prefix_bank(bank, prescreen_trials)
+    small_bank = (
+        _prefix_bank(bank, prescreen_trials)
+        if prefix_cache is None
+        else prefix_cache.prefix(bank, prescreen_trials)
+    )
     prescreened = []
     for candidate, risk in screened:
-        action = exp.audit_metric(candidate.eta, small_bank, "full_action")
+        action = _exact_audit(
+            exp, candidate.eta, small_bank, "full_action", audit_cache
+        )
         if action["valid"] and np.isfinite(action["value"]):
             prescreened.append((float(action["value"]), candidate, risk, action))
     if not prescreened:
@@ -239,7 +364,9 @@ def _audit_full(
             selected_keys.add(key)
     rows = []
     for _, candidate, risk, prescreen in selected:
-        action = exp.audit_metric(candidate.eta, bank, "full_action")
+        action = _exact_audit(
+            exp, candidate.eta, bank, "full_action", audit_cache
+        )
         action = dict(action)
         action["prescreen_value"] = float(prescreen["value"])
         rows.append((candidate, action, risk))
@@ -261,17 +388,35 @@ def _serial(rows):
     ]
 
 
-def optimize_percentage_designs(exp, bank):
+def optimize_percentage_designs(
+    exp,
+    bank,
+    *,
+    multistart_backend: str = "serial",
+    multistart_workers: int = 2,
+    audit_cache: ExactAuditCache | None = None,
+    prefix_cache: ObservationBankPrefixCache | None = None,
+):
     """Select Law, tangent, and Full designs with a relative risk ceiling."""
     opt = exp.cfg["optimization"]
     relative = float(exp.cfg["law"]["max_relative_risk_violation"])
     if not np.isfinite(relative) or relative < 0.0:
         raise ValueError("law.max_relative_risk_violation must be finite and nonnegative")
 
+    multistart_execution = _multistart_execution(
+        multistart_backend, multistart_workers
+    )
     available = int(bank.plus_sample_indices.shape[0])
-    law_bank = _prefix_bank(bank, int(opt.get("law_gradient_trials", min(8, available))))
-    tangent_bank = _prefix_bank(bank, int(opt.get("tangent_gradient_trials", min(8, available))))
-    full_bank = _prefix_bank(bank, int(opt.get("full_gradient_trials", min(2, available))))
+    make_prefix = _prefix_bank if prefix_cache is None else prefix_cache.prefix
+    law_bank = make_prefix(
+        bank, int(opt.get("law_gradient_trials", min(8, available)))
+    )
+    tangent_bank = make_prefix(
+        bank, int(opt.get("tangent_gradient_trials", min(8, available)))
+    )
+    full_bank = make_prefix(
+        bank, int(opt.get("full_gradient_trials", min(2, available)))
+    )
     starts = random_periodic_sensor_starts(
         jax.random.PRNGKey(int(exp.cfg["seed"]) + 17),
         int(opt.get("start_count", 12)),
@@ -301,7 +446,7 @@ def optimize_percentage_designs(exp, bank):
             _optimizer_config(opt, "law"),
             constraints=geometry,
             canonicalize=exp.sensors.canonicalize,
-            vectorize_starts=False,
+            **multistart_execution,
             progress_callback=_progress("law"),
         )
     else:
@@ -311,6 +456,7 @@ def optimize_percentage_designs(exp, bank):
     law, law_rows = _audit_law(
         exp, bank, law_candidates,
         int(opt.get("law_exact_audit_candidates", 6)),
+        audit_cache,
     )
     law_candidate, law_audit, _ = law
     risk_star = float(law_audit["value"])
@@ -357,7 +503,7 @@ def optimize_percentage_designs(exp, bank):
         _optimizer_config(opt, "tangent"),
         constraints=tangent_constraints,
         canonicalize=exp.sensors.canonicalize,
-        vectorize_starts=False,
+        **multistart_execution,
         progress_callback=_progress("tangent"),
     )
     # Optimizer outputs are endpoints, not their initial seeds.  Reinsert every
@@ -373,8 +519,11 @@ def optimize_percentage_designs(exp, bank):
         risk_view_maxima=risk_view_maxima,
         limit=int(opt.get("tangent_exact_audit_candidates", 6)),
         mandatory=[law_candidate.eta],
+        audit_cache=audit_cache,
     )
-    tangent, tangent_rows = _audit_tangent(exp, bank, tangent_screened)
+    tangent, tangent_rows = _audit_tangent(
+        exp, bank, tangent_screened, audit_cache
+    )
     tangent_candidate = tangent[0]
 
     proxy_cfg = dict(exp.cfg)
@@ -425,7 +574,7 @@ def optimize_percentage_designs(exp, bank):
         _optimizer_config(opt, "full"),
         constraints=full_constraints,
         canonicalize=exp.sensors.canonicalize,
-        vectorize_starts=False,
+        **multistart_execution,
         progress_callback=_progress("full"),
     )
     full_candidates = [
@@ -446,12 +595,15 @@ def optimize_percentage_designs(exp, bank):
         risk_view_maxima=risk_view_maxima,
         limit=int(opt.get("full_exact_audit_candidates", 6)),
         mandatory=mandatory_full,
+        audit_cache=audit_cache,
+        prefix_cache=prefix_cache,
     )
     full, full_rows = _audit_full(
         exp, bank, full_screened,
         prescreen_trials=int(opt.get("full_prescreen_trials", min(4, available))),
         finalists=int(opt.get("full_exact_rescore_candidates", 2)),
         mandatory=mandatory_full,
+        audit_cache=audit_cache,
     )
 
     selected_full = full

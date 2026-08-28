@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -23,6 +26,30 @@ PRIMARY_ALLOWANCE = 3.0
 
 def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _mean_se(values: list[float]) -> dict[str, float | int] | None:
+    """Compatibility helper retained for experiment tests and saved audits."""
+    if not values:
+        return None
+    array = np.asarray(values, dtype=np.float64)
+    return {
+        "mean": float(np.mean(array)),
+        "se": float(np.std(array, ddof=1) / math.sqrt(len(array))) if len(array) > 1 else 0.0,
+        "min": float(np.min(array)),
+        "max": float(np.max(array)),
+        "n": int(len(array)),
+    }
+
+
+def _selected_full_audit(result: dict[str, Any], design: str) -> dict[str, Any] | None:
+    """Return the exact Full audit matching a selected saved geometry, if present."""
+    eta = np.asarray(result["designs"][design], dtype=np.float64)
+    matches = [
+        row for row in result["selection_candidates"]["full"]
+        if np.allclose(np.asarray(row["eta"], dtype=np.float64), eta, rtol=0.0, atol=1.0e-8)
+    ]
+    return min(matches, key=lambda row: float(row["audit"]["value"])) if matches else None
 
 
 def main() -> int:

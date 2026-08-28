@@ -95,17 +95,23 @@ class RobustPhysicalViewExperiment:
         rebuilt = []
         for view in self.views:
             exp = view.experiment
+            next_exp = type(exp)(
+                cfg,
+                times=exp.times,
+                plus=exp.data["plus"],
+                minus=exp.data["minus"],
+            )
+            for attribute in (
+                "skip_unused_tangent_for_full_metric",
+            ):
+                if hasattr(exp, attribute):
+                    setattr(next_exp, attribute, getattr(exp, attribute))
             rebuilt.append(
                 PhysicalView(
                     label=view.label,
                     reference_seed=view.reference_seed,
                     run_indices=view.run_indices,
-                    experiment=type(exp)(
-                        cfg,
-                        times=exp.times,
-                        plus=exp.data["plus"],
-                        minus=exp.data["minus"],
-                    ),
+                    experiment=next_exp,
                 )
             )
         return RobustPhysicalViewExperiment(cfg, rebuilt)

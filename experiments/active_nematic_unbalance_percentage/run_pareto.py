@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import math
@@ -28,7 +29,11 @@ from mfsi.config import load_config
 from mfsi.io import jsonable, write_json
 
 from domain import make_run_split
-from percentage_selection import optimize_percentage_designs
+from percentage_selection import (
+    ExactAuditCache,
+    ObservationBankPrefixCache,
+    optimize_percentage_designs,
+)
 from robust_selection import (
     PhysicalView,
     RobustPhysicalViewExperiment,
@@ -65,6 +70,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--percent", nargs="+", type=float)
     parser.add_argument("--reference-seeds", nargs="+", type=int)
+    parser.add_argument(
+        "--multistart-backend",
+        choices=("serial", "threaded"),
+        default="serial",
+        help="execution-only optimizer backend; does not alter the scientific config",
+    )
+    parser.add_argument(
+        "--multistart-workers",
+        type=int,
+        default=2,
+        help="concurrent original single-start executables for the threaded backend",
+    )
+    parser.add_argument(
+        "--reuse-exact-evaluations",
+        action="store_true",
+        help=(
+            "reuse byte-identical exact audits/validation designs and remember "
+            "authoritative scalar fallback decisions"
+        ),
+    )
+    parser.add_argument(
+        "--reuse-prefix-banks",
+        action="store_true",
+        help="retain exact observation-bank prefix objects across allowances",
+    )
+    parser.add_argument(
+        "--reuse-scalar-geometry",
+        action="store_true",
+        help="reuse immutable feature tensors across authoritative scalar trials",
+    )
+    parser.add_argument(
+        "--skip-unused-tangent-for-full",
+        action="store_true",
+        help="omit Tangent-action work when the requested metric is Full only",
+    )
     return parser.parse_args()
 
 
@@ -74,6 +114,14 @@ def _tag(percent: float) -> str:
 
 def _copy_or_link(source: Path, target: Path) -> None:
     if target.exists():
+        # Initial freezing normally creates a hard link. Inode identity is both
+        # stronger and cheaper than hashing the same large file twice on resume.
+        # Copied artifacts retain the SHA-256 safeguard below.
+        try:
+            if os.path.samefile(source, target):
+                return
+        except OSError:
+            pass
         if file_sha256(source) != file_sha256(target):
             raise RuntimeError(
                 f"refusing to replace frozen input {target} with different source {source}; "
@@ -171,6 +219,44 @@ def _full_action_row(result: dict[str, Any], design: str) -> dict[str, Any]:
     return min(matches, key=lambda row: float(row["audit"]["value"]))
 
 
+def _hydrate_selection_audit_cache(
+    cache: ExactAuditCache,
+    exp: RobustPhysicalViewExperiment,
+    bank: UnbalancedObservationBank,
+    result: dict[str, Any],
+    *,
+    prefix_cache: ObservationBankPrefixCache | None = None,
+    full_prescreen_trials: int | None = None,
+) -> None:
+    """Reuse complete-bank audits already preserved in a certified point."""
+    for stage, rows in result["selection_candidates"].items():
+        audit_name = {
+            "law": "law_risk",
+            "tangent": "tangent_action",
+            "full": "full_action",
+        }[stage]
+        for row in rows:
+            cache.store(exp, row["eta"], bank, audit_name, row["audit"])
+            cache.store(exp, row["eta"], bank, "law_risk", row["law_screen"])
+            if (
+                stage == "full"
+                and prefix_cache is not None
+                and full_prescreen_trials is not None
+                and row["audit"].get("prescreen_value") is not None
+            ):
+                prefix = prefix_cache.prefix(bank, full_prescreen_trials)
+                cache.store(
+                    exp,
+                    row["eta"],
+                    prefix,
+                    "full_action",
+                    {
+                        "value": float(row["audit"]["prescreen_value"]),
+                        "valid": True,
+                    },
+                )
+
+
 def _physical_view_summary(view_rows: list[dict[str, Any]]) -> dict[str, Any]:
     values = np.asarray([
         row["summary"]["metrics"]["full_unbalanced_action_total"]["mean"]
@@ -202,9 +288,28 @@ def _evaluate_validation(
     views: list[PhysicalView],
     bank: UnbalancedObservationBank,
     designs: dict[str, Any],
+    *,
+    cache: dict[tuple[tuple[int, ...], bytes], dict[str, Any]] | None = None,
+    cache_stats: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     output = {}
     for design, eta in designs.items():
+        canonical = np.ascontiguousarray(
+            np.asarray(
+                views[0].experiment.sensors.canonicalize(
+                    jnp.asarray(eta, dtype=jnp.float64)
+                ),
+                dtype=np.float64,
+            )
+        )
+        cache_key = (canonical.shape, canonical.tobytes())
+        if cache is not None and cache_key in cache:
+            if cache_stats is not None:
+                cache_stats["hits"] = cache_stats.get("hits", 0) + 1
+            output[design] = copy.deepcopy(cache[cache_key])
+            continue
+        if cache_stats is not None:
+            cache_stats["misses"] = cache_stats.get("misses", 0) + 1
         view_rows = []
         all_rows = []
         for view in views:
@@ -226,11 +331,14 @@ def _evaluate_validation(
                 "summary": summarize_rows(rows),
                 "rows": annotated,
             })
-        output[design] = {
+        evaluated = {
             "summary": summarize_rows(all_rows),
             "physical_view_action": _physical_view_summary(view_rows),
             "views": view_rows,
         }
+        output[design] = evaluated
+        if cache is not None:
+            cache[cache_key] = copy.deepcopy(evaluated)
     return output
 
 
@@ -275,6 +383,8 @@ def _save_table(output: Path, rows: list[dict[str, Any]]) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.multistart_workers < 1:
+        raise ValueError("--multistart-workers must be >= 1")
     cfg = load_config(args.config.expanduser().resolve(), smoke=args.smoke)
     if args.reference_seeds is not None:
         cfg["reference_training"]["seeds"] = [int(value) for value in args.reference_seeds]
@@ -366,6 +476,15 @@ def main() -> None:
         cfg, bank, references, validation_indices, phase="validation"
     )
     base_robust = RobustPhysicalViewExperiment(cfg, selection_views)
+    if args.skip_unused_tangent_for_full:
+        for view in selection_views:
+            view.experiment.skip_unused_tangent_for_full_metric = True
+    if args.reuse_exact_evaluations:
+        for view in validation_views:
+            view.experiment.remember_certification_scalar_fallback = True
+    if args.reuse_scalar_geometry:
+        for view in validation_views:
+            view.experiment.reuse_exact_trial_geometry = True
     selection_path = frozen / "selection_bank.npz"
     validation_path = frozen / "validation_bank.npz"
     if selection_path.is_file():
@@ -409,6 +528,12 @@ def main() -> None:
     law_anchor = None
     incumbent_eta = None
     incumbent_action = math.inf
+    selection_audit_cache = ExactAuditCache(
+        enabled=args.reuse_exact_evaluations
+    )
+    prefix_cache = ObservationBankPrefixCache(
+        enabled=args.reuse_prefix_banks
+    )
     tolerance = float(cfg.get("pareto", {}).get("nesting_tolerance", 1.0e-8))
     for percent in percentages:
         point_dir = output / _tag(percent)
@@ -430,7 +555,18 @@ def main() -> None:
         if cached is None:
             print(f"active robust Pareto allowance={percent:g}%", flush=True)
             robust = base_robust.with_config(point_cfg)
-            selected = optimize_percentage_designs(robust, selection_bank)
+            cache_before = selection_audit_cache.stats()
+            prefix_before = prefix_cache.stats()
+            selected = optimize_percentage_designs(
+                robust,
+                selection_bank,
+                multistart_backend=args.multistart_backend,
+                multistart_workers=args.multistart_workers,
+                audit_cache=selection_audit_cache,
+                prefix_cache=prefix_cache,
+            )
+            cache_after = selection_audit_cache.stats()
+            prefix_after = prefix_cache.stats()
             result = {
                 "schema_version": 2,
                 "experiment": "active_nematic_unbalance_robust_pareto",
@@ -443,6 +579,29 @@ def main() -> None:
                 "risk_view_star": selected["risk_view_star"],
                 "risk_view_maxima": selected["risk_view_maxima"],
                 "selection_certified": bool(selected["certified"]),
+                "selection_execution": {
+                    "multistart_backend": args.multistart_backend,
+                    "multistart_workers": (
+                        int(args.multistart_workers)
+                        if args.multistart_backend == "threaded"
+                        else None
+                    ),
+                    "reuse_exact_evaluations": bool(
+                        args.reuse_exact_evaluations
+                    ),
+                    "exact_audit_cache_delta": {
+                        key: int(cache_after[key] - cache_before[key])
+                        for key in ("hits", "misses", "entries")
+                    },
+                    "reuse_prefix_banks": bool(args.reuse_prefix_banks),
+                    "skip_unused_tangent_for_full": bool(
+                        args.skip_unused_tangent_for_full
+                    ),
+                    "prefix_cache_delta": {
+                        key: int(prefix_after[key] - prefix_before[key])
+                        for key in ("hits", "misses", "entries")
+                    },
+                },
                 "designs": {
                     "law": np.asarray(selected["law_eta"]).tolist(),
                     "tangent": np.asarray(selected["tangent_eta"]).tolist(),
@@ -454,6 +613,25 @@ def main() -> None:
             }
         else:
             result = cached
+            if args.reuse_exact_evaluations:
+                _hydrate_selection_audit_cache(
+                    selection_audit_cache,
+                    base_robust,
+                    selection_bank,
+                    result,
+                    prefix_cache=(
+                        prefix_cache if args.reuse_prefix_banks else None
+                    ),
+                    full_prescreen_trials=int(
+                        cfg["optimization"].get(
+                            "full_prescreen_trials",
+                            min(
+                                4,
+                                int(selection_bank.plus_sample_indices.shape[0]),
+                            ),
+                        )
+                    ),
+                )
         if not result["selection_certified"]:
             raise RuntimeError(f"uncertified selection at {percent:g}%")
         law_row = _selected_row(result, "law")
@@ -480,12 +658,25 @@ def main() -> None:
 
     # Validation begins only after every selection winner has been frozen.
     table_rows = []
+    validation_cache = {} if args.reuse_exact_evaluations else None
+    validation_cache_stats: dict[str, int] = {"hits": 0, "misses": 0}
     for percent, result_path, result in point_results:
         if result.get("validation_designs") is None or args.force:
             print(f"active robust validation allowance={percent:g}%", flush=True)
             result["validation_designs"] = _evaluate_validation(
-                validation_views, validation_bank, result["designs"]
+                validation_views,
+                validation_bank,
+                result["designs"],
+                cache=validation_cache,
+                cache_stats=validation_cache_stats,
             )
+            result["validation_execution"] = {
+                "reuse_exact_evaluations": bool(
+                    args.reuse_exact_evaluations
+                ),
+                "cache_stats_cumulative": dict(validation_cache_stats),
+                "reuse_scalar_geometry": bool(args.reuse_scalar_geometry),
+            }
             write_json(result_path, jsonable(result))
         table_rows.append(_row(result, percent, result_path))
     _save_table(output, table_rows)

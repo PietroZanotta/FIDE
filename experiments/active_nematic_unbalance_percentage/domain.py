@@ -69,6 +69,9 @@ class SplitConfig:
     design_runs: int = 16
     validation_runs: int = 16
     seed: int = 20260818
+    train_indices: tuple[int, ...] | None = None
+    design_indices: tuple[int, ...] | None = None
+    validation_indices: tuple[int, ...] | None = None
 
     @property
     def total_runs(self) -> int:
@@ -77,6 +80,18 @@ class SplitConfig:
     def __post_init__(self) -> None:
         if min(self.train_runs, self.design_runs, self.validation_runs) < 1:
             raise ValueError("every realization split must contain at least one run")
+        explicit = (self.train_indices, self.design_indices, self.validation_indices)
+        if any(indices is not None for indices in explicit):
+            if not all(indices is not None for indices in explicit):
+                raise ValueError("explicit train/design/validation indices must be provided together")
+            expected = (self.train_runs, self.design_runs, self.validation_runs)
+            if tuple(len(indices) for indices in explicit) != expected:
+                raise ValueError("explicit split lengths do not match configured run counts")
+            flattened = tuple(index for indices in explicit for index in indices)
+            if len(set(flattened)) != self.total_runs:
+                raise ValueError("explicit split indices must be disjoint")
+            if set(flattened) != set(range(self.total_runs)):
+                raise ValueError("explicit split indices must partition [0, total_runs)")
 
 
 class BankSplit(NamedTuple):
@@ -87,6 +102,15 @@ class BankSplit(NamedTuple):
 
 def make_run_split(config: SplitConfig) -> BankSplit:
     """Return deterministic, disjoint run indices without touching global RNG state."""
+    if config.train_indices is not None:
+        return BankSplit(*(
+            np.asarray(indices, dtype=np.int64)
+            for indices in (
+                config.train_indices,
+                config.design_indices,
+                config.validation_indices,
+            )
+        ))
     order = np.random.default_rng(config.seed).permutation(config.total_runs)
     a = config.train_runs
     b = a + config.design_runs

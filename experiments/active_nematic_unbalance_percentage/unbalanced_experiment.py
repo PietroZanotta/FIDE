@@ -398,6 +398,13 @@ class UnbalancedActiveNematicExperiment:
                 )
             )(data.truth_particles)
             self.truth_finite_histogram[species] = normalized * data.truth_mass[:, None, None, None]
+        # Execution-only validation state.  The default preserves the historical
+        # behavior; an orchestrator may opt in to remember an already-proven need
+        # for authoritative scalar evaluation on this exact experiment view.
+        self.remember_certification_scalar_fallback = False
+        self._certification_scalar_required = False
+        self.reuse_exact_trial_geometry = False
+        self.skip_unused_tangent_for_full_metric = False
 
     def _validated_data(self, species: Species, data: SpeciesExperimentData) -> SpeciesExperimentData:
         values = SpeciesExperimentData(
@@ -453,9 +460,12 @@ class UnbalancedActiveNematicExperiment:
         *,
         compute_tangent: bool,
         compute_full: bool,
+        geometry=None,
     ):
         data = self.data[species]
-        phi_truth, phi_ref, grad_ref, velocity = self._geometry(species, eta)
+        if geometry is None:
+            geometry = self._geometry(species, eta)
+        phi_truth, phi_ref, grad_ref, velocity = geometry
         target, target_dot = self._reconstruct(species, phi_truth, bank, trial)
         law_rows = []
         tangent_total_rows = []
@@ -856,14 +866,18 @@ class UnbalancedActiveNematicExperiment:
         *,
         compute_tangent: bool = True,
         compute_full: bool = True,
+        geometry_by_species=None,
     ):
+        geometry_by_species = geometry_by_species or {}
         plus = self._species_trial(
             "plus", eta, bank, trial,
             compute_tangent=compute_tangent, compute_full=compute_full,
+            geometry=geometry_by_species.get("plus"),
         )
         minus = self._species_trial(
             "minus", eta, bank, trial,
             compute_tangent=compute_tangent, compute_full=compute_full,
+            geometry=geometry_by_species.get("minus"),
         )
         law = self.risk_weights["plus"] * plus["law_risk"] + self.risk_weights["minus"] * minus["law_risk"]
         tangent = self.species_weights["plus"] * plus["tangent_action"] + self.species_weights["minus"] * minus["tangent_action"]
@@ -877,7 +891,13 @@ class UnbalancedActiveNematicExperiment:
         values = self.trial_values_batch(
             eta,
             bank,
-            compute_tangent=name != "law_risk",
+            compute_tangent=(
+                name != "law_risk"
+                and not (
+                    name == "full_action"
+                    and self.skip_unused_tangent_for_full_metric
+                )
+            ),
             compute_full=name == "full_action",
         )[index]
         return jnp.mean(values)
@@ -885,8 +905,21 @@ class UnbalancedActiveNematicExperiment:
     def exact_trial_rows(self, eta: Array, bank: UnbalancedObservationBank) -> list[dict[str, Any]]:
         validity = self.cfg["validity"]
         rows = []
+        geometry_by_species = (
+            {
+                species: self._geometry(species, eta)
+                for species in ("plus", "minus")
+            }
+            if self.reuse_exact_trial_geometry
+            else None
+        )
         for trial in range(int(bank.plus_sample_indices.shape[0])):
-            law, tangent, full, plus, minus = self.trial_values(eta, bank, trial)
+            law, tangent, full, plus, minus = self.trial_values(
+                eta,
+                bank,
+                trial,
+                geometry_by_species=geometry_by_species,
+            )
             max_calibration = jnp.maximum(plus["max_calibration_residual"], minus["max_calibration_residual"])
             min_ess = jnp.minimum(plus["min_ess_fraction"], minus["min_ess_fraction"])
             max_pde = jnp.maximum(plus["max_pde_relative_residual"], minus["max_pde_relative_residual"])
@@ -938,6 +971,11 @@ class UnbalancedActiveNematicExperiment:
         scalar_spotcheck_trials: int = 2,
     ) -> list[dict[str, Any]]:
         """Serialize batched trials after checking a scalar authority subset."""
+        if (
+            self.remember_certification_scalar_fallback
+            and self._certification_scalar_required
+        ):
+            return self.exact_trial_rows(eta, bank)
         values = self.trial_values_batch(
             eta, bank, compute_tangent=True, compute_full=True
         )
@@ -1036,6 +1074,8 @@ class UnbalancedActiveNematicExperiment:
                     err_msg=f"batched/scalar trial mismatch at trial {trial}",
                 )
             except AssertionError:
+                if self.remember_certification_scalar_fallback:
+                    self._certification_scalar_required = True
                 print(
                     "unbalanced certification batch/scalar spot check failed; "
                     "falling back to authoritative scalar trial evaluation",
@@ -1047,7 +1087,13 @@ class UnbalancedActiveNematicExperiment:
     def audit_metric(self, eta: Array, bank: UnbalancedObservationBank, name: str) -> dict[str, Any]:
         if name not in {"law_risk", "tangent_action", "full_action"}:
             raise ValueError("unknown unbalanced metric")
-        compute_tangent = name != "law_risk"
+        compute_tangent = (
+            name != "law_risk"
+            and not (
+                name == "full_action"
+                and self.skip_unused_tangent_for_full_metric
+            )
+        )
         compute_full = name == "full_action"
         value_index = {"law_risk": 0, "tangent_action": 1, "full_action": 2}[name]
         validity = self.cfg["validity"]

@@ -16,8 +16,9 @@ sys.path.insert(0, str(SCRIPT_DIR.parent))
 from saved_result_display import MISSING, number, percent, print_heading, print_table, print_uncertainty_note, source_label
 
 
-DEFAULT_RESULT = SCRIPT_DIR / "published_official_b1_final_summary.json"
-DEFAULT_SELECTION = SCRIPT_DIR / "published_official_b1_cross_evaluation.json"
+RUN_DIR = SCRIPT_DIR / "outputs" / "official_b1_galerkin_pareto_v1"
+DEFAULT_RESULT = RUN_DIR / "final_summary.json"
+DEFAULT_SELECTION = RUN_DIR / "selection" / "cross_evaluation.json"
 EXPECTED_SHA256 = "e7f38eeda7d1aefea1ed2bc701bc35b5926f3b8f504bc3a75df0392ee5ddd9d3"
 EXPECTED_SELECTION_SHA256 = "4ccf6ff16a03f4f0e3169d2caabf6be7d1c15d230e8f0ea2e6e8e402901db86c"
 PRIMARY_ALLOWANCE = 5.0

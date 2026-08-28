@@ -8,12 +8,26 @@ skyrmion benchmark. The current documentation is intentionally small:
 - [`outputs/official_b1_galerkin_pareto_v1/report.md`](outputs/official_b1_galerkin_pareto_v1/report.md) is the compact generated run report.
 - [`outputs/official_b1_galerkin_pareto_v1/final_summary.json`](outputs/official_b1_galerkin_pareto_v1/final_summary.json) is the machine-readable final summary.
 - [`outputs/official_b1_galerkin_pareto_v1/selection/selection_manifest.json`](outputs/official_b1_galerkin_pareto_v1/selection/selection_manifest.json) is the sealed selection manifest.
+- [`outputs/official_b1_galerkin_pareto_v1/REPRODUCIBILITY.md`](outputs/official_b1_galerkin_pareto_v1/REPRODUCIBILITY.md) inventories the GitHub-visible bundle and the explicitly regenerated oversized arrays.
 
 The official run selected a frozen 6% candidate and returned `PASS`. All 18
 validation rows passed both the preregistered strict gate and the diagnostic
 `p+5pp` gate. The outcome is scientifically valid for the frozen B1 protocol;
 its limitations and the observed Full-versus-Law response plateau are discussed
 in the complete study record.
+
+## Paper observation-mechanism figure
+
+![Hidden skyrmion population, corrected law, and sensor views](figures/skyrmion_population_correction_sensors.png)
+
+Regenerate the PNG and PDF from the frozen official 5% Full geometry and fresh
+validation artifacts without running simulation, training, optimization, or
+validation. The published paper-reference artifact preserves the exact
+configuration nodes and base weights while omitting the unused velocity array:
+
+```bash
+.venv/bin/python experiments/skyrmions_galerkin/visualize_paper.py
+```
 
 ## Reproduction entry points
 
@@ -56,8 +70,8 @@ From the repository root:
 .venv/bin/python experiments/skyrmions_galerkin/eval_pareto.py
 ```
 
-These commands read the exact published copies of the official final summary
-and selection cross-evaluation. They verify the authoritative SHA-256 digests
+These commands read the GitHub-visible official final summary and selection
+cross-evaluation under `outputs/`. They verify the authoritative SHA-256 digests
 and do not import or run simulation, training, optimization, or validation.
 Both use the repository-wide saved-evaluator table style and include Law,
 Tangent, Full, and the saved empirical audit-sample SEs. The receipts do not

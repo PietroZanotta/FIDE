@@ -59,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
+        "--base-physical-bank",
+        type=Path,
+        help="extend a compatible prefix bank instead of regenerating its runs",
+    )
+    parser.add_argument(
         "--input-dir",
         type=Path,
         help="read physical/defect banks from another isolated output directory",
@@ -85,11 +90,16 @@ def state_config(cfg: dict[str, Any]) -> UnbalancedStateConfig:
 
 def split_config(cfg: dict[str, Any]) -> SplitConfig:
     block = cfg["splits"]
+    explicit = {
+        key: (tuple(int(value) for value in block[key]) if key in block else None)
+        for key in ("train_indices", "design_indices", "validation_indices")
+    }
     return SplitConfig(
         train_runs=int(block["train_runs"]),
         design_runs=int(block["design_runs"]),
         validation_runs=int(block["validation_runs"]),
         seed=int(cfg["seed"]) + int(block.get("seed_offset", 1101)),
+        **explicit,
     )
 
 
@@ -136,14 +146,38 @@ def charge_diagnostics(cfg, bank, runs=None):
     )
 
 
-def build_physical_bank(cfg, target: Path) -> Path:
+def build_physical_bank(cfg, target: Path, base_path: Path | None = None) -> Path:
     split = split_config(cfg)
     seeds = int(cfg["seed"]) + int(cfg["physical_bank"].get("seed_offset", 1001)) + np.arange(split.total_runs)
-    bank = generate_physical_bank(
-        physics_config(cfg), seeds=seeds,
-        times=np.asarray(cfg["physical_bank"]["save_times"], dtype=np.float64),
-        workers=int(cfg["physical_bank"].get("workers", 1)),
-    )
+    params = physics_config(cfg)
+    times = np.asarray(cfg["physical_bank"]["save_times"], dtype=np.float64)
+    if base_path is None:
+        bank = generate_physical_bank(
+            params, seeds=seeds, times=times,
+            workers=int(cfg["physical_bank"].get("workers", 1)),
+        )
+    else:
+        base = PhysicalBank.load(base_path.expanduser().resolve())
+        if base.params != params:
+            raise ValueError("base physical-bank parameters do not match the requested configuration")
+        if not np.array_equal(base.times, times):
+            raise ValueError("base physical-bank times do not match the requested configuration")
+        if len(base.seeds) > len(seeds) or not np.array_equal(base.seeds, seeds[:len(base.seeds)]):
+            raise ValueError("base physical-bank seeds are not the required deterministic prefix")
+        if len(base.seeds) == len(seeds):
+            bank = base
+        else:
+            extension = generate_physical_bank(
+                params, seeds=seeds[len(base.seeds):], times=times,
+                workers=int(cfg["physical_bank"].get("workers", 1)),
+            )
+            bank = PhysicalBank(
+                times=times,
+                q1=np.concatenate((base.q1, extension.q1), axis=0),
+                q2=np.concatenate((base.q2, extension.q2), axis=0),
+                seeds=np.concatenate((base.seeds, extension.seeds)),
+                params=params,
+            )
     path = target / "physical_bank.npz"
     bank.save(path)
     return path
@@ -708,7 +742,7 @@ def main() -> None:
         else target
     )
     if args.stage == "physical-bank":
-        result = build_physical_bank(cfg, target)
+        result = build_physical_bank(cfg, target, args.base_physical_bank)
     elif args.stage == "defects":
         result = build_defect_bank(cfg, target)
     elif args.stage == "defect-audit":
