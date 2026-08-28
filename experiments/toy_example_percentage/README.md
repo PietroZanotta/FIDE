@@ -31,6 +31,33 @@ Thus `A_full(0.5%) >= A_full(1%) >= ... >= A_full(5%)` passes at tolerance `1e-6
 
 ![Experiment and representative sensor layout](outputs/pareto/experiment_sensors.png)
 
+### Paper observation-mechanism figure
+
+![Hidden population, corrected law, and sensor views](figures/toy_population_correction_sensors.png)
+
+`visualize_paper.py` uses the authoritative 5% Full geometry and the frozen
+reference/validation banks. It selects the frozen validation trial closest to
+the representative `45°` nuisance angle and displays four acquisition nodes:
+
+- the analytic hidden population;
+- the endpoint-reference law after maximum-entropy correction to the two saved
+  sensor observations; and
+- one sensor-weighted spatial view per sensor, annotated with the corresponding
+  observed scalar value.
+
+The figure is post-processing only: it performs no training, design
+optimization, or new validation. From the repository root, regenerate both the
+raster and vector versions with
+
+```bash
+.venv/bin/python experiments/toy_example_percentage/visualize_paper.py
+```
+
+This writes
+`figures/toy_population_correction_sensors.png` and
+`figures/toy_population_correction_sensors.pdf`. Use `--output-stem` to change
+the common destination while retaining both formats.
+
 ## Scientific setup
 
 ### Hidden population

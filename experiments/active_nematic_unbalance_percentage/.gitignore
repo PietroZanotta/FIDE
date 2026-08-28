@@ -1,3 +1,9 @@
-outputs/
+# Publish the complete authoritative Pareto receipts and compact frozen inputs.
+# Other historical/development output trees stay local.  The physical Q-field
+# bank is deterministically regenerable and exceeds GitHub's 100 MB blob limit.
+outputs/*
+!outputs/pareto_robust/
+outputs/pareto_robust/.matplotlib/
+outputs/pareto_robust/frozen_inputs/physical_bank.npz
 __pycache__/
 !README.md

@@ -1,0 +1,233 @@
+{
+  "name": "active_nematic_unbalance_percentage_two_species",
+  "seed": 20260818,
+  "physics": {
+    "n": 128,
+    "box_size": 32.0,
+    "A": -1.0,
+    "C": 1.0,
+    "elastic_L": 0.2,
+    "gamma": 1.0,
+    "flow_alignment": 0.7,
+    "viscosity": 1.0,
+    "friction": 0.1,
+    "activity": 1.5,
+    "dt": 0.02,
+    "init_angle_noise": 0.18,
+    "init_amplitude_noise": 0.03,
+    "init_smoothing_length": 2.0
+  },
+  "physical_bank": {
+    "seed_offset": 1001,
+    "workers": 16,
+    "save_times": [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+    "population_times": [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+  },
+  "splits": {
+    "train_runs": 32,
+    "design_runs": 16,
+    "validation_runs": 16,
+    "seed_offset": 1101
+  },
+  "state": {
+    "orientation_coherence_min_plus": 0.2,
+    "orientation_coherence_min_minus": 0.2,
+    "maximum_core_residual": null,
+    "fit_rmin_cells": 2.0,
+    "fit_rmax_cells": 6.0
+  },
+  "unbalanced": {
+    "reaction_kappa": 1.0,
+    "species_weight_plus": 1.0,
+    "species_weight_minus": 1.0,
+    "risk_weight_plus": 1.0,
+    "risk_weight_minus": 1.0,
+    "minimum_mass": 0.1,
+    "charge_balance_tolerance": 0.25,
+    "expected_charge_imbalance": 0.0,
+    "enforce_charge_balance": true,
+    "mass_interpolation": "fisher_rao",
+    "mass_smoothing": 0.0001
+  },
+  "measurement": {
+    "n_sensors": 2,
+    "sensor_width": 4.0,
+    "min_sep": 3.0,
+    "use_plus_orientation": true,
+    "use_minus_triatic_orientation": true,
+    "mass_is_global_observation": true,
+    "finite_n": 256,
+    "acquisition_k": 9,
+    "obs_noise_std": 0.005
+  },
+  "moment_reconstruction": {
+    "internal_knots": 3,
+    "smoothing": 0.0001,
+    "ridge_rel": 1e-10,
+    "roughness_quadrature_order": 8
+  },
+  "reference_training": {
+    "seeds": [20260818, 20260819, 20260820],
+    "plus_seed_offset": 0,
+    "minus_seed_offset": 10000,
+    "hidden_width": 128,
+    "hidden_layers": 4,
+    "train_steps": 12000,
+    "batch_size": 2048,
+    "learning_rate": 0.001,
+    "min_learning_rate_ratio": 0.05,
+    "grad_clip_norm": 10.0,
+    "bridge_schedule": "linear",
+    "bridge_noise_std": 0.15,
+    "log_every": 500
+  },
+  "reference": {
+    "endpoint_particles": 50000,
+    "particles": 8192,
+    "endpoint_seed_offset": 2001,
+    "bank_seed_offset": 3001,
+    "bank_position_jitter_std": 1.0,
+    "bank_beta_jitter_std": 0.25,
+    "rk4_substeps_per_time_interval": 16
+  },
+  "law": {
+    "mmd_bandwidths": [0.5, 1.0, 2.0, 4.0],
+    "grid_shape": [48, 48, 24],
+    "max_relative_risk_violation": 0.05
+  },
+  "projection": {
+    "max_steps": 300,
+    "residual_tol": 1e-8,
+    "newton_ridge": 1e-7,
+    "step_cap": 20.0,
+    "lambda_clip": 1000.0,
+    "line_search_steps": 8
+  },
+  "particle_mfsi": {
+    "covariance_ridge": 1e-7,
+    "tangent_ridge": 1e-7
+  },
+  "full_action": {
+    "grid_shape": [48, 48, 24],
+    "polarity_metric_radius": 1.0,
+    "backend": "tesseract_cpp",
+    "raster_bandwidth": 1.2,
+    "operator_floor_rel": 1e-14,
+    "cg_tol": 1e-7,
+    "cg_maxiter": 1200
+  },
+  "validity": {
+    "max_calibration_residual": 0.001,
+    "min_ess_fraction": 0.03,
+    "max_screened_pde_relative_residual": 1e-5
+  },
+  "optimization": {
+    "law_steps": 60,
+    "tangent_steps": 50,
+    "full_steps": 40,
+    "law_learning_rate": 0.008,
+    "tangent_learning_rate": 0.006,
+    "full_learning_rate": 0.004,
+    "constraint_penalty": 10000.0,
+    "feasibility_tol": 1e-6,
+    "start_count": 24,
+    "start_oversample": 96,
+    "law_start_count": 8,
+    "tangent_start_count": 6,
+    "tangent_local_starts": 8,
+    "tangent_local_scale": 1.5,
+    "full_start_count": 6,
+    "full_local_starts": 10,
+    "full_local_scale": 1.5,
+    "law_gradient_trials": 16,
+    "tangent_gradient_trials": 16,
+    "full_gradient_trials": 4,
+    "full_gradient_grid_shape": [24, 24, 12],
+    "full_gradient_cg_tol": 1e-6,
+    "full_gradient_cg_maxiter": 420,
+    "law_exact_audit_candidates": 12,
+    "tangent_exact_audit_candidates": 16,
+    "full_exact_audit_candidates": 16,
+    "full_prescreen_trials": 8,
+    "full_exact_rescore_candidates": 4
+  },
+  "controls": {
+    "fixed_design_eta": [4.049550445530692, 30.506008504299235, 28.400398305163762, 2.8281974339441738],
+    "fixed_design_provenance": "balanced seed-20260819 common geometry; evaluation only"
+  },
+  "randomness": {
+    "selection_trials": 32,
+    "validation_trials": 32,
+    "selection_namespace": 9890,
+    "validation_namespace": 9891,
+    "truth_particles": 2048
+  },
+  "robust_selection": {
+    "design_views": 4,
+    "validation_views": 4,
+    "view_method": "leave_one_fold_out",
+    "objective": "max",
+    "upper_quantile": 0.75,
+    "gradient_physical_views": 1,
+    "seed_offset": 1201
+  },
+  "pareto": {
+    "allowances_percent": [0.5, 1.0, 2.0, 3.0, 4.0, 5.0],
+    "nesting_tolerance": 1e-8
+  },
+  "smoke": {
+    "physics": {"n": 32, "dt": 0.02},
+    "physical_bank": {
+      "save_times": [21.0, 23.5, 26.0, 28.5, 31.0],
+      "population_times": [21.0, 23.5, 26.0, 28.5, 31.0],
+      "workers": 4
+    },
+    "splits": {"train_runs": 4, "design_runs": 2, "validation_runs": 2},
+    "unbalanced": {"minimum_mass": 0.01, "charge_balance_tolerance": 3.0},
+    "measurement": {"finite_n": 16, "acquisition_k": 3},
+    "reference_training": {
+      "seeds": [20260818],
+      "hidden_width": 16,
+      "hidden_layers": 1,
+      "train_steps": 2,
+      "batch_size": 16,
+      "log_every": 1
+    },
+    "reference": {"endpoint_particles": 32, "particles": 32, "rk4_substeps_per_time_interval": 1},
+    "full_action": {
+      "grid_shape": [12, 12, 8],
+      "operator_floor_rel": 1e-12,
+      "cg_maxiter": 600
+    },
+    "law": {"grid_shape": [12, 12, 8]},
+    "validity": {
+      "max_calibration_residual": 2.0,
+      "min_ess_fraction": 0.0,
+      "max_screened_pde_relative_residual": 0.001
+    },
+    "optimization": {
+      "law_steps": 1,
+      "tangent_steps": 1,
+      "full_steps": 1,
+      "start_count": 2,
+      "law_start_count": 2,
+      "tangent_start_count": 2,
+      "full_start_count": 2,
+      "tangent_local_starts": 1,
+      "tangent_local_scale": 0.5,
+      "full_local_starts": 1,
+      "full_local_scale": 0.5,
+      "full_gradient_grid_shape": [8, 8, 6],
+      "full_gradient_cg_tol": 1e-5,
+      "full_gradient_cg_maxiter": 120,
+      "law_exact_audit_candidates": 2,
+      "tangent_exact_audit_candidates": 2,
+      "full_exact_audit_candidates": 2,
+      "full_prescreen_trials": 1,
+      "full_exact_rescore_candidates": 1,
+      "start_oversample": 16
+    },
+    "randomness": {"selection_trials": 1, "validation_trials": 1, "truth_particles": 16},
+    "robust_selection": {"design_views": 2, "validation_views": 2}
+  }
+}

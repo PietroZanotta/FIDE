@@ -1,0 +1,235 @@
+{
+  "controls": {
+    "fixed_design_eta": [
+      4.049550445530692,
+      30.506008504299235,
+      28.400398305163762,
+      2.8281974339441738
+    ],
+    "fixed_design_provenance": "balanced seed-20260819 common geometry; evaluation only"
+  },
+  "full_action": {
+    "backend": "tesseract_cpp",
+    "cg_maxiter": 1200,
+    "cg_tol": 1e-07,
+    "grid_shape": [
+      48,
+      48,
+      24
+    ],
+    "operator_floor_rel": 1e-14,
+    "polarity_metric_radius": 1.0,
+    "raster_bandwidth": 1.2
+  },
+  "law": {
+    "grid_shape": [
+      48,
+      48,
+      24
+    ],
+    "max_relative_risk_violation": 0.05,
+    "mmd_bandwidths": [
+      0.5,
+      1.0,
+      2.0,
+      4.0
+    ]
+  },
+  "measurement": {
+    "acquisition_k": 9,
+    "finite_n": 256,
+    "mass_is_global_observation": true,
+    "min_sep": 3.0,
+    "n_sensors": 2,
+    "obs_noise_std": 0.005,
+    "sensor_width": 4.0,
+    "use_minus_triatic_orientation": true,
+    "use_plus_orientation": true
+  },
+  "moment_reconstruction": {
+    "internal_knots": 3,
+    "ridge_rel": 1e-10,
+    "roughness_quadrature_order": 8,
+    "smoothing": 0.0001
+  },
+  "name": "active_nematic_unbalance_percentage_two_species",
+  "optimization": {
+    "constraint_penalty": 10000.0,
+    "feasibility_tol": 1e-06,
+    "full_exact_audit_candidates": 16,
+    "full_exact_rescore_candidates": 4,
+    "full_gradient_cg_maxiter": 420,
+    "full_gradient_cg_tol": 1e-06,
+    "full_gradient_grid_shape": [
+      24,
+      24,
+      12
+    ],
+    "full_gradient_trials": 4,
+    "full_learning_rate": 0.004,
+    "full_local_scale": 1.5,
+    "full_local_starts": 10,
+    "full_prescreen_trials": 8,
+    "full_start_count": 6,
+    "full_steps": 40,
+    "law_exact_audit_candidates": 12,
+    "law_gradient_trials": 16,
+    "law_learning_rate": 0.008,
+    "law_start_count": 8,
+    "law_steps": 60,
+    "start_count": 24,
+    "start_oversample": 96,
+    "tangent_exact_audit_candidates": 16,
+    "tangent_gradient_trials": 16,
+    "tangent_learning_rate": 0.006,
+    "tangent_local_scale": 1.5,
+    "tangent_local_starts": 8,
+    "tangent_start_count": 6,
+    "tangent_steps": 50
+  },
+  "pareto": {
+    "allowances_percent": [
+      0.5,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0
+    ],
+    "nesting_tolerance": 1e-08
+  },
+  "particle_mfsi": {
+    "covariance_ridge": 1e-07,
+    "tangent_ridge": 1e-07
+  },
+  "physical_bank": {
+    "population_times": [
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "save_times": [
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "seed_offset": 1001,
+    "workers": 16
+  },
+  "physics": {
+    "A": -1.0,
+    "C": 1.0,
+    "activity": 1.5,
+    "box_size": 32.0,
+    "dt": 0.02,
+    "elastic_L": 0.2,
+    "flow_alignment": 0.7,
+    "friction": 0.1,
+    "gamma": 1.0,
+    "init_amplitude_noise": 0.03,
+    "init_angle_noise": 0.18,
+    "init_smoothing_length": 2.0,
+    "n": 128,
+    "viscosity": 1.0
+  },
+  "projection": {
+    "lambda_clip": 1000.0,
+    "line_search_steps": 8,
+    "max_steps": 300,
+    "newton_ridge": 1e-07,
+    "residual_tol": 1e-08,
+    "step_cap": 20.0
+  },
+  "randomness": {
+    "selection_namespace": 9890,
+    "selection_trials": 32,
+    "truth_particles": 2048,
+    "validation_namespace": 9891,
+    "validation_trials": 32
+  },
+  "reference": {
+    "bank_beta_jitter_std": 0.25,
+    "bank_position_jitter_std": 1.0,
+    "bank_seed_offset": 3001,
+    "endpoint_particles": 50000,
+    "endpoint_seed_offset": 2001,
+    "particles": 8192,
+    "rk4_substeps_per_time_interval": 16
+  },
+  "reference_training": {
+    "batch_size": 2048,
+    "bridge_noise_std": 0.15,
+    "bridge_schedule": "linear",
+    "grad_clip_norm": 10.0,
+    "hidden_layers": 4,
+    "hidden_width": 128,
+    "learning_rate": 0.001,
+    "log_every": 500,
+    "min_learning_rate_ratio": 0.05,
+    "minus_seed_offset": 10000,
+    "plus_seed_offset": 0,
+    "seeds": [
+      20260818,
+      20260819,
+      20260820
+    ],
+    "train_steps": 12000
+  },
+  "robust_selection": {
+    "design_views": 4,
+    "gradient_physical_views": 1,
+    "objective": "max",
+    "seed_offset": 1201,
+    "upper_quantile": 0.75,
+    "validation_views": 4,
+    "view_method": "leave_one_fold_out"
+  },
+  "seed": 20260818,
+  "splits": {
+    "design_runs": 16,
+    "seed_offset": 1101,
+    "train_runs": 32,
+    "validation_runs": 16
+  },
+  "state": {
+    "fit_rmax_cells": 6.0,
+    "fit_rmin_cells": 2.0,
+    "maximum_core_residual": null,
+    "orientation_coherence_min_minus": 0.2,
+    "orientation_coherence_min_plus": 0.2
+  },
+  "unbalanced": {
+    "charge_balance_tolerance": 0.25,
+    "enforce_charge_balance": true,
+    "expected_charge_imbalance": 0.0,
+    "mass_interpolation": "fisher_rao",
+    "mass_smoothing": 0.0001,
+    "minimum_mass": 0.1,
+    "reaction_kappa": 1.0,
+    "risk_weight_minus": 1.0,
+    "risk_weight_plus": 1.0,
+    "species_weight_minus": 1.0,
+    "species_weight_plus": 1.0
+  },
+  "validity": {
+    "max_calibration_residual": 0.001,
+    "max_screened_pde_relative_residual": 1e-05,
+    "min_ess_fraction": 0.03
+  }
+}

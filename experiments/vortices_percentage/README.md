@@ -194,11 +194,20 @@ No additional Full or Tangent optimization is required for this declared sweep: 
 
 ## Figures
 
+![Hidden population, corrected law, and four sensor views](figures/vortices_population_correction_sensors.png)
+
 ![Corrected Law, Tangent, and Full Pareto curves](outputs/pareto/pareto_methods.png)
 
 ![Corrected sensor layouts by method and allowance](outputs/pareto/pareto_sensor_layouts.png)
 
 ![Double-gyre experiment and four-sensor geometry](outputs/pareto/experiment_sensors.png)
+
+Regenerate the paper-style observation-mechanism figure from the frozen 5% Full
+geometry and validation/reference banks (both PNG and PDF are always written):
+
+```bash
+.venv/bin/python experiments/vortices_percentage/visualize_paper.py
+```
 
 ## Reproduction
 

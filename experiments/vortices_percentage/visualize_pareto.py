@@ -24,9 +24,9 @@ from percentage_pareto_visualization import (
     make_figure,
     method_records,
     save_figure,
-    save_method_figure,
     save_method_tables,
 )
+from pareto_cost_risk_visualization import save_cost_risk_figure
 import visualize as experiment_visualization
 
 DEFAULT_INPUT = SCRIPT_DIR / "outputs" / "pareto"
@@ -148,7 +148,14 @@ def save_pareto_suite(
     records = method_records(rows, pareto_source)
     outputs = [save_pareto_figure(rows, output_dir / "pareto.png", dpi=dpi)]
     outputs.extend(save_method_tables(records, output_dir))
-    outputs.append(save_method_figure(records, output_dir / "pareto_methods.png", experiment_label="Vortices / double gyre", dpi=dpi))
+    outputs.extend(
+        save_cost_risk_figure(
+            records,
+            output_dir / "pareto_methods.png",
+            title="Vortices · cost and risk use along the risk–allowance frontier",
+            dpi=dpi,
+        )
+    )
     outputs.append(save_sensor_atlas(rows, pareto_source, output_dir / "pareto_sensor_layouts.png", dpi=dpi))
     outputs.append(save_experiment_figure(rows, pareto_source, output_dir / "experiment_sensors.png", dpi=dpi))
     return outputs

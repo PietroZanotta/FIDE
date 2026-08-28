@@ -120,9 +120,37 @@ improvement as a held-out result. Reported uncertainty is the jackknife
 standard error across physical/reference views and should not be interpreted
 as a formal significance claim.
 
+## Paper visualization
+
+![Held-out signed defect population, corrected law, and sensor views](figures/active_nematic_defect_correction_sensors.png)
+
+The paper-style population/sensor figure is regenerated solely from the
+frozen authoritative outputs (3% Full geometry by default):
+
+```bash
+.venv/bin/python experiments/active_nematic_unbalance_percentage/visualize_paper.py
+```
+
+It writes both
+`figures/active_nematic_defect_correction_sensors.png` and
+`figures/active_nematic_defect_correction_sensors.pdf`. The top row is the
+signed held-out defect population, the middle row is the independently
+charge-corrected endpoint-only reference law, and the bottom row shows the
+two sensor-local total-defect views. The script reads validation fold 0,
+reference seed 20260818, and frozen trial 0 by default. It does not simulate,
+train, optimize, or run a new validation evaluation.
+
+The displayed initial and final conditions are the exact endpoints of the
+inference experiment: physical times 21 and 31, normalized to `t=0` and `t=1`.
+The production bank does not contain the simulator's physical `t=0` field, and
+the correction law was never defined before physical time 21.
+
 The complete table is in `outputs/pareto_robust/authoritative_pareto.md`; the
 fail-closed receipt is
 `outputs/pareto_robust/authoritative_certification_diagnostic.json`.
+The exact GitHub-visible bundle and its one intentionally regenerated oversized
+source bank are described in
+[`outputs/pareto_robust/REPRODUCIBILITY.md`](outputs/pareto_robust/REPRODUCIBILITY.md).
 
 ## Historical diagnostic
 
