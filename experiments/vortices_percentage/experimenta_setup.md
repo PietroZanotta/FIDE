@@ -8,9 +8,10 @@ experiment record and is intended to support a future Methods section,
 supplement, results table, reproducibility statement, or figure caption.
 
 The active scientific result is the corrected physical-density (`q_h`)
-weighted-Poisson evaluation. The pre-correction sweep under
-`outputs/old/pareto_pre_corrected_full/` is retained only as provenance and
-must not be quoted as the current result.
+weighted-Poisson evaluation. The pre-correction sweep is provenance only and
+must not be quoted as the current result. The ignored `outputs/old/` tree is
+absent from a normal checkout; the README documents how to reconstruct its
+exact seed state from Git history for a full replay.
 
 ## 1. Experiment identity and status
 
@@ -480,6 +481,11 @@ Important qualifications:
   optimization changes because the scientific evaluator itself changed.
 
 ## 17. Reproduction
+
+The commands below describe the original in-place production layout. For a
+fresh checkout, use the README's three-level reproduction procedure: it adds
+the required archive bootstrap and writes a replay outside the tracked
+authoritative directory.
 
 From the repository root:
 

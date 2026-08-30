@@ -4,6 +4,12 @@ Date: 2026-08-19
 
 ## Conclusion
 
+This is a historical auxiliary audit of the earlier base evaluator, not a
+rerun of the corrected physical-`q_h` Pareto sweep. Its action levels and
+`50.54%`--`54.15%` reductions must not be compared as if they were points in
+the current authoritative `59.17%`--`70.18%` result. The controlled seed
+comparison and its caveats remain valid for the setup actually tested.
+
 The vortices experiment has a small, statistically detectable dependence on
 the learned-reference seed, but it does **not** show the severe sensitivity seen
 in the active-nematic experiment.
@@ -134,16 +140,17 @@ reference-model sensitivity.
 The runner now supports isolated reference-seed outputs:
 
 ```bash
-OMP_NUM_THREADS=4 .venv/bin/python experiments/vortices/run.py \
+OMP_NUM_THREADS=4 .venv/bin/python experiments/vortices_percentage/run.py \
   --reference-seed 20260816 \
-  --output-dir experiments/vortices/outputs/reference_seed_sensitivity/reference_seed_20260816
+  --output-dir experiments/vortices_percentage/outputs/reference_seed_sensitivity/reference_seed_20260816
 ```
 
-The read-only summary audit is:
+The summary program reads the completed runs without altering them and writes
+only the derived `summary.json`:
 
 ```bash
-.venv/bin/python experiments/vortices/summarize_reference_seeds.py
+.venv/bin/python experiments/vortices_percentage/summarize_reference_seeds.py
 ```
 
 It writes the machine-readable result to
-`experiments/vortices/outputs/reference_seed_sensitivity/summary.json`.
+`experiments/vortices_percentage/outputs/reference_seed_sensitivity/summary.json`.

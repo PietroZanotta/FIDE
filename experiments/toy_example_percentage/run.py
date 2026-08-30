@@ -21,6 +21,11 @@ CONFIG_PATH = SCRIPT_DIR / "config.json"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="write an isolated run instead of outputs/run or outputs/smoke",
+    )
     return parser.parse_args()
 
 
@@ -29,7 +34,11 @@ def main() -> None:
     cfg = load_config(CONFIG_PATH, smoke=args.smoke)
 
     mode = "smoke" if args.smoke else "run"
-    output_dir = SCRIPT_DIR / "outputs" / mode
+    output_dir = (
+        args.output_dir.expanduser().resolve()
+        if args.output_dir is not None
+        else SCRIPT_DIR / "outputs" / mode
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"toy_example smoke={args.smoke} output={output_dir}", flush=True)

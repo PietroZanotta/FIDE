@@ -28,8 +28,8 @@ DEFAULT_TRIALS = SCRIPT_DIR / "outputs" / "pareto" / "validation_trial_summaries
 EXPECTED_HASHES = {
     "result": "114df72191c0b519e6e45cf7c574060a47ac6c64201eba7ed7432f2f11fc2c7e",
     "summary": "2e29a178e3850ccb35c067006fb565bcb4f5fb845740ab4b6d4e4859034b80db",
-    "methods": "4f648a6c6478fa76c443b5fcdbfc1f8b487c625075fb9d0f521f045465349c46",
-    "selection": "921d9edb24d10d220b018092705abec318677c9d310f583d53827ecea9824401",
+    "methods": "ecc97198987d12a07178f7650987312a92301d92a9deb97178ce3e4b3e0fb433",
+    "selection": "074782c18571679badc806dd85c28d3a92e85dda1bd455c4d4aac3c181d18412",
     "trials": "7215f0c01230e6c7946be3fc5f2fe7d65e5233a20b8270e1b3d33713973ee6ed",
 }
 

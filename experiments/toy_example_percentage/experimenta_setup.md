@@ -9,9 +9,10 @@ section, supplement, results table, reproducibility statement, or figure
 caption.
 
 The active scientific result is the corrected positive-support physical-`q_h`
-Full sweep. The pre-correction/mixed artifacts under
-`outputs/old/pareto_pre_corrected_full/` are retained only as provenance and
-must not be presented as the current result.
+Full sweep. The pre-correction/mixed artifacts are provenance only and must not
+be presented as the current result. The ignored `outputs/old/` tree is absent
+from a normal checkout; the README documents how to reconstruct its exact seed
+state from Git history for a full replay.
 
 ## 1. Experiment identity and status
 
@@ -499,6 +500,11 @@ Important qualifications:
   were evaluated in this authoritative sweep.
 
 ## 17. Reproduction
+
+The commands below describe the original in-place production layout. For a
+fresh checkout, use the README's three-level reproduction procedure: it adds
+the required archive bootstrap and writes a replay outside the tracked
+authoritative directory.
 
 Run from the repository root with 64-bit JAX enabled:
 
