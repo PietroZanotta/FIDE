@@ -35,8 +35,8 @@ DEFAULT_OUTPUT_STEM = SCRIPT_DIR / "figures" / "toy_population_correction_sensor
 
 TIME_INDICES = (0, 6, 14, 20)
 SENSOR_COLORS = ("#16A6A1", "#F28E5B")
-PAPER_BACKGROUND = "#F5F1EA"
-PANEL_BACKGROUND = "#FBF9F5"
+PAPER_BACKGROUND = "#FFFFFF"
+PANEL_BACKGROUND = "#FFFFFF"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -486,7 +486,7 @@ def make_figure(data: dict[str, Any]) -> plt.Figure:
 
     angles_deg = np.rad2deg(data["angles"])
     fig.suptitle(
-        "Two sensors, one evolving population",
+        "Analytic Gaussian-mixture transport",
         x=0.105,
         y=0.955,
         ha="left",

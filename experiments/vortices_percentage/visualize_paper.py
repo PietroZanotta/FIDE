@@ -38,8 +38,8 @@ DEFAULT_OUTPUT_STEM = SCRIPT_DIR / "figures" / "vortices_population_correction_s
 # All four panels are frozen acquisition nodes on the 21-node scientific grid.
 TIME_INDICES = (0, 5, 15, 20)
 SENSOR_COLORS = ("#1CA6A3", "#F28E5B", "#9271C2", "#5AAA70")
-PAPER_BACKGROUND = "#F4F1EA"
-PANEL_BACKGROUND = "#FBFAF6"
+PAPER_BACKGROUND = "#FFFFFF"
+PANEL_BACKGROUND = "#FFFFFF"
 FLOW_CMAP = LinearSegmentedColormap.from_list(
     "vortex_density",
     ("#F7F3EA", "#DCC8A6", "#D77A61", "#8D3D55", "#272442"),

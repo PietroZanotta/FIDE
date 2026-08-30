@@ -291,7 +291,7 @@ def _render_frames(
 
     angles = np.rad2deg(data["angles"])
     fig.suptitle(
-        "Two sensors, one evolving population",
+        "Analytic Gaussian-mixture transport",
         x=0.045,
         y=0.965,
         ha="left",
