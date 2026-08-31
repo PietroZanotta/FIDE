@@ -30,13 +30,7 @@ This lets us use trusted endpoint information and trusted observable responses w
 
 - **Characterizes Full transportability through a weighted Poisson problem.** In the balanced probability-law setting, the minimum-energy Full correction is the gradient of a potential solving a density-weighted Poisson equation. Equivalently, the Full action is a weighted negative-Sobolev $H^{-1}$ norm of the reference-relative continuity residual.
 
-- **Separates visible and hidden dynamical corrections.** The minimum Full correction admits an exact orthogonal decomposition into a component visible through the measured moment rates and a complementary *hidden* component that is invisible to those measurements:
-
-  ```math
-  \text{Full action} = \text{Tangent action} + \text{Hidden action.}
-  ```
-
-  The decomposition therefore quantifies how much of the law-level dynamical discrepancy can (and cannot) be detected from the chosen observables.
+- **Separates visible and hidden dynamical corrections.** The minimum Full correction admits an exact orthogonal decomposition into a component visible through the measured moment rates and a complementary *hidden* component that is invisible to those measurements: **Full action = Tangent action + Hidden action.** The decomposition therefore quantifies how much of the law-level dynamical discrepancy can (and cannot) be detected from the chosen observables.
 
 - **Shows that matching moment dynamics can be fundamentally insufficient.** The gap between moment-level and law-level compatibility is not merely numerical. There is no universal constant controlling Full action by Tangent action: smooth examples exist in which the moment-rate correction vanishes while the Full law-level correction remains strictly positive.
 
@@ -99,33 +93,17 @@ Scientific usefulness remains primary. FIDE first restricts attention to measure
 ## Problem Statement
 Consider a dynamical system whose microscopic state at time $t$ is a random variable
 
-```math
-X_t \sim P_t,
-```
+$$X_t \sim P_t,$$
 
 where $P_t$ is the unknown population law. In many experiments we cannot observe $P_t$ directly. Instead, a **measurement design** $\eta$ (for example, a set of sensor locations, projection angles, or observable parameters) determines an observable map $\Phi_\eta$, and the experiment gives access only to aggregate quantities of the form
 
-```math
-c_\eta(t) = \mathbb{E}_{P_t}\left[\Phi_\eta(X_t)\right].
-```
+$$c_\eta(t) = \mathbb{E}_{P_t}\left[\Phi_\eta(X_t)\right].$$
 
 In practice these quantities may themselves be observed sparsely and noisily, so we reconstruct a smooth trajectory $\hat c_\eta(t)$ from the available measurements.
 
 The central difficulty is that finitely many aggregate measurements do **not** uniquely identify the underlying law. At each time they instead define a **moment fiber**
 
-```math
-\mathcal{F}_\eta(\hat c_\eta(t)) =
-
-\left\{
-
-Q :
-
-\mathbb{E}_{Q}[\Phi_\eta(X)] =
-
-\hat c_\eta(t)
-
-\right\},
-```
+$$\mathcal{F}_\eta(\hat c_\eta(t)) = \left\{ Q : \mathbb{E}_{Q}[\Phi_\eta(X)] = \hat c_\eta(t) \right\},$$
 
 containing all population laws that reproduce the measured observables.
 
@@ -141,15 +119,7 @@ FIDE separates these two requirements deliberately. A user-specified **scientifi
 
 The resulting **FIDE/Full design** solves, schematically,
 
-```math
-\eta_{\mathrm{Full}}
-
-\in
-
-\arg\min_{\eta:\,R(\eta)\leq R_{\max}}
-
-A(\eta),
-```
+$$\eta_{\mathrm{Full}} \in \arg\min_{\eta:\,R(\eta)\leq R_{\max}} A(\eta).$$
 
 where $A(\eta)$ is the **Full action**: the minimum dynamical correction required to realize the complete law path implied by the measurements.
 
@@ -162,147 +132,59 @@ Please refer to our [technical report](full_report.pdf) for further info on the 
 
 FIDE turns the problem above into a differentiable pipeline from **measurement design** to **law reconstruction** to **dynamical compatibility**.
 
-1. **Choose a measurement design and reconstruct its aggregate observations.**
+**1. Choose a measurement design and reconstruct its aggregate observations.**
 
-   A design $\eta$ specifies the sensor geometry or, more generally, the parameters of the observable map $\Phi_\eta$. Sparse population-level measurements are used to reconstruct the moment trajectory
+A design $\eta$ specifies the sensor geometry or, more generally, the parameters of the observable map $\Phi_\eta$. Sparse population-level measurements are used to reconstruct the moment trajectory $\hat c_\eta(t)$ and, when needed, its derivative $\dot{\hat c}_\eta(t)$. These are the pieces of intermediate information we require the experiment or predictive simulator to provide reliably.
 
-   ```math
-   \hat c_\eta(t)
+**2. Construct the moment fiber.**
 
-   \quad\text{and, when needed,}\quad
+At each time, the reconstructed measurements determine the set $\mathcal{F}_\eta(\hat c_\eta(t))$, containing every law consistent with the observations. The experiment therefore does not provide a unique population law; it provides a constraint on the law.
 
-   \dot{\hat c}_\eta(t).
-   ```
+**3. Lift the measurements to a canonical law.**
 
-   These are the pieces of intermediate information we require the experiment or predictive simulator to provide reliably.
+FIDE resolves the ambiguity inside the moment fiber using the same frozen reference $\widetilde Q_t$ for every candidate design. At each time it computes the information projection
 
-2. **Construct the moment fiber.**
+$$Q_t^\eta = \arg\min_{Q \in \mathcal{F}_\eta(\hat c_\eta(t))} D_{\mathrm{KL}}\left(Q \| \widetilde Q_t\right).$$
 
-   At each time, the reconstructed measurements determine the set
+The resulting path $t \mapsto Q_t^\eta$ is the **measurement-implied law path**.
 
-   ```math
-   \mathcal{F}_\eta(\hat c_\eta(t)),
-   ```
+Importantly, $Q_t^\eta$ is not claimed to be the unknown physical truth. It is a canonical completion of the aggregate evidence: the measurements determine what must be matched, while the reference supplies what remains unresolved.
 
-   containing every law consistent with the observations.
+**4. Evaluate scientific adequacy.**
 
-   The experiment therefore does not provide a unique population law. It provides a constraint on the law.
+The projected law is evaluated using an externally specified scientific risk $R(\eta)$, such as error in a quantity of interest, held-out reconstruction error, or another task-specific criterion. This step remains primary: a design with poor scientific performance is not made attractive simply because it is easy to reconcile with the reference.
 
-3. **Lift the measurements to a canonical law.**
+**5. Measure full-law dynamical compatibility.**
 
-   FIDE resolves the ambiguity inside the moment fiber using the same frozen reference $\widetilde Q_t$ for every candidate design. At each time it computes the information projection
+Let $q_t^\eta$ denote the density of the projected law and let $u_t$ be the frozen reference velocity. FIDE asks for the smallest velocity correction $\delta_t$ such that the **entire projected law** satisfies the continuity equation
 
-   ```math
-   Q_t^\eta =
+$$\partial_t q_t^\eta + \nabla\cdot\left(q_t^\eta(u_t+\delta_t)\right) = 0.$$
 
-   \arg\min_{Q \in \mathcal{F}_\eta(\hat c_\eta(t))}
+In the balanced setting (no probability mass can be created), the minimum-energy correction has the form
 
-   D_{\mathrm{KL}}\!\left(Q\,\|\,\widetilde Q_t\right).
-   ```
+$$\delta_t^\star = -\nabla\psi_t^\star.$$
 
-   The resulting path $t \mapsto Q_t^\eta$ is the **measurement-implied law path**.
+The potential $\psi_t^\star$ solves the density-weighted Poisson problem
 
-   Importantly, $Q_t^\eta$ is not claimed to be the unknown physical truth. It is a canonical completion of the aggregate evidence: the measurements determine what must be matched, while the reference supplies what remains unresolved.
+$$\nabla\cdot\left(q_t^\eta\nabla\psi_t^\star\right) = \partial_t q_t^\eta + \nabla\cdot\left(q_t^\eta u_t\right).$$
 
-4. **Evaluate scientific adequacy.**
+We retrieve similar equations for the unbalanced dynamics case as well. The corresponding **Full action** is
 
-   The projected law is evaluated using an externally specified scientific risk
+$$A(\eta) = \int \mathbb{E}_{Q_t^\eta}\left[\|\delta_t^\star(X)\|^2\right]\rho(dt).$$
 
-   ```math
-   R(\eta),
-   ```
+It measures how much additional dynamical effort is required to realize the complete measurement-implied law relative to the frozen reference.
 
-   such as error in a quantity of interest, held-out reconstruction error, or another task-specific criterion.
+**6. Optimize the experiment, not the reference.**
 
-   This step remains primary: a design with poor scientific performance is not made attractive simply because it is easy to reconcile with the reference.
+FIDE minimizes Full action only inside the scientifically admissible set:
 
-5. **Measure full-law dynamical compatibility.**
+$$\min_{\eta:\,R(\eta)\leq R_{\max}} A(\eta).$$
 
-   Let $q_t^\eta$ denote the density of the projected law and let $u_t$ be the frozen reference velocity. FIDE asks for the smallest velocity correction $\delta_t$ such that the **entire projected law** satisfies the continuity equation
+When $\eta$ is continuous, gradients are propagated through the moment reconstruction, information projection, scientific risk, and Full-action computation. The measurement geometry can therefore be updated with a gradient-based step such as
 
-   ```math
-   \partial_t q_t^\eta
+$$\eta \leftarrow \eta - \alpha\nabla_\eta \mathcal{L}.$$
 
-   +
-
-   \nabla\!\cdot
-
-   \left(
-
-   q_t^\eta (u_t+\delta_t)
-
-   \right) =
-
-   0.
-   ```
-
-   In the balanced setting (no probability mass can be created), the minimum-energy correction has the form
-
-   ```math
-   \delta_t^\star = -\nabla\psi_t^\star,
-   ```
-
-   where $\psi_t^\star$ solves the density-weighted Poisson problem
-
-   ```math
-   \nabla\!\cdot
-
-   \left(
-
-   q_t^\eta\nabla\psi_t^\star
-
-   \right) =
-
-   \partial_t q_t^\eta
-
-   +
-
-   \nabla\!\cdot(q_t^\eta u_t).
-   ```
-
-  We retrieve similar equations for the unbalanced dynamics case as well. The corresponding **Full action**
-
-   ```math
-   A(\eta) =
-
-   \int
-
-   \mathbb{E}_{Q_t^\eta}
-
-   \left[
-
-   \lVert\delta_t^\star(X)\rVert^2
-
-   \right]
-
-   \rho(dt)
-   ```
-
-   measures how much additional dynamical effort is required to realize the complete measurement-implied law relative to the frozen reference.
-
-6. **Optimize the experiment, not the reference.**
-
-   FIDE minimizes Full action only inside the scientifically admissible set,
-
-   ```math
-   \min_\eta A(\eta)
-
-   \qquad
-
-   \text{subject to}
-
-   \qquad
-
-   R(\eta)\leq R_{\max}.
-   ```
-
-   When $\eta$ is continuous, gradients are propagated through the moment reconstruction, information projection, scientific risk, and Full-action computation. The measurement geometry can therefore be updated with a gradient-based step such as
-
-   ```math
-   \eta \leftarrow \eta - \alpha\nabla_\eta \mathcal{L}.
-   ```
-
-   The frozen reference itself is never retrained during this optimization. Every candidate design is judged against the same background dynamics.
+The frozen reference itself is never retrained during this optimization. Every candidate design is judged against the same background dynamics.
 
 In short, the FIDE pipeline is
 
@@ -398,33 +280,15 @@ gradient dA/deta and constrained sensor update                     [JAX]
 
 The first Tesseract solves, at each selected time, the calibration equation
 
-```math
-\sum_i q_i(\lambda,\eta)\,\Phi_\eta(x_i) =
+$$\sum_i q_i(\lambda,\eta)\Phi_\eta(x_i) = \hat c_\eta(t).$$
 
-\hat c_\eta(t),
-
-\qquad
-
-q_i(\lambda,\eta)
-
-\propto
-
-b_i\exp\!\left(\lambda^\top\Phi_\eta(x_i)\right).
-```
+$$q_i(\lambda,\eta) \propto b_i\exp\left(\lambda^\top\Phi_\eta(x_i)\right).$$
 
 The sensor angles affect both the observable values and the reconstructed moment targets. Rather than differentiating through every Newton step, the Tesseract differentiates the converged calibration condition. Its central linear system is the covariance of the two sensor observables,
 
-```math
-C_{t,\eta} =
+$$C_{t,\eta} = \mathrm{Cov}_{Q_t^\eta}(\Phi_\eta,\Phi_\eta).$$
 
-\operatorname{Cov}_{Q_t^\eta}(\Phi_\eta,\Phi_\eta),
-
-\qquad
-
-D_\eta\lambda_{t,\eta} =
-
--C_{t,\eta}^{-1}D_\eta F.
-```
+$$D_\eta\lambda_{t,\eta} = -C_{t,\eta}^{-1}D_\eta F.$$
 
 The calibrated particle weights determine the projected density and its reference-relative continuity forcing. After rasterization, the second Tesseract solves the weighted-Poisson system that defines the Full correction. Its adjoint rule propagates the action derivative back through the PDE solution without storing or differentiating through hundreds of PCG iterations.
 
@@ -486,39 +350,19 @@ This section gives the visual and conceptual overview. The full specification, o
 ### The system
 The state is a point $x=(x_1,x_2)$ in $[-3.2,3.2]^2$. Define an antipodal pair of Gaussian lobes by
 
-```math
-g_\alpha(x) =
+$$g_\alpha(x) = \frac{1}{2}\mathcal{N}\left(x;1.5d(\alpha),0.3^2I\right) + \frac{1}{2}\mathcal{N}\left(x;-1.5d(\alpha),0.3^2I\right).$$
 
-\frac{1}{2}\,\mathcal N\!\left(x;1.5d(\alpha),0.3^2I\right)
-
-+
-
-\frac{1}{2}\,\mathcal N\!\left(x;-1.5d(\alpha),0.3^2I\right),
-
-\qquad
-
-d(\alpha)=(\cos\alpha,\sin\alpha).
-```
+$$d(\alpha)=(\cos\alpha,\sin\alpha).$$
 
 The hidden population evolves along the analytic path
 
-```math
-\rho_t^\alpha =
-
-(1-t)^2g_0+2t(1-t)g_\alpha+t^2g_{\pi/2},
-
-\qquad t\in[0,1].
-```
+$$\rho_t^\alpha = (1-t)^2g_0+2t(1-t)g_\alpha+t^2g_{\pi/2},\ t\in[0,1].$$
 
 It begins as a horizontal pair, passes through a mixture whose intermediate orientation $\alpha$ is uncertain between $30^\circ$ and $60^\circ$, and ends as a vertical pair. The common endpoints are supplied to a neural reference flow, which is then frozen. Its intermediate trajectory is a shared dynamical background—not privileged access to the analytic hidden path.
 
 Two Gaussian sensors are placed on the same radius-$1.5$ ring as the lobe centers. A sensor at angle $\theta_j$ has response
 
-```math
-\Phi_j(x;\theta_j) =
-
-\exp\!\left(-\frac{\lVert x-1.5d(\theta_j)\rVert^2}{2(0.45)^2}\right).
-```
+$$\Phi_j(x;\theta_j) = \exp\left(-\frac{\| x-1.5d(\theta_j)\|^2}{2(0.45)^2}\right).$$
 
 Each sensor returns only the population average of this response. A finite trial observes 100 particles at 11 acquisition times, with detector-noise standard deviation $0.01$. Thus the experiment never observes the complete density shown in the figures below; those densities are available only because this is a validation benchmark.
 
@@ -544,13 +388,9 @@ The design variable is the pair of sensor angles $\eta=(\theta_1,\theta_2)$. Eve
 
 For an allowed Law-relative risk increase $p\in\{0.5,1,2,3,4,5\}$, Full and Tangent must satisfy
 
-```math
-L(\eta)\le L_{\max},
+$$L(\eta)\leq L_{\max}.$$
 
-\qquad
-
-R(\eta)\le\left(1+\frac{p}{100}\right)R_{\mathrm{Law}}.
-```
+$$R(\eta)\leq\left(1+\frac{p}{100}\right)R_{\mathrm{Law}}.$$
 
 This is an information-first comparison: Full action does not compensate for an uninformative experiment. It ranks designs only after the population and finite-data scientific-risk screens have been passed. Candidate selection uses frozen data, and the final geometry is evaluated on a disjoint bank of 128 validation trials.
 
