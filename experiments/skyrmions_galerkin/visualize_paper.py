@@ -33,8 +33,8 @@ DEFAULT_OUTPUT_STEM = SCRIPT_DIR / "figures" / "skyrmion_population_correction_s
 
 TIME_INDICES = (0, 4, 8, 12)
 SENSOR_COLORS = ("#1CA6A3", "#F28E5B", "#9271C2", "#5AAA70")
-PAPER_BACKGROUND = "#F4F1EA"
-PANEL_BACKGROUND = "#FBFAF6"
+PAPER_BACKGROUND = "#FFFFFF"
+PANEL_BACKGROUND = "#FFFFFF"
 DENSITY_CMAP = LinearSegmentedColormap.from_list(
     "skyrmion_density",
     ("#F7F3EA", "#D9C8AA", "#C66B67", "#713B62", "#20233C"),

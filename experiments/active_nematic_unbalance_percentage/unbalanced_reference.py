@@ -1,4 +1,4 @@
-"""Factorized two-species endpoint reference over the single t=21 -> 31 interval.
+"""Factorized two-species endpoint reference over one declared physical interval.
 
 Each species owns an existing normalized ``PeriodicReferenceFlow`` for shape.
 No intermediate physical marginal enters training.  Finite mass is represented
@@ -173,7 +173,8 @@ def endpoint_pair_mass_schedule(
     plus = bank.mean_mass("plus", run_indices)
     minus = bank.mean_mass("minus", run_indices)
     # Reference construction is endpoint-only: even the constant topological
-    # sector is inferred from t=21 and t=31, never from hidden marginals.
+    # sector is inferred from the two declared endpoints, never from hidden
+    # intermediate marginals.
     imbalance = float(0.5 * ((plus[0] - minus[0]) + (plus[-1] - minus[-1])))
     pair = 0.5 * (plus + minus)
     return FisherRaoPairMassSchedule(

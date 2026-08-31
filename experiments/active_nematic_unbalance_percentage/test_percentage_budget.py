@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ast
+import inspect
 import json
+import textwrap
 from pathlib import Path
 from typing import NamedTuple
 
@@ -19,6 +22,7 @@ from experiments.active_nematic_unbalance_percentage.percentage_selection import
     _explicit_candidate,
     _audit_full,
     _risk_passes,
+    optimize_percentage_designs,
     percentage_risk_budget,
 )
 from experiments.active_nematic_unbalance_percentage.unbalanced_experiment import (
@@ -202,6 +206,20 @@ def test_stable_prefix_enables_repeated_full_prescreen_audit_hit() -> None:
         )
     assert exp.calls == 2  # one prefix audit plus one complete-bank audit
     assert audit_cache.stats() == {"hits": 2, "misses": 2, "entries": 2}
+
+
+def test_percentage_optimizer_routes_prefix_cache_only_to_full_audit() -> None:
+    """Guard the production-only wiring that a small smoke run did not reach."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(optimize_percentage_designs)))
+    calls = {
+        node.func.id: {keyword.arg for keyword in node.keywords}
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"_law_screen", "_audit_full"}
+    }
+    assert "prefix_cache" not in calls["_law_screen"]
+    assert "prefix_cache" in calls["_audit_full"]
 
 
 def test_remembered_scalar_authority_skips_batch_probe() -> None:

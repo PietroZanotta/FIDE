@@ -57,6 +57,106 @@ Focused tests:
   experiments/skyrmions_galerkin/test_single_reference_b1_preflight.py
 ```
 
+## Three-reference B1 Pareto study
+
+The additive three-reference study reuses the three frozen particle-matched B1
+bridge checkpoints as an equal-weight design ensemble. Scientific risk and
+forcing support must pass separately for every flow; Tangent and K=280 Full
+actions are averaged over independent per-flow solves. Run or resume it with:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_three_reference_pareto --stage all
+```
+
+Its isolated output root is
+`outputs/skyrmion_b1_galerkin_pareto_3references_v1/`. Individual stages are
+`protocol`, `data`, `law`, `candidates`, `screen`, `tangent`, `full`, and
+`finalize`; every expensive completed artifact is reused on restart.
+
+Evaluate the completed result and regenerate its robust Pareto PNG/PDF without
+rerunning simulation or optimization:
+
+```bash
+.venv/bin/python experiments/skyrmions_galerkin/eval_pareto.py --three-reference
+MPLBACKEND=Agg .venv/bin/python experiments/skyrmions_galerkin/visualize_pareto.py --three-reference
+```
+
+The evaluator checks every frozen per-flow risk ceiling, the equal-weight mean
+action, nesting, Full-gap receipts, and validation isolation. The visualization
+shows certified Tangent action, realized risk changes for all three flows, and
+per-flow budget use; absent Full points are labeled as certification gaps.
+
+## Independent per-seed Pareto studies
+
+Before starting a new common-discretization per-seed Pareto series, qualify the
+three independently fitted Laws on the same Galerkin task:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_three_law_qualification --stage all
+```
+
+This prospectively tests the shared K/rank-tolerance ladder on development
+banks, confirms the selected setting on the larger authoritative banks, and
+writes `outputs/skyrmion_b1_three_law_common_task_v1/pareto_handoff.json` only
+if every Law/reference-flow diagonal certificate passes. Later Pareto runs must
+consume that handoff and include the corresponding Law as a mandatory Full
+candidate at every allowance.
+
+The original K>=120 qualification is preserved as a fail-closed diagnostic. If
+it reports that the residual is already worsening at the bottom of the ladder,
+run the frozen lower-K corrective follow-up:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_three_law_qualification_v2 --stage all
+```
+
+If v2 isolates a K-independent raw forcing-mean fluctuation on its smaller
+development audit, the final fail-closed larger-bank confirmation is:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_three_law_qualification_v3
+```
+
+V3 retains every centered development gate and requires the original,
+unamended complete certificate on all three 65k authoritative confirmations.
+
+The support-robust Law refreeze, which is the Pareto-ready qualification entry
+point, is:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_three_law_qualification_v4 --stage all
+```
+
+It refreezes each Law only after the original support/forcing gates pass on four
+selection-bank roles, rechecks the common K ladder, and reserves the
+authoritative audit role for the final complete certificate.
+
+The seed-addressable runner executes all six risk allowances for one reference
+flow at a time. Each seed has an isolated output root under
+`outputs/skyrmion_b1_galerkin_pareto_per_seed_v1/<seed>/`, while deterministic
+selection seeds and allowance definitions are shared. Run the first seed with:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_per_seed_pareto --seed B1_seed0 --stage all
+```
+
+Additional seeds are additive and do not rerun completed seeds:
+
+```bash
+.venv/bin/python -m experiments.skyrmions_galerkin.run_per_seed_pareto --seed B1_seed1 --stage all
+.venv/bin/python -m experiments.skyrmions_galerkin.run_per_seed_pareto --seed B1_seed2 --stage all
+```
+
+Each completed seed writes `evaluations/allowance_<p>/eval.json` and `eval.md`
+for 0.5%, 1%, 2%, 3%, 4%, and 5%. Display all six or one allowance with the
+shared read-only evaluator, then regenerate the seed-level PNG/PDF:
+
+```bash
+.venv/bin/python experiments/skyrmions_galerkin/eval.py --seed B1_seed0
+.venv/bin/python experiments/skyrmions_galerkin/eval.py --seed B1_seed0 --allowance 2
+MPLBACKEND=Agg .venv/bin/python -m experiments.skyrmions_galerkin.visualize_per_seed_pareto --seed B1_seed0
+```
+
 Historical and superseded study documents are preserved, without modification,
 under [`old_stuff/`](old_stuff/). Production code, sealed artifacts, and output
 directories remain in their original locations.

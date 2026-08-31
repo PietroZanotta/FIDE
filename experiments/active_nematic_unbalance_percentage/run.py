@@ -26,7 +26,13 @@ from mfsi.flow_matching import FlowMatchingConfig
 from mfsi.io import jsonable, write_json
 
 from active_nematic_solver import ActiveNematicParams
-from domain import PhysicalBank, SplitConfig, generate_physical_bank, make_run_split
+from domain import (
+    EmpiricalEndpointSource,
+    PhysicalBank,
+    SplitConfig,
+    generate_physical_bank,
+    make_run_split,
+)
 from periodic_reference import PeriodicReferenceFlow, train_periodic_reference_flow
 from risk import histogram_mass, periodic_grid_mmd2
 from unbalanced_experiment import (
@@ -120,12 +126,11 @@ def flow_config(cfg: dict[str, Any], seed: int) -> FlowMatchingConfig:
 
 
 def normalized_times(bank: TwoSpeciesDefectBank) -> np.ndarray:
-    if not np.isclose(bank.times[0], 21.0) or not np.isclose(bank.times[-1], 31.0):
-        raise ValueError(
-            "unbalanced reference requires physical endpoints t=21 and t=31; "
-            f"got {bank.times[0]:g} and {bank.times[-1]:g}"
-        )
-    return np.asarray((bank.times - 21.0) / 10.0, dtype=np.float64)
+    times = np.asarray(bank.times, dtype=np.float64)
+    interval = float(times[-1] - times[0])
+    if not np.isfinite(times).all() or interval <= 0.0:
+        raise ValueError("reference physical times must define a finite positive interval")
+    return np.asarray((times - times[0]) / interval, dtype=np.float64)
 
 
 def output_dir(args: argparse.Namespace) -> Path:
@@ -220,6 +225,51 @@ def species_reference_seed(cfg, base_seed: int, species: str) -> int:
     return int(base_seed) + int(cfg["reference_training"].get(f"{species}_seed_offset", default))
 
 
+def reference_training_source(cfg, bank, train_runs, species: str, periods):
+    """Return the frozen endpoint source under the declared initial-law semantics."""
+    minimum_mass = float(cfg["unbalanced"]["minimum_mass"])
+    endpoint_seed = (
+        int(cfg["seed"])
+        + int(cfg["reference"].get("endpoint_seed_offset", 2001))
+        + (species == "minus")
+    )
+    source = endpoint_source_for_species(
+        bank,
+        species,
+        run_indices=train_runs,
+        sample_count=int(cfg["reference"]["endpoint_particles"]),
+        seed=endpoint_seed,
+        minimum_mass=minimum_mass,
+    )
+    density_model = cfg["reference_training"].get(
+        "initial_endpoint_density_model", "empirical"
+    )
+    if density_model == "empirical":
+        return source
+    if density_model != "periodic_kde":
+        raise ValueError(
+            "reference_training.initial_endpoint_density_model must be "
+            "'empirical' or 'periodic_kde'"
+        )
+
+    measure = bank.measure(species, 0, train_runs)
+    probabilities = measure.normalized_probabilities(minimum_mass=minimum_mass)
+    x0 = sample_periodic_kde_bank(
+        measure.states,
+        probabilities,
+        sample_count=int(cfg["reference"]["endpoint_particles"]),
+        seed=endpoint_seed,
+        periods=np.asarray(periods),
+        position_std=float(
+            cfg["reference"].get("bank_position_jitter_std", 0.0)
+        ),
+        beta_std=float(cfg["reference"].get("bank_beta_jitter_std", 0.0)),
+    )
+    # Preserve the exact target sample bank used by the empirical-source
+    # baseline.  This isolates the initial-density semantics alone.
+    return EmpiricalEndpointSource(jnp.asarray(x0), source.x1)
+
+
 def ensure_reference(cfg, bank, train_runs, base_seed: int, seed_dir: Path):
     """Build/load two normalized endpoint flows and one analytic mass schedule."""
     if cfg["unbalanced"].get("mass_interpolation", "fisher_rao") != "fisher_rao":
@@ -228,6 +278,9 @@ def ensure_reference(cfg, bank, train_runs, base_seed: int, seed_dir: Path):
     tau = normalized_times(bank)
     periods = jnp.asarray([bank.box_size, bank.box_size, 2.0 * np.pi])
     minimum_mass = float(cfg["unbalanced"]["minimum_mass"])
+    training_density_model = cfg["reference_training"].get(
+        "initial_endpoint_density_model", "empirical"
+    )
     schedule = endpoint_pair_mass_schedule(bank, run_indices=train_runs, minimum_mass=minimum_mass)
     result = {}
     for species in ("plus", "minus"):
@@ -239,13 +292,18 @@ def ensure_reference(cfg, bank, train_runs, base_seed: int, seed_dir: Path):
                 checkpoint,
                 substeps_per_interval=int(cfg["reference"].get("rk4_substeps_per_time_interval", 16)),
             )
+            saved_density_model = (flow.metadata or {}).get(
+                "training_initial_density_model", "empirical"
+            )
+            if saved_density_model != training_density_model:
+                raise RuntimeError(
+                    f"{checkpoint} was trained with initial density model "
+                    f"{saved_density_model!r}, expected {training_density_model!r}"
+                )
             history = json.loads(history_path.read_text()).get("history", []) if history_path.is_file() else []
         else:
-            source = endpoint_source_for_species(
-                bank, species, run_indices=train_runs,
-                sample_count=int(cfg["reference"]["endpoint_particles"]),
-                seed=int(cfg["seed"]) + int(cfg["reference"].get("endpoint_seed_offset", 2001)) + (species == "minus"),
-                minimum_mass=minimum_mass,
+            source = reference_training_source(
+                cfg, bank, train_runs, species, periods
             )
             flow, history = train_periodic_reference_flow(
                 source, flow_config(cfg, seed), periods=periods,
@@ -254,8 +312,21 @@ def ensure_reference(cfg, bank, train_runs, base_seed: int, seed_dir: Path):
             metadata = dict(flow.metadata or {})
             metadata.update({
                 "experiment": cfg["name"], "species": species,
-                "physical_interval": [21.0, 31.0], "endpoint_only": True,
+                "physical_interval": [float(bank.times[0]), float(bank.times[-1])],
+                "endpoint_only": True,
                 "intermediate_marginals_used_for_training": False,
+                "training_initial_density_model": training_density_model,
+                "training_initial_position_jitter_std": (
+                    float(cfg["reference"].get("bank_position_jitter_std", 0.0))
+                    if training_density_model == "periodic_kde"
+                    else 0.0
+                ),
+                "training_initial_beta_jitter_std": (
+                    float(cfg["reference"].get("bank_beta_jitter_std", 0.0))
+                    if training_density_model == "periodic_kde"
+                    else 0.0
+                ),
+                "rollout_initial_density_model": "periodic_kde",
             })
             flow = PeriodicReferenceFlow(flow.params, flow.periods, flow.substeps_per_interval, metadata)
             flow.save(checkpoint)
@@ -430,7 +501,8 @@ def base_payload(cfg, bank, base_seed, reference, masses, eta, rows, diagnostics
             "plus": "(x,y,beta_plus): vector/comet polarity",
             "minus": "(x,y,beta_minus): triatic phase; arm=beta_minus/3 mod 2pi/3",
         },
-        "physical_interval": [21.0, 31.0], "normalized_times": tau.tolist(),
+        "physical_interval": [float(bank.times[0]), float(bank.times[-1])],
+        "normalized_times": tau.tolist(),
         "reference_training_uses_endpoints_only": True,
         "reference_checkpoints": {
             "plus": str(reference["plus"]["checkpoint"]),

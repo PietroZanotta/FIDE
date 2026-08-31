@@ -83,6 +83,21 @@ Tangent optimizer had completed 3 of 15 starts. The runner reused the frozen
 atomic `result.json` checkpoint. Therefore 0.5% remains reusable and 1% must
 restart under whichever execution implementation is selected.
 
+On the first production restart with both accepted reuse flags, every 1%
+Tangent and Full optimizer start completed, but execution stopped before the
+exact Full prescreen. The newly added `prefix_cache` argument had accidentally
+been attached to `_law_screen`, which does not accept or use prefix banks,
+instead of `_audit_full`, which owns the Full prescreen. Python raised a
+`TypeError`; no 1% receipt was written and no validation data were accessed.
+The argument was moved to `_audit_full`, and a regression test now inspects the
+production optimizer wiring in addition to the existing behavioral prefix-hit
+test. The focused suite passed 22/22 tests. Production was restarted with the
+same frozen configuration, serial optimizer, exact-evaluation reuse, and
+stable-prefix reuse. The certified 0.5% receipt remains unchanged; 1% is being
+recomputed. That restart was then stopped on request after the first of 15
+Tangent starts at 1%. No 1% atomic receipt or validation result was written;
+the certified 0.5% point remains the sole resumable checkpoint.
+
 ## Multistart-acceleration engineering study
 
 Profiling showed that the Pareto process used approximately one CPU core even

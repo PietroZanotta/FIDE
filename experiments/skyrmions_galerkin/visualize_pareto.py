@@ -33,6 +33,13 @@ DEFAULT_VALIDATION = SCRIPT_DIR / "published_official_b1_final_summary.json"
 DEFAULT_OUTPUT_STEM = (
     SCRIPT_DIR / "figures" / "skyrmion_galerkin_pareto_methods"
 )
+THREE_REFERENCE_RUN_DIR = (
+    SCRIPT_DIR / "outputs" / "skyrmion_b1_galerkin_pareto_3references_v1"
+)
+DEFAULT_THREE_REFERENCE_PARETO = THREE_REFERENCE_RUN_DIR / "pareto.json"
+DEFAULT_THREE_REFERENCE_OUTPUT_STEM = (
+    SCRIPT_DIR / "figures" / "skyrmion_b1_galerkin_pareto_3references_v1"
+)
 FIGURE_TITLE = "Skyrmions Galerkin · cost and risk use along the frontier"
 VALIDATION_RISK_NOTE = (
     "validation: p + 5 pp · negative = below frozen Law"
@@ -46,6 +53,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-stem", type=Path, default=DEFAULT_OUTPUT_STEM)
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument("--show", action="store_true")
+    parser.add_argument(
+        "--three-reference", action="store_true",
+        help="plot the robust three-reference Pareto summary",
+    )
+    parser.add_argument(
+        "--pareto", type=Path, default=DEFAULT_THREE_REFERENCE_PARETO,
+        help="three-reference pareto.json artifact",
+    )
     return parser.parse_args()
 
 
@@ -132,8 +147,152 @@ def make_figure(records: list[dict]) -> plt.Figure:
     )
 
 
+def load_three_reference_records(pareto_path: Path) -> tuple[list[str], list[dict]]:
+    """Translate the robust Pareto summary into per-allowance plot records."""
+    payload = _load_json(pareto_path)
+    flows = [str(flow) for flow in payload.get("flow_ids", [])]
+    if len(flows) != 3 or len(set(flows)) != 3:
+        raise ValueError("three-reference result must contain three distinct flows")
+    records: list[dict] = []
+    for row in payload.get("allowances", []):
+        allowance = float(row["allowance_percent"])
+        law = row.get("Law") or {}
+        tangent = row.get("Tangent") or {}
+        if tangent.get("status") != "CERTIFIED":
+            raise ValueError(f"Tangent is not certified at {allowance:g}%")
+        law_risk = law.get("risk_by_flow", {})
+        tangent_risk = tangent.get("risk_by_flow", {})
+        if set(law_risk) != set(flows) or set(tangent_risk) != set(flows):
+            raise ValueError(f"incomplete per-flow risks at {allowance:g}%")
+        risk_change = {
+            flow: 100.0 * (float(tangent_risk[flow]) / float(law_risk[flow]) - 1.0)
+            for flow in flows
+        }
+        for flow, value in risk_change.items():
+            if value > allowance + 1e-8:
+                raise ValueError(f"{flow} exceeds its risk gate at {allowance:g}%")
+        records.append(
+            {
+                "allowance_percent": allowance,
+                "tangent_action": float(tangent["tangent_action"]),
+                "risk_change_percent": risk_change,
+                "budget_used_percent": {
+                    flow: 100.0 * risk_change[flow] / allowance for flow in flows
+                },
+                "full_certified": row.get("Full") is not None,
+            }
+        )
+    if [record["allowance_percent"] for record in records] != [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]:
+        raise ValueError("expected the frozen 0.5%, 1%, 2%, 3%, 4%, 5% allowance grid")
+    return flows, records
+
+
+def make_three_reference_figure(flows: list[str], records: list[dict]) -> plt.Figure:
+    """Plot action, realized per-flow risk, and gate utilization."""
+    allowances = [record["allowance_percent"] for record in records]
+    actions = [record["tangent_action"] for record in records]
+    colors = ("#0072B2", "#D55E00", "#009E73")
+    figure, axes = plt.subplots(1, 3, figsize=(13.2, 4.2), constrained_layout=True)
+    figure.suptitle(
+        "Skyrmions B1 Galerkin · robust Pareto across three reference flows",
+        fontsize=14,
+        fontweight="bold",
+    )
+
+    action_axis, risk_axis, budget_axis = axes
+    action_axis.plot(
+        allowances, actions, marker="o", linewidth=2.2, markersize=6,
+        color="#6A3D9A", label="Tangent (certified)",
+    )
+    action_axis.set_title("Mean tangent action")
+    action_axis.set_xlabel("Risk allowance p (%)")
+    action_axis.set_ylabel("Equal-weight mean action")
+    action_axis.legend(frameon=False, loc="upper right")
+    action_axis.text(
+        0.57, 0.58,
+        "Full K=280:\nno certified point\nat all 6 allowances",
+        transform=action_axis.transAxes,
+        fontsize=9,
+        color="#9C2F2F",
+        bbox={"boxstyle": "round,pad=0.35", "facecolor": "#FFF3F3", "edgecolor": "#D9A4A4"},
+    )
+
+    risk_axis.plot(
+        allowances, allowances, linestyle="--", linewidth=1.5,
+        color="#555555", label="per-flow ceiling",
+    )
+    for flow, color in zip(flows, colors):
+        risk_axis.plot(
+            allowances,
+            [record["risk_change_percent"][flow] for record in records],
+            marker="o", linewidth=2.0, color=color, label=flow,
+        )
+    risk_axis.axhline(0.0, color="#999999", linewidth=0.8)
+    risk_axis.set_title("Realized scientific-risk change")
+    risk_axis.set_xlabel("Risk allowance p (%)")
+    risk_axis.set_ylabel("Change from frozen Law (%)")
+    risk_axis.legend(frameon=False, fontsize=8)
+
+    budget_axis.axhline(
+        100.0, linestyle="--", linewidth=1.5, color="#555555",
+        label="protocol ceiling",
+    )
+    for flow, color in zip(flows, colors):
+        budget_axis.plot(
+            allowances,
+            [record["budget_used_percent"][flow] for record in records],
+            marker="o", linewidth=2.0, color=color, label=flow,
+        )
+    budget_axis.axhline(0.0, color="#999999", linewidth=0.8)
+    budget_axis.set_title("Per-flow risk-budget use")
+    budget_axis.set_xlabel("Risk allowance p (%)")
+    budget_axis.set_ylabel("Signed budget use (%)\n(negative = below Law)")
+    budget_axis.legend(frameon=False, fontsize=8)
+
+    for axis in axes:
+        axis.set_xticks(allowances)
+        axis.grid(True, alpha=0.22, linewidth=0.7)
+        axis.spines[["top", "right"]].set_visible(False)
+    figure.text(
+        0.5, -0.01,
+        "Frozen selection artifacts only · ceilings are (1+p) times each flow's own Law risk · validation not accessed",
+        ha="center", fontsize=8.5, color="#555555",
+    )
+    return figure
+
+
+def save_three_reference_figure(
+    flows: list[str], records: list[dict], output_stem: Path, *, dpi: int
+) -> list[Path]:
+    output_stem = output_stem.expanduser().resolve()
+    output_stem.parent.mkdir(parents=True, exist_ok=True)
+    figure = make_three_reference_figure(flows, records)
+    outputs = [output_stem.with_suffix(".png"), output_stem.with_suffix(".pdf")]
+    figure.savefig(outputs[0], dpi=dpi, bbox_inches="tight")
+    figure.savefig(outputs[1], bbox_inches="tight")
+    plt.close(figure)
+    return outputs
+
+
 def main() -> int:
     args = _parse_args()
+    if args.three_reference:
+        flows, records = load_three_reference_records(args.pareto)
+        output_stem = (
+            args.output_stem
+            if args.output_stem != DEFAULT_OUTPUT_STEM
+            else DEFAULT_THREE_REFERENCE_OUTPUT_STEM
+        )
+        outputs = save_three_reference_figure(
+            flows, records, output_stem, dpi=args.dpi
+        )
+        for path in outputs:
+            print(f"saved {path}")
+        if args.show:
+            figure = make_three_reference_figure(flows, records)
+            plt.show()
+            plt.close(figure)
+        return 0
     records = load_method_records(args.selection, args.validation)
     outputs = save_cost_risk_figure(
         records,

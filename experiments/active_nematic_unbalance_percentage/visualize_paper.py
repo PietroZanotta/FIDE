@@ -31,8 +31,8 @@ DEFAULT_OUTPUT_STEM = SCRIPT_DIR / "figures" / "active_nematic_defect_correction
 
 DISPLAY_INDICES = (0, 4, 8, 10)
 SENSOR_COLORS = ("#159B9A", "#EF855B")
-PAPER_BACKGROUND = "#F4F1EA"
-PANEL_BACKGROUND = "#FBFAF6"
+PAPER_BACKGROUND = "#FFFFFF"
+PANEL_BACKGROUND = "#FFFFFF"
 SIGNED_CMAP = LinearSegmentedColormap.from_list(
     "signed_defect_density",
     ("#203B73", "#78A5C8", "#F8F5ED", "#D98875", "#8F283A"),
@@ -513,6 +513,7 @@ def _prepare_data(args: argparse.Namespace) -> dict[str, Any]:
         "reference": reference,
         "corrected_weights": corrected,
         "target_mass": {"plus": target_plus_mass, "minus": target_minus_mass},
+        "targets": {"plus": plus_target, "minus": minus_target},
         "observations": displayed_observations,
         "multipliers": multipliers,
         "residuals": residuals,

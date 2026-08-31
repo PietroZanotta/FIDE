@@ -596,7 +596,6 @@ def optimize_percentage_designs(
         limit=int(opt.get("full_exact_audit_candidates", 6)),
         mandatory=mandatory_full,
         audit_cache=audit_cache,
-        prefix_cache=prefix_cache,
     )
     full, full_rows = _audit_full(
         exp, bank, full_screened,
@@ -604,6 +603,7 @@ def optimize_percentage_designs(
         finalists=int(opt.get("full_exact_rescore_candidates", 2)),
         mandatory=mandatory_full,
         audit_cache=audit_cache,
+        prefix_cache=prefix_cache,
     )
 
     selected_full = full
