@@ -7,68 +7,68 @@
   "dtype": "float64",
   "cg_tol": 1e-06,
   "cg_maxiter": 360,
-  "repetitions": 3,
+  "repetitions": 5,
   "design_deg": [
-    23.26406012392596,
-    71.72283796963714
+    21.218481145575826,
+    68.84605992792198
   ],
   "jax_devices": [
-    "TFRT_CPU_0"
+    "cuda:0"
   ],
   "cpu_model": "Intel(R) Core(TM) Ultra 9 275HX",
   "logical_cpu_count": 24,
   "affinity_cpu_count": 1,
-  "OMP_NUM_THREADS": "8",
+  "OMP_NUM_THREADS": "24",
   "OMP_PROC_BIND": "close",
   "OMP_PLACES": "cores",
   "tesseract_mode": "in-process Tesseract.from_tesseract_api",
   "timings": {
-    "A_jax_batched_forward_seconds": 0.05499382899142802,
-    "B_tesseract_cpp_forward_seconds": 0.004828600998735055,
-    "C_jax_forward_gradient_seconds": 0.12475457999971695,
-    "D_tesseract_cpp_forward_gradient_seconds": 0.019514675019308925,
-    "native_direct_forward_pcg_seconds": 0.004187709011603147,
-    "native_direct_adjoint_pcg_seconds": 0.00497508401167579,
-    "estimated_tesseract_forward_overhead_seconds": 0.0006408919871319085,
-    "system_construction_iprojection_forcing_raster_seconds": 0.04890418500872329,
-    "stage4_like_jax_value_gradient_seconds": 0.20430535200284794,
-    "stage4_like_tesseract_cpp_value_gradient_seconds": 0.14400957300676964,
-    "exact_one_trial_audit_seconds": 9.616576492000604,
-    "exact_one_trial_native_cold_seconds": 0.7707545809971634,
-    "exact_one_trial_jax_steady_seconds": 4.921643554000184,
-    "exact_one_trial_native_steady_seconds": 0.11014754400821403
+    "A_jax_batched_forward_seconds": 0.0212532529985765,
+    "B_tesseract_cpp_forward_seconds": 0.0015855079982429743,
+    "C_jax_forward_gradient_seconds": 0.050325197000347544,
+    "D_tesseract_cpp_forward_gradient_seconds": 0.008969900001829956,
+    "native_direct_forward_pcg_seconds": 0.002753624998149462,
+    "native_direct_adjoint_pcg_seconds": 0.0035852130022249185,
+    "estimated_tesseract_forward_overhead_seconds": 0.0,
+    "system_construction_iprojection_forcing_raster_seconds": 0.008456698997179046,
+    "stage4_like_jax_value_gradient_seconds": 2.1228524039979675,
+    "stage4_like_tesseract_cpp_value_gradient_seconds": 0.035230303001299035,
+    "exact_one_trial_audit_seconds": null,
+    "exact_one_trial_native_cold_seconds": null,
+    "exact_one_trial_jax_steady_seconds": null,
+    "exact_one_trial_native_steady_seconds": null
   },
   "errors": {
-    "forward_absolute_l2": 9.587284235431495e-09,
-    "forward_relative_l2": 1.3266442781648803e-14,
-    "forward_max_absolute": 1.9099388737231493e-10,
-    "gradient_absolute_l2": 1.8509693437062025e-05,
-    "gradient_relative_l2": 1.4858184990008734e-14,
-    "gradient_max_absolute": 2.1457672119140625e-06,
-    "end_to_end_value_absolute": 9.890754881780595e-12,
-    "end_to_end_value_relative": 1.4282557509987147e-14,
-    "end_to_end_gradient_relative_l2": 4.224010425580592e-15,
-    "end_to_end_gradient_max_absolute": 2.1827872842550278e-11,
-    "exact_one_trial_action_absolute": 1.1709744285326451e-11
+    "forward_absolute_l2": 0.042211696551063486,
+    "forward_relative_l2": 5.013556135504476e-08,
+    "forward_max_absolute": 0.0024254765748992213,
+    "gradient_absolute_l2": 178.81252820640142,
+    "gradient_relative_l2": 1.2544485365276374e-07,
+    "gradient_max_absolute": 18.045957028865814,
+    "end_to_end_value_absolute": 29499129.230455067,
+    "end_to_end_value_relative": 0.999980909834522,
+    "end_to_end_gradient_relative_l2": 0.9997043454513675,
+    "end_to_end_gradient_max_absolute": 8985784.224669008,
+    "exact_one_trial_action_absolute": null
   },
   "native_forward_iterations": {
-    "mean": 180.89285714285714,
-    "max": 198,
-    "max_relative_residual": 9.975885093374597e-07
+    "mean": 59.92857142857143,
+    "max": 64,
+    "max_relative_residual": 9.970584207396108e-07
   },
   "historical_120_cap_check": {
-    "converged_count": 0,
+    "converged_count": 28,
     "system_count": 28,
-    "mean_relative_residual": 0.002482242249200828,
-    "max_relative_residual": 0.009018419289395146,
+    "mean_relative_residual": 7.588106581409218e-07,
+    "max_relative_residual": 9.970584207396108e-07,
     "note": "The former stage-4 cap returned unconverged iterates in the JAX reference path; the shared cap is now 360 without changing tolerance."
   },
   "native_adjoint_iterations": {
-    "mean": 219.78571428571428,
-    "max": 245,
-    "max_relative_residual": 9.940681190178214e-07
+    "mean": 70.03571428571429,
+    "max": 78,
+    "max_relative_residual": 9.936815701895443e-07
   },
-  "stage4_like_speedup": 1.4186928531011191,
-  "exact_trial_steady_speedup": 44.6822813737287,
-  "decision": "integrate exact batching; CUDA unnecessary"
+  "stage4_like_speedup": 60.25643333012754,
+  "exact_trial_steady_speedup": null,
+  "decision": "integrate proxy acceleration; CUDA unnecessary"
 }
