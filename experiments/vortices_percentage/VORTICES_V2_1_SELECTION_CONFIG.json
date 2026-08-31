@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN_PROSPECTIVE_BEFORE_V2_1_SELECTION_BANK",
+  "method_version": "V2.1",
+  "data_role": "SELECTION",
+  "base_v2_config": {
+    "path": "experiments/vortices_percentage_v2/VORTICES_V2_SELECTION_CONFIG.json",
+    "sha256": "8c06b8afee434d945d456c8e9524a4dc5f2ef95ead7c5eaf0ea9fa0de56f93d6",
+    "inherit_all_fields_except_explicit_overrides": true
+  },
+  "immutable_historical_inputs": {
+    "reference_training_seeds": [310000101, 310000102, 310000103],
+    "reference_rollout_seeds": [310003102, 310003103, 310003104],
+    "common_physical_bandwidth": 0.058816544123815116,
+    "failed_v2_selection_namespace": 410000101,
+    "retired_v2_validation_namespace": 410000102
+  },
+  "two_digit_randomness": {
+    "policy": "all newly chosen V2.1 RNG seeds and observation namespaces are integers from 10 through 99; immutable historical identifiers are retained verbatim",
+    "outcome_blind_allocation_rule": "assign the first unused values from the declared simple role ranges before inspecting any V2.1 bank: bank roles 10:15, Tangent roles 20:25, Full roles 30:47",
+    "observation_generation_seed": 10,
+    "selection_namespace": 11,
+    "stress_test_namespace": 12,
+    "validation_namespace": 13,
+    "optimizer_root_seed": 14,
+    "bootstrap_seed": 15,
+    "tangent_local_cloud_seed_by_allowance": {
+      "0.5": 20,
+      "1.0": 21,
+      "2.0": 22,
+      "3.0": 23,
+      "4.0": 24,
+      "5.0": 25
+    },
+    "full_local_cloud_seeds_by_allowance_and_round": {
+      "0.5": [30, 31, 32],
+      "1.0": [33, 34, 35],
+      "2.0": [36, 37, 38],
+      "3.0": [39, 40, 41],
+      "4.0": [42, 43, 44],
+      "5.0": [45, 46, 47]
+    }
+  },
+  "observation_bank_overrides": {
+    "generation_seed": 10,
+    "selection_namespace": 11,
+    "validation_namespace": 13,
+    "selection_master_trials": 128,
+    "validation_trials": 1024
+  },
+  "optimization_overrides": {
+    "optimizer_root_seed": 14,
+    "full": {
+      "candidate_generation": "unchanged_from_failed_V2_except_fresh_two_digit_randomness",
+      "exact_population_and_risk_audit": "every_unique_candidate_before_proxy",
+      "proxy_eligibility": "jointly_feasible_candidates_only",
+      "promoted_candidates": 8,
+      "mandatory_finalists_at_0p5": ["new_law", "current_tangent"],
+      "mandatory_finalists_later": ["previous_tighter_full", "current_tangent"],
+      "if_fewer_than_8_feasible": "evaluate_all_feasible"
+    }
+  },
+  "validation_overrides": {
+    "bootstrap_seed": 15,
+    "bootstrap_resamples": 100000,
+    "validation_trials": 1024
+  },
+  "development_stress_test": {
+    "required_before_final_validation": true,
+    "namespace": 12,
+    "shared_trials": 256,
+    "data_role": "STRESS-TEST",
+    "may_not_confirm_final_method": true
+  },
+  "development_evidence": {
+    "data_role": "DEVELOPMENT",
+    "failed_bank_exact_l_r_audit_sha256": "e730e0adb2d089fe19c9f1cacbaf29e4e5b335eb2eec776dc0f3b0936e85ae1a",
+    "failed_bank_exact_full_audit_sha256": "62175452e0279fa9b8701f7ba6456935adf1428226a09e9507d4f4bc4e14b416",
+    "tight_0p5_feasible_candidates": 34,
+    "best_tight_feasible_old_proxy_rank": 77,
+    "feasible_proxy_exact_pearson_32_trial_prefix": 0.9999771975503498,
+    "feasible_proxy_exact_spearman_32_trial_prefix": 1.0,
+    "conclusion": "feasibility-first corrects the demonstrated pruning-order mechanism; the retained proxy accurately ranks the audited feasible leaders"
+  },
+  "artifact_root": "experiments/vortices_percentage_v2/outputs/prospective_v2_1"
+}

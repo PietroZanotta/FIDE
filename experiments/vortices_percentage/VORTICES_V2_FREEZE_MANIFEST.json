@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN_PROSPECTIVE_NO_OUTCOMES",
+  "freeze_name": "vortices_v2_reflection_neumann_prospective_selection_validation_v1",
+  "freeze_date": "2026-08-30",
+  "scope": "Vortices V2 reference training, selection, and validation; no prospective scientific operation has been run",
+  "repository": {
+    "head": "1e65587684857a84e98fda181fe472d62f46f7a8",
+    "working_tree": "modified_before_and_during_freeze; hashes in this manifest, not repository cleanliness, define the frozen scientific state",
+    "commit_or_tag_created": false,
+    "commit_or_tag_reason": "The pre-existing working tree contains extensive unrelated user changes, so an automatic commit or tag would not be a clean scientific boundary."
+  },
+  "paths": {
+    "selection_config": "experiments/vortices_percentage_v2/VORTICES_V2_SELECTION_CONFIG.json",
+    "numerical_config": "experiments/vortices_percentage_v2/config.json",
+    "reference_seed_provenance": "experiments/vortices_percentage_v2/REFERENCE_SEED_PROVENANCE.md",
+    "frozen_protocol": "experiments/vortices_percentage_v2/VORTICES_V2_SELECTION_VALIDATION_PROTOCOL_FROZEN.md",
+    "freeze_report": "experiments/vortices_percentage_v2/VORTICES_V2_FREEZE_REPORT.md",
+    "preflight": "experiments/vortices_percentage_v2/preflight_vortices_v2_freeze.py",
+    "dry_run": "experiments/vortices_percentage_v2/dry_run_vortices_v2_workflow.py",
+    "bandwidth_freezer": "experiments/vortices_percentage_v2/freeze_common_bandwidth.py",
+    "inference": "experiments/vortices_percentage_v2/v2_inference.py",
+    "selection_contract": "experiments/vortices_percentage_v2/selection_contract.py",
+    "prospective_output_root": "experiments/vortices_percentage_v2/outputs/prospective_v2"
+  },
+  "authorities": {
+    "numerical_prefreeze": {
+      "path": "experiments/vortices_percentage_v2/outputs/vortices_v2_reflection_prefreeze/convergence_summary.json",
+      "sha256": "911ba023d1ec44bb049bc020c750373d2927ee64737c3ca4aeb4c5506ebca572",
+      "role": "old-development-only reflected continuity, convergence, independent-solver, and decomposition authority"
+    },
+    "search_proxy": {
+      "path": "experiments/vortices_percentage_v2/outputs/vortices_v2_search_proxy_prefreeze/proxy_diagnostics.json",
+      "sha256": "cc9b9b0d41c01f242d3528cb8e4ddd7e1e7fbc5d31b095859869ad783afcf579",
+      "role": "old-development-only ranking diagnostic; not a scientific selection outcome",
+      "status": "PASS",
+      "overall_pearson": 0.9999980455388904,
+      "overall_spearman": 1.0
+    }
+  },
+  "prospective": {
+    "reference_training_seeds": [310000101, 310000102, 310000103],
+    "reference_rollout_seeds": [310003102, 310003103, 310003104],
+    "selection_namespace": 410000101,
+    "validation_namespace": 410000102,
+    "observation_generation_seed": 20260815,
+    "selection_master_trials": 128,
+    "selection_prefixes": {
+      "tangent_full_prescreen": [0, 32],
+      "law_finite_risk": [0, 64],
+      "tangent_full_final": [0, 128]
+    },
+    "validation_trials": 1024,
+    "shared_bank_rule": "one selection bank and one disjoint validation bank shared across all three references, methods, candidates, and allowances",
+    "reference_training": {
+      "common_endpoint_dataset": "experiments/vortices_percentage/outputs/run/reference_endpoints.npz",
+      "common_endpoint_sha256": "ad4006927e268c52f621c16c773f0600d803370bd21fb5e0816d82a70dbdfbba",
+      "hidden_width": 128,
+      "hidden_layers": 4,
+      "steps": 12000,
+      "batch_size": 2048,
+      "initial_learning_rate": 0.001,
+      "final_learning_rate_ratio": 0.05,
+      "adam": [0.9, 0.999, 1e-8],
+      "gradient_clip_norm": 10.0,
+      "bridge_schedule": "linear",
+      "bridge_noise_standard_deviation": 0.0,
+      "rollout_particles_per_reference": 32768,
+      "rollout_time_nodes": 21,
+      "rollout_rk4_substeps_per_interval": 16
+    },
+    "reference_qualification": {
+      "reference_only": true,
+      "required_final_step": 12000,
+      "maximum_final_loss": 10.0,
+      "maximum_final_preclip_gradient_norm": 100.0,
+      "finite_checkpoint_rollout_and_velocity_required": true,
+      "rollout_shape": [21, 32768, 2],
+      "weight_shape": [21, 32768],
+      "weight_sum_absolute_tolerance": 1e-12,
+      "minimum_in_domain_base_mass": 0.995,
+      "positive_finite_scott_bandwidth_required": true,
+      "failure_policy": "stop entire experiment and retain failed receipt; do not replace a seed"
+    },
+    "common_bandwidth": {
+      "per_reference": "median over 21 scientific times of weighted two-dimensional Scott bandwidth",
+      "ensemble": "median of exactly three qualified reference bandwidths",
+      "grid_floor": null,
+      "performance_tuning_forbidden": true,
+      "freeze_before_sensor_optimization": true
+    },
+    "finite_observations": {
+      "particles_per_trial": 2000,
+      "acquisition_indices": [0, 2, 5, 8, 10, 12, 15, 18, 20],
+      "detector_noise_standard_deviation": 0.005,
+      "sensor_count": 4,
+      "sensor_width": 0.12
+    },
+    "risk_and_geometry": {
+      "mmd_bandwidths": [0.05, 0.1, 0.2, 0.4],
+      "population_slack": 0.025,
+      "allowances_percent": [0.5, 1.0, 2.0, 3.0, 4.0, 5.0],
+      "center_box": [[0.24, 1.76], [0.24, 0.76]],
+      "minimum_pairwise_separation": 0.24,
+      "population_and_finite_law_aggregation": "equal arithmetic mean across three references",
+      "new_population_and_law_anchors_required": true
+    },
+    "scientific_action": {
+      "identity": "vortices_v2_reflection_neumann_hard_projection",
+      "grid": [256, 128],
+      "time_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      "precision": "float64",
+      "density_floor": 0.0,
+      "boundary_condition": "homogeneous_neumann",
+      "reflected_image_pairs": 4,
+      "equation": "K(q_h) psi_h = -s_h",
+      "projection": "hard_empirical_information_projection"
+    },
+    "optimization": {
+      "root_seed": 310000201,
+      "generated_starts": 64,
+      "raw_start_pool": 8192,
+      "population": "8 Adam starts, 100 steps, lr 0.01, audit 20, require 6 valid",
+      "law": "6 Adam starts, 50 steps, lr 0.008, 4-trial gradient prefix, audit 24 on 64 trials, require 8 valid, two anchor refinements",
+      "tangent": "4 Adam starts, 50 steps, lr 0.006, 4-trial gradient prefix, 12 local proposals per center at scale 0.08, audit 30, 32-trial prescreen, promote 10, final 128",
+      "full": "derivative-free three-round reflected proxy search; 64 global starts; 10 proposals per center per round at scales 0.06, 0.03, 0.015; audit 30; 32-trial prescreen; promote 8; exact final 128",
+      "proxy": "same reflected V2 evaluator on 64x32 grid and all 21 time nodes with the frozen common physical bandwidth",
+      "nested_allowances": true,
+      "tie_tolerance": 1e-6,
+      "old_v1_geometries": "proposal candidates only; no anchor or incumbent status; full prospective reaudit required",
+      "checkpointing": "atomic after every candidate and stage; resume requires exact config/input/bank/reference/bandwidth hashes"
+    },
+    "candidate_numerical_gates": {
+      "population_calibration": 1e-5,
+      "finite_calibration": 0.001,
+      "projection_acceptance": 2e-6,
+      "support_certificate": 1e-10,
+      "minimum_ess_fraction": 0.03,
+      "minimum_in_domain_base_mass": 0.995,
+      "mass_error": 5e-13,
+      "source_compatibility": 5e-12,
+      "normal_reflected_flux": 1e-14,
+      "poisson_relative_residual": 2e-7,
+      "conductive_components": 1,
+      "moment_and_decomposition_tolerances": 1e-6,
+      "float64_required": true
+    },
+    "validation_inference": {
+      "per_reference_effect": "1 - arithmetic_mean(Full) / arithmetic_mean(Law)",
+      "bootstrap_resamples": 100000,
+      "bootstrap_seed": 821775,
+      "pairing": "one common 1024-index vector per resample for all references, methods, and allowances",
+      "simultaneous_family_size": 18,
+      "simultaneous_method": "unstudentized maximum absolute deviation",
+      "confidence": 0.95,
+      "required_positive_simultaneous_lower_bounds": 18,
+      "maximum_simultaneous_half_width": 0.05,
+      "maximum_within_reference_relative_standard_error": 0.1,
+      "all_numerical_evaluations_must_pass": true,
+      "outcome_dependent_stopping_or_estimand_changes_forbidden": true
+    }
+  },
+  "future_artifact_placeholders": {
+    "reference_checkpoints": [
+      "outputs/prospective_v2/references/reference_seed_310000101/checkpoint",
+      "outputs/prospective_v2/references/reference_seed_310000102/checkpoint",
+      "outputs/prospective_v2/references/reference_seed_310000103/checkpoint"
+    ],
+    "qualification_receipts": "outputs/prospective_v2/references/reference_seed_<seed>/qualification_receipt.json",
+    "common_bandwidth_receipt": "outputs/prospective_v2/freeze/common_bandwidth_receipt.json",
+    "selection_bank": "outputs/prospective_v2/selection/shared_selection_bank.npz",
+    "selection_winners": "outputs/prospective_v2/selection/frozen_winners.json",
+    "validation_bank": "outputs/prospective_v2/validation/shared_validation_bank.npz",
+    "final_inference": "outputs/prospective_v2/validation/simultaneous_inference.json"
+  },
+  "frozen_files": {
+    "experiments/vortices_percentage_v2/REFERENCE_SEED_PROVENANCE.md": "83f8d184f110a0a8edaf0af67fec742a56ce5ac02989aee9df4e9cda13701508",
+    "experiments/vortices_percentage_v2/VORTICES_V2_CONTINUITY_COMMUTATOR_AUDIT.md": "9e33f16ac9ac6d14a93b860655c20331e8f1245fc5a2a8e193c9cd007c1853d3",
+    "experiments/vortices_percentage_v2/VORTICES_V2_FREEZE_REPORT.md": "1af5aedf74d6837f2d6f470875970252a7c3d82d0734012f6c497104a36e8fa9",
+    "experiments/vortices_percentage_v2/VORTICES_V2_NUMERICAL_REPAIR.md": "5b63c828346347b82656affdd5ea013f0bc0819fd78d65fabb128db3ba2667d6",
+    "experiments/vortices_percentage_v2/VORTICES_V2_NUMERICAL_REPAIR_FINAL.md": "7258f75a2440721561610bed83f6f4048a641fc1351a85292e78b91efef0abbe",
+    "experiments/vortices_percentage_v2/VORTICES_V2_SELECTION_CONFIG.json": "8c06b8afee434d945d456c8e9524a4dc5f2ef95ead7c5eaf0ea9fa0de56f93d6",
+    "experiments/vortices_percentage_v2/VORTICES_V2_SELECTION_VALIDATION_PROTOCOL_FROZEN.md": "48176166e9a22cf0f5a50fc78c77d3216a19a588ad04f0da45c37474e4015b0e",
+    "experiments/vortices_percentage_v2/VORTICES_V2_VALIDATION_PROTOCOL_DRAFT.md": "dcf4b268317c923e611e69cbeaee86560dbf784453934f568a2b17c943ce5458",
+    "experiments/vortices_percentage_v2/__init__.py": "a565c9798a65d386b07807dcf7aaca0c25cbcf0979cd5d9f10b0a1eccbf6182e",
+    "experiments/vortices_percentage_v2/audit_v2_continuity_commutator.py": "8200076055f44189baa08eb8b2cdc17fcd3016cd4871a022c41699f96aac112f",
+    "experiments/vortices_percentage_v2/config.json": "0962e8834f100a293985f24ee60e94b9bd1318673472e98697bb70ce4b5fb1fa",
+    "experiments/vortices_percentage_v2/continuity_commutator.py": "7ab3fd2eca399040872a08ee75cc6058611536db15965deb9f0d7943b3e63ecd",
+    "experiments/vortices_percentage_v2/core.py": "0c8343aae751cd92fa5411e5e2ba9610dba6b8693165aca8f5c25ca3be5a3fd8",
+    "experiments/vortices_percentage_v2/diagnose_vortices_v2_convergence.py": "d241c89ab80c9ec5075b5d6f9fde299f9656523738ec0ae398e4315d586a392b",
+    "experiments/vortices_percentage_v2/dry_run_vortices_v2_workflow.py": "69d05acb0292fd973a106ac6c932652033055e07c25206908690951f53af38e8",
+    "experiments/vortices_percentage_v2/freeze_common_bandwidth.py": "58d427a16b890dfa6e3cd4c258b1c3f1bd81bffd8e1867253f3ef9492a616a7c",
+    "experiments/vortices_percentage_v2/preflight_vortices_v2_freeze.py": "0a981c5e7b219845dae90134508f83155837ac3bdba90c0b7034689a64749d48",
+    "experiments/vortices_percentage_v2/selection_contract.py": "17964b423642d4702ff32366a596533e2732c223b59acc136e82493bf9965441",
+    "experiments/vortices_percentage_v2/test_freeze.py": "9fb44bd2a4afb2e6ed455de5f345a5505665225c910a7d81faa3b1ed90a2b10c",
+    "experiments/vortices_percentage_v2/test_v2.py": "553a36066e0a86ec74c6c725fdb8742faf4a6313c55860a4e31f2696d8b3ebd6",
+    "experiments/vortices_percentage_v2/v2_inference.py": "8581c928552393cf038eaf67294da52b7db3000fa8313f93688096907287ecee",
+    "experiments/vortices_percentage_v2/verify_v2_search_proxy.py": "0c2715af0daba6e108b7ac8409e21647933a4763eccdffa7d286dfb0539364c3"
+  },
+  "shared_dependencies": {
+    "src/mfsi/raster.py": "4208ebe18d9f7f788a117c1bff74dce585a601f2c5bc6e89b1ff1389d6267c28",
+    "src/mfsi/design.py": "c143fc09839a37eb5e2a0dd0a187c4a2a1007dc66ccd87b2084044fb503701a1",
+    "src/mfsi/flow_matching.py": "6117bc312330d0de6edecbf93718f3b65fe2600484731ae0dfb178c8f878d1ec",
+    "src/mfsi/reference.py": "c887d2502972c00f12fa9cbd9561658bcb0e44b8ec802eb75b680f62e44fe88b",
+    "src/mfsi/poisson.py": "e02a831a2f9c91bfe8818a33f7b88119499ead544eebe3ca8283f8f66aa37981",
+    "src/mfsi/projection.py": "004833594835544472657fa53175a3a0f0c79ef225fe4decb67e549751930a64",
+    "src/mfsi/moments.py": "fc16e92f101dec9d4bcb7c829807e019279f16f96356f2e01fe5e3c9eccf7ca6",
+    "src/mfsi/measurements.py": "a106b013dbde3ee2cce5a2ab778a9225a45ea813fbbb75ea7529109dc5d314d8",
+    "src/mfsi/grid.py": "e297649c4b2ff9b209cca4153a7193e67c25ac72467790b50343b025008cbd1f",
+    "src/mfsi/decomposition.py": "8a542cff04b66a78fa8c9504ea81c5a702a86a85bd494427cffc57f3d466ea33"
+  },
+  "toy_immutability": {
+    "experiments/toy_example_percentage/config.json": "e0462f4ce60fc2105905bd6e54fb673e14de0ea2ba120a951d02053b1caf9f1f",
+    "experiments/toy_example_percentage/experiment.py": "35bbce25a92790f152664c8304adcd837e117598213c0c80b821254b50e7dcd3",
+    "experiments/toy_example_percentage/README.md": "a31537e13f0facaad52eb78a218b4e54418986da3b7498b2280abdde8f84318b",
+    "experiments/toy_example_percentage/outputs/pareto/corrected_nested_full_sweep.json": "114df72191c0b519e6e45cf7c574060a47ac6c64201eba7ed7432f2f11fc2c7e",
+    "experiments/toy_example_percentage/outputs/pareto/authoritative_run_summary.json": "2e29a178e3850ccb35c067006fb565bcb4f5fb845740ab4b6d4e4859034b80db",
+    "experiments/toy_example_percentage/outputs/pareto/pareto.json": "22771bdaf577c8d69ae5642f86539d3d2b2feaa6b361b1ec145d08471bc8dbc3",
+    "experiments/toy_example_percentage/outputs/pareto/positive_raster_decomposition_diagnostics.json": "e57928bd779e5873bd9044a601574122d1c38a2d0a008dbdbc4716934f42eed4"
+  },
+  "v1_immutability": {
+    "experiments/vortices_percentage/config.json": "8f57f167675718b19d7ffc1741a8175adbe22069ff4043634b62df8dcf100ed0",
+    "experiments/vortices_percentage/experiment.py": "5bcd5b3c96668cabf6d7a8b2b1944f48f490635763b997172584328551a9a4c4",
+    "experiments/vortices_percentage/bounded_reference.py": "bb9bb091329cf1cda54252d4b86463c900307f5ed7b983fd30de959ffa4d7cbe",
+    "experiments/vortices_percentage/outputs/run/selection_bank.npz": "0ae52680ba66f07e36e02a0d85d25847fc11dc2554fcb63f95cb4e7aa0636ef9",
+    "experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/confirmatory_summary.json": "3d1f8e6f95adcdc3e61918d789c5cf83c25c802e3b9ae9d3a64620a91a329901",
+    "experiments/vortices_percentage/outputs/pareto/authoritative_run_summary.json": "4a162a7c6121fe31da5d486a586f204d0a08117a306eeb83db77b82098ef3404"
+  },
+  "scientific_operations_performed_during_freeze": [],
+  "prospective_outcomes_inspected": false
+}

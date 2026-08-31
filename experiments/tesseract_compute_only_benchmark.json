@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "timing_contract": {
+    "summary": "Compute only: JAX inputs are resident on the accelerator and native inputs are resident in host memory before timing.",
+    "included": [
+      "solver/assembly computation",
+      "native output allocation",
+      "implicit native reverse computation where applicable"
+    ],
+    "excluded": [
+      "host-device transfer",
+      "Tesseract and tesseract-jax wrapper overhead",
+      "JAX tracing and compilation",
+      "input construction"
+    ],
+    "repetitions": 9,
+    "warmup_repetitions": 3,
+    "statistic": "median after three untimed warm-ups"
+  },
+  "environment": {
+    "jax_version": "0.8.3",
+    "jax_devices": [
+      "cuda:0"
+    ],
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU, 592.01",
+    "cpu_count": 24,
+    "calling_thread_affinity_count_after_openmp_binding": 1,
+    "OMP_NUM_THREADS": "24",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OMP_WAIT_POLICY": "PASSIVE",
+    "OPENBLAS_NUM_THREADS": "24"
+  },
+  "iprojection": {
+    "workload": {
+      "design_deg": [
+        21.218481145575826,
+        68.84605992792198
+      ],
+      "phi_shape": [
+        7,
+        2592,
+        2
+      ],
+      "targets_shape": [
+        4,
+        7,
+        2
+      ],
+      "dtype": "float64"
+    },
+    "timings_seconds": {
+      "jax_forward": 0.06686048700066749,
+      "native_forward_compute_only": 0.0017563910005264916,
+      "jax_value_gradient": 0.07615026800340274,
+      "native_value_gradient_compute_only": 0.002592026001366321
+    },
+    "timing_samples_seconds": {
+      "jax_forward": [
+        0.06676276800135383,
+        0.06652423700143117,
+        0.07221764700079802,
+        0.0664826180000091,
+        0.06678195799759123,
+        0.06691760099784005,
+        0.06790819099842338,
+        0.06686048700066749,
+        0.06692334399849642
+      ],
+      "native_forward_compute_only": [
+        0.0019942899962188676,
+        0.001619374001165852,
+        0.0017563910005264916,
+        0.001814297997043468,
+        0.0017536550003569573,
+        0.0020422559973667376,
+        0.001580670999828726,
+        0.0016538210038561374,
+        0.001816460004192777
+      ],
+      "jax_value_gradient": [
+        0.07596700399881229,
+        0.07627134599897545,
+        0.07615026800340274,
+        0.07629448600346223,
+        0.07690493999689352,
+        0.07607849100168096,
+        0.07673991099727573,
+        0.07581100399693241,
+        0.075906023994321
+      ],
+      "native_value_gradient_compute_only": [
+        0.0025349290008307435,
+        0.0024965289994725026,
+        0.0028509420008049347,
+        0.002592026001366321,
+        0.002599546998681035,
+        0.0025310509954579175,
+        0.002634734999446664,
+        0.0025437399963266216,
+        0.002852881996659562
+      ]
+    },
+    "speedups": {
+      "forward": 38.06697197869128,
+      "value_gradient": 29.3786667121634
+    },
+    "agreement": {
+      "lambda_max_absolute": 0.00017190309312020702,
+      "value_absolute": 4.225890607756355e-05,
+      "gradient_relative_l2": 2.7937770251694017e-06,
+      "gradient_max_absolute": 0.04664304965399424,
+      "all_native_systems_converged": true,
+      "maximum_native_residual": 9.94655293067919e-08
+    }
+  },
+  "weighted_poisson": {
+    "workload": {
+      "design_deg": [
+        21.218481145575826,
+        68.84605992792198
+      ],
+      "system_shape": [
+        28,
+        41,
+        41
+      ],
+      "cg_tolerance": 1e-06,
+      "cg_maximum_iterations": 360,
+      "dtype": "float64"
+    },
+    "timings_seconds": {
+      "jax_forward": 0.017007165995892137,
+      "native_forward_compute_only": 0.0028531600037240423,
+      "jax_value_gradient": 0.03796054700069362,
+      "native_value_gradient_compute_only": 0.008145178995619062
+    },
+    "timing_samples_seconds": {
+      "jax_forward": [
+        0.018756830002530478,
+        0.017139896997832693,
+        0.0169574850006029,
+        0.01676947599480627,
+        0.017667770996922627,
+        0.016590288003499154,
+        0.01678778299537953,
+        0.018506918000639416,
+        0.017007165995892137
+      ],
+      "native_forward_compute_only": [
+        0.0032412750006187707,
+        0.0029324679999263026,
+        0.0027628600000753067,
+        0.0039154959958978,
+        0.0026035679984488524,
+        0.0028531600037240423,
+        0.0033369150041835383,
+        0.002805064999847673,
+        0.00284523400478065
+      ],
+      "jax_value_gradient": [
+        0.04845174100046279,
+        0.03930471600324381,
+        0.03788129999884404,
+        0.038235394000366796,
+        0.0377280359971337,
+        0.03746559600403998,
+        0.037480473998584785,
+        0.03796054700069362,
+        0.04391477799799759
+      ],
+      "native_value_gradient_compute_only": [
+        0.006533565996505786,
+        0.007691741004236974,
+        0.007532335999712814,
+        0.008268438003142364,
+        0.007534784999734256,
+        0.008615628998086322,
+        0.009027329004311468,
+        0.008145178995619062,
+        0.009110710998356808
+      ]
+    },
+    "speedups": {
+      "forward": 5.960817470346493,
+      "value_gradient": 4.660492669481045
+    },
+    "agreement": {
+      "forward_relative_l2": 5.0135425023576664e-08,
+      "forward_max_absolute": 0.002425476636744861,
+      "value_absolute": 0.02682646131142974,
+      "gradient_relative_l2": 6.246885450545494e-08,
+      "gradient_max_absolute": 13.417243164032698,
+      "all_native_systems_converged": true,
+      "maximum_native_relative_residual": 9.970564310978058e-07
+    }
+  },
+  "galerkin": {
+    "workload": {
+      "input_shape": [
+        256,
+        280,
+        16,
+        2
+      ],
+      "dtype": "float64",
+      "derivative": "forward-only by design"
+    },
+    "timings_seconds": {
+      "jax_forward": 0.004491873005463276,
+      "native_forward_compute_only": 0.006037389000994153
+    },
+    "timing_samples_seconds": {
+      "jax_forward": [
+        0.004277906002243981,
+        0.0040603949964861386,
+        0.003957025001000147,
+        0.004129106993786991,
+        0.004623397995601408,
+        0.004624726003385149,
+        0.004491873005463276,
+        0.005468878996907733,
+        0.009757523999724071
+      ],
+      "native_forward_compute_only": [
+        0.005131967001943849,
+        0.005075337998277973,
+        0.014767319997190498,
+        0.015776791995449457,
+        0.015995273002772592,
+        0.007991808997758199,
+        0.006037389000994153,
+        0.0059570020021055825,
+        0.005233810996287502
+      ]
+    },
+    "speedups": {
+      "forward": 0.7440092074112861
+    },
+    "agreement": {
+      "maximum_absolute": 1.7763568394002505e-13
+    }
+  }
+}

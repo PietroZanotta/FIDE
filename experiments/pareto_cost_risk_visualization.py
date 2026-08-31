@@ -17,8 +17,8 @@ from percentage_pareto_visualization import (
 )
 
 
-PAPER_BACKGROUND = "#F5F1EA"
-PANEL_BACKGROUND = "#FBF9F5"
+PAPER_BACKGROUND = "#FFFFFF"
+PANEL_BACKGROUND = "#FFFFFF"
 INK = "#252A33"
 MUTED = "#66707C"
 

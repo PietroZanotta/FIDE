@@ -1,491 +1,225 @@
-# Vortices percentage-risk Pareto experiment
+# Vortices experiment: FIDE in a time-dependent double gyre
 
-## Authoritative status
+This directory contains the canonical, standalone V2.1 vortices experiment for **Fiber-Informed Differentiable Experimental Design (FIDE)**. It asks whether four aggregate sensors can remain nearly as informative as a Law-optimal design while inducing a complete population-law trajectory that is easier to reconcile with the same frozen reference dynamics. The experiment is the nonlinear, bounded-domain counterpart of the repository's [analytical Gaussian-mixture experiment](../toy_example_percentage/README.md).
 
-This directory contains the corrected, authoritative percentage-risk sweep for the time-dependent double-gyre experiment. The active results are under `outputs/pareto/`. The pre-correction sweep is not a current scientific result and is not present in a normal checkout; when needed as replay input, it can be reconstructed byte-for-byte from the Git commit documented below.
+The confirmed result covers risk allowances of **0.5%, 1%, and 2%**. We deliberately stopped at 2% because of the hackathon's computational time limit; the 3%, 4%, and 5% branches were paused before completion and are not part of the claim. A future study will extend the sweep and test whether a broader allowance range produces a larger Pareto effect.
 
-The corrected sweep covers `0.5%, 1%, 2%, 3%, 4%, 5%`. Full selection uses the physical-density weighted-Poisson evaluator on a `128 x 64` grid at all 21 time nodes. Every final Law, Tangent, and Full geometry passes the exact common-raster audit on the frozen 24-trial selection bank and the independent frozen 64-trial validation bank. The corrected Full selection curve is nested.
+> **Current status: PASS.** On a fresh shared 64-trial holdout, the Full/FIDE designs reduce Full action relative to Law by **8.28%**, **12.19%**, and **15.71%** at the 0.5%, 1%, and 2% operating points. All nine reference-by-allowance simultaneous 95% lower bounds are positive, and all 768 exact reference/design/trial evaluations pass the frozen numerical gates.
 
-The headline result survives: corrected Full designs reduce mean validation Full action relative to the common Law design by `59.17%` to `70.18%`, depending on allowance. The earlier `26.70%` headline belonged to the archived evaluator and must not be quoted as the current result.
+## Naming and repository cleanup
 
-Key artifacts:
+The active experiment is V2.1 and now lives at `experiments/vortices_percentage/`. The former V1 directory has been moved to `old_stuff/vortices_percentage_v1/` and remains ignored by Git. V2.1 is nevertheless standalone: the reusable double-gyre model, reference transformation, base configuration, frozen truth population, and frozen endpoint population that V2.1 consumes are all retained in this directory. No active V2.1 import or execution path depends on `old_stuff/`.
 
-- [corrected authoritative table](outputs/pareto/corrected_authoritative_pareto.md)
-- [common-raster decomposition audit](outputs/pareto/corrected_authoritative_decomposition_audit.md)
-- [old-versus-corrected comparison](outputs/pareto/old_vs_corrected_full_comparison.md)
-- [complete Law/Tangent/Full tables](outputs/pareto/pareto_methods_tables.md)
-- [Pareto figure](outputs/pareto/pareto_methods.png)
-- [sensor-layout figure](outputs/pareto/pareto_sensor_layouts.png)
-- [experiment and sensor illustration](outputs/pareto/experiment_sensors.png)
-
-The publication authority is the corrected table, per-allowance audit files,
-independent validation receipts, frozen-input manifest, and fail-closed
-finalizer under `outputs/pareto/`. `outputs/run/`, `eval.py`, historical
-reference-seed studies, proxy actions, and smoke runs are useful diagnostics
-but do not supersede that result. “Authoritative” here means certified under
-the declared frozen numerical protocol; it is a multistart certificate, not
-an analytic global-optimum proof.
+The frozen protocol documents and historical manifests still contain their original `experiments/vortices_percentage_v2/` and V1 path strings. Those strings are provenance, not current instructions; editing them would change the hashes that identify the preregistered files. Use the commands and current paths in this README.
 
 ## Scientific question
 
-Four localized sensors observe a finite noisy particle population in a double-gyre flow. Their locations are optimized while allowing a controlled percentage increase in finite-law risk. The experiment asks how much physical correction action can be removed by accepting that small risk increase, and how much of the correction is tangent-visible versus tangent-invisible.
+The hidden population is transported by a time-dependent double-gyre flow, but the experiment observes only four noisy Gaussian sensor averages at nine acquisition times. Many population laws reproduce those sixteen-dimensional time-dependent constraints, so the data identify a moment fiber rather than a unique microscopic density.
 
-The eight-dimensional design is
+FIDE completes each fiber using the same frozen endpoint-trained reference and asks which scientifically admissible sensor geometry requires the smallest full-law correction. The comparison separates three designs:
 
-```text
-eta = (x1,y1,x2,y2,x3,y3,x4,y4).
-```
+- **Law** minimizes finite-data scientific risk and defines the common risk anchor.
 
-At allowance `p`, an eligible action design must satisfy the unchanged exact risk screens
+- **Tangent** minimizes the correction visible through the measured moment rates. Its holdout evaluation is supplementary and descriptive in this experiment; it is outside the primary Law–Full inference family.
 
-```text
-L(eta) <= L* + epsilon_L,
-R(eta) <= R* + (p/100) |R*|.
-```
+- **Full/FIDE** minimizes the correction required by the complete information-projected population law, subject to the same population and finite-risk restrictions.
 
-Here `L` is exact-oracle population risk, `R` is finite noisy law risk, and the shared frozen Law anchor is
+The key question is therefore not whether the reference flow exactly reproduces the hidden simulator. It is whether two sensor systems with nearly equal scientific risk imply complete law paths that demand substantially different corrections relative to the same frozen reference.
 
-```text
-L*    = 0.03773928370170817,
-L_max = L* + 0.025 = 0.06273928370170817,
-R*    = 0.03838744201119958.
-```
+## The double-gyre system
 
-Selection uses only the frozen selection bank and these exact screens. Validation is computed only after a winner is frozen and never participates in selection.
+The physical domain is the rectangle $[0,2]\times[0,1]$. With normalized experiment time $t\in[0,1]$, physical time $\tau=10t$, amplitude $A=0.1$, modulation $\epsilon=0.25$, period $T=10$, and $\omega=2\pi/T$, define
 
-## Physical model
+$$a(\tau)=\epsilon\sin(\omega\tau),\qquad b(\tau)=1-2a(\tau),\qquad f(x,\tau)=a(\tau)x_1^2+b(\tau)x_1.$$
 
-The domain is `Omega = [0,2] x [0,1]`. Normalized experiment time `t in [0,1]` corresponds to physical time `tau = Ht`, with `H = 10`. The double-gyre field is
+The textbook double-gyre velocity in physical time is
 
-```text
-a(tau) = epsilon sin(omega tau)
-b(tau) = 1 - 2 a(tau)
-f(x,tau) = a(tau) x^2 + b(tau) x
-df/dx = 2 a(tau) x + b(tau)
-omega = 2 pi / period
+$$v_1=-\pi A\sin(\pi f)\cos(\pi x_2),\qquad v_2=\pi A\cos(\pi f)\sin(\pi x_2)\,\partial_{x_1}f.$$
 
-dx/dtau = -pi A sin(pi f) cos(pi y)
-dy/dtau =  pi A cos(pi f) sin(pi y) df/dx
-```
+The implementation returns $dX/dt=10v$ because the rest of the FIDE pipeline uses normalized time. The oscillating separatrix stretches and folds the four initial particle concentrations while the rectangular boundary remains impermeable.
 
-with `A = 0.1`, `epsilon = 0.25`, `period = 10`, and normalized velocity `dX/dt = H dX/dtau`.
+The initial law is a 10% uniform background plus four truncated Gaussian components. Their normalized mixture weights are $(0.30,0.20,0.25,0.25)$, centers are $(0.45,0.25)$, $(0.78,0.72)$, $(1.28,0.28)$, and $(1.62,0.68)$, and both coordinate standard deviations are $0.07$. The frozen truth bank uses 50,000 particles; a finite observation trial samples 2,000 of them.
 
-The initial law is a `10%` uniform background plus four truncated Gaussian components. Their internal mixture weights are `(0.30, 0.20, 0.25, 0.25)`, centers are `(0.45,0.25)`, `(0.78,0.72)`, `(1.28,0.28)`, `(1.62,0.68)`, and coordinate standard deviations are `0.07`. Out-of-domain samples are rejection-resampled, not clipped.
+## Aggregate observations and sensor design
 
-The base seed is `20260815`. The frozen truth bank contains `50,000`
-particles on the equally spaced nodes `t_i=i/20`, generated with seed offset
-`1001` and RK4 with 32 substeps per interval. Endpoint training data use
-`50,000` particles, seed offset `2001`, and 512 RK4 substeps over the complete
-endpoint trajectory.
+A design is an ordered set of four sensor centers $\eta=(z_1,\ldots,z_4)$ inside the box. Each sensor is a Gaussian response of width $0.12$,
 
-## Sensors and observations
+$$\Phi_j(x;z_j)=\exp\left(-\frac{\lVert x-z_j\rVert^2}{2(0.12)^2}\right).$$
 
-Each Gaussian sensor has feature
+The sensor centers remain at least `0.24` from the relevant box limits and at least `0.24` from one another. At acquisition indices `(0, 2, 5, 8, 10, 12, 15, 18, 20)`, each trial observes the four empirical sensor means with independent noise of standard deviation `0.005`. Endpoint-anchored, bounded cubic smoothing splines reconstruct the four moment trajectories and their time derivatives on all 21 scientific nodes.
 
-```text
-Phi_j(x; eta) = exp(-||x-s_j||^2 / (2 ell^2)),  ell = 0.12.
-```
+The finite-data risk is a multiscale Gaussian MMD criterion with bandwidths `(0.05, 0.10, 0.20, 0.40)` and population slack `0.025`. If $R_\mathrm{Law}$ is the selected Law risk, an allowance $p$ admits only designs satisfying
 
-There are four labeled sensors. Centers are constrained to `x in [0.24,1.76]`, `y in [0.24,0.76]`, with minimum pairwise separation `0.24`. Each noisy observation uses `2,000` truth particles at acquisition indices `(0,2,5,8,10,12,15,18,20)` of the 21-node scientific grid and independent detector noise with standard deviation `0.005`. Endpoint moments are exact.
+$$R(\eta)\leq\left(1+\frac{p}{100}\right)R_\mathrm{Law}.$$
 
-The selection bank stores sample indices with shape `[24,9,2000]` and
-detector noise with shape `[24,9,4]`; its first 16 trials define Law risk and
-all 24 define action. The independent validation arrays have shapes
-`[64,9,2000]` and `[64,9,4]`. Selection and validation use random namespaces
-`9890` and `9891`, respectively.
+Full action never compensates for a scientifically poor geometry: population feasibility and the exact finite-risk cap are applied before Full candidates are ranked.
 
-The moment path is an endpoint-anchored, bounded, `C2` cubic penalized least-squares spline with three internal knots, smoothing `1e-4`, relative ridge `1e-10`, eighth-order roughness quadrature, feature bounds `[0,1]`, interior margin `0.002`, and transition width `0.002`.
+## From endpoints to a measurement-implied law
 
-At each scientific time, empirical information projection calibrates the frozen reference particles to the reconstructed moments. The projection settings are: 300 maximum steps, Newton ridge `1e-7`, step cap `20`, multiplier clip `1000`, search tolerance `1e-6`, acceptance tolerance `2e-6`, support-certificate tolerance `1e-10`, L-BFGS maximum 800 iterations, and at most two retries. Certification also requires adequate effective sample size and empirical-hull support.
+The reference model is trained only from the common physical endpoint dataset. It is a box-logit endpoint flow with a four-layer, width-128 SiLU MLP, trained for 12,000 Adam steps. Three independent reference-training seeds—`310000101`, `310000102`, and `310000103`—are qualified separately, and each produces a 32,768-particle rollout on the same 21 time nodes. The common physical raster bandwidth, `0.058816544123815116`, is the median of the three reference-only weighted Scott bandwidths and does not use a sensor geometry, action value, or validation outcome.
 
-## Learned reference model
+At every time, the hard empirical information projection exponentially tilts a reference particle law until its four sensor moments equal the reconstructed observations. This projected law is a canonical completion of the aggregate data, not a claim to recover the hidden particle density pointwise.
 
-The endpoint-only reference is trained in box-logit coordinates so its physical pushforward stays inside the rectangle. Its velocity MLP receives two latent coordinates plus `(t, sin(pi t), cos(pi t), sin(2pi t), cos(2pi t))`, has four SiLU hidden layers of width 128, and a linear two-dimensional output.
+## Why the V2 numerical repair matters
 
-Training uses conditional flow matching with a deterministic linear bridge, zero bridge noise, Adam (`beta1=0.9`, `beta2=0.999`, `eps=1e-8`), batch size 2,048, 12,000 steps, gradient clipping at 10, and cosine learning-rate decay from `1e-3` to `5e-5`. The frozen reference rollout bank contains 32,768 particles, uses seed offset `3001`, and RK4 with 16 substeps per scientific interval.
+V1 revealed that bounded-domain Full action is sensitive to how mass and flux are rasterized near the wall. V2 replaces the earlier treatment with a consistent reflected discretization:
 
-The reference checkpoint, rollout bank, truth bank, endpoint data, selection bank, validation bank, source manifest, and configuration are frozen. Their active copies and hashes are recorded in `outputs/pareto/frozen_inputs/manifest.json`.
+- scalar density and signed continuity source use the same cell-integrated Gaussian kernel with even reflection;
 
-## Objectives
+- reference flux uses the matching reflected normal-flux rule;
 
-- **Population** minimizes exact-oracle population risk and is used to establish the population screen.
-- **Law** minimizes finite noisy law risk and provides the one common anchor for all allowances.
-- **Tangent** minimizes the experiment's unchanged particle-space tangent metric under the same risk screens.
-- **Full** minimizes weighted-Poisson correction action under the same risk screens.
+- the physical projected density has no artificial floor;
 
-The Law risk is a multi-bandwidth MMD with bandwidths `0.05`, `0.1`, `0.2`, and `0.4`; the population slack is `epsilon_L = 0.025`. Both `L` and `R` are normalized trapezoidal averages over all 21 scientific time nodes. Projected and truth laws are compared after depositing cell mass on the `128 x 64` rectangular grid and applying the configured separable Gaussian anti-aliasing kernel. `raster.bandwidth=0` selects `0.35 min(dx,dy)`; the kernel truncation is four standard deviations. Mass is normalized and the deposited signed source is centered to floating-point compatibility before the Poisson solve.
+- the correction satisfies homogeneous Neumann boundary conditions; and
 
-### Correct authoritative Full evaluator
+- the weighted Poisson problem is solved as $K(q)\psi=-s$, with $K(q)=-\nabla\cdot(q\nabla)$ and $\delta=-\nabla\psi$.
 
-Reported Full action uses the physical raster density `q_h` in both the operator and the vector-field inner product:
+The authoritative Full action uses a `256 × 128` physical grid and all 21 time nodes. Every candidate must pass mass, source compatibility, Poisson residual, independent-action, calibration, covariance, and effective-sample-size gates. Numerical development and convergence evidence are documented in [VORTICES_V2_NUMERICAL_REPAIR_FINAL.md](VORTICES_V2_NUMERICAL_REPAIR_FINAL.md); the final prospective selection protocol is recorded in [VORTICES_V2_1_SELECTION_PROTOCOL_FROZEN.md](VORTICES_V2_1_SELECTION_PROTOCOL_FROZEN.md).
 
-```text
--div(q_h grad psi_h) = s_h,
-delta*_h = -grad psi_h,
-A_full,h = ||delta*_h||^2_{q_h}.
-```
+## Selection and independent confirmation
 
-The authoritative grid is `128 x 64`, all 21 time nodes are included, and there is no density floor in the scientific operator. The solve is a sparse physical-`q_h` direct solve over conductive components, with component compatibility checks, a constant-fixing pin, symmetric variable scaling, and residual iterative refinement using the same factorization. These operations preserve the discrete equation. A preconditioned-CG fallback is available. Certification independently checks the physical Poisson residual and the sensor moment-rate equations.
+Candidate generation uses one 128-trial shared selection bank across all methods and all three references. Selection is feasibility-first: exact population and risk checks determine the admissible set, then the Full proxy ranks only admissible geometries, and promoted candidates receive the exact `256 × 128` Full evaluation. Allowances are nested and share a common Law anchor.
 
-The regularized `tesseract_cpp` solve remains a search proxy only: its `64 x 32`, seven-time-node gradient objective may guide candidates, but it never supplies a reported scientific Full-action value. The `operator_floor_rel` field retained in the frozen configuration belongs to that proxy path and is not used in the corrected scientific operator.
+The final result uses a fresh 64-trial shared holdout with observation seed `22`, namespace `23`, and bootstrap seed `24`. The four designs—one Law geometry and three Full geometries—were evaluated under every reference and trial, producing $3\times4\times64=768$ exact evaluations. The primary effect family contains the nine reference-by-allowance Full-versus-Law reductions and uses common max-deviation simultaneous 95% intervals. The maximum simultaneous half-width is `2.454` percentage points and the maximum within-reference relative standard error is `2.442%`.
 
-### Common-raster decomposition
+The originally planned 1,024-trial confirmation was retired outcome-blind before any action cell or result was produced, solely because its runtime was incompatible with the remaining hackathon window. A reduced 64-trial protocol was frozen before evaluation. A proposed fused-cell accelerator was also rejected: although it was 1.19× faster, it did not preserve exact floating-point solver fields. The accepted ordered parallel evaluator retained its exact-equivalence qualification.
 
-For each final Law, Tangent, and Full geometry, the audit builds the moment-rate operator `L_h` in exactly the Full raster vector-field space and solves
+## Confirmed results
 
-```text
-delta_tan,h = argmin ||delta||^2_{q_h}  subject to L_h delta = -r_h,
-delta_hid,h = delta*_h - delta_tan,h.
-```
+| Allowed extra risk | Full sensor centers $(x,y)$                                            | Selection risk increase | Holdout risk change vs Law | Holdout Full action | Reduction vs Law |
+| -----------------: | :--------------------------------------------------------------------- | ----------------------: | -------------------------: | ------------------: | ---------------: |
+|               0.5% | `(0.251, 0.607)`, `(0.473, 0.760)`, `(1.061, 0.398)`, `(1.760, 0.240)` |                  0.291% |                     0.303% |              1.4598 |        **8.28%** |
+|                 1% | `(0.251, 0.602)`, `(0.468, 0.757)`, `(1.042, 0.393)`, `(1.760, 0.240)` |                  0.810% |                     0.850% |              1.3974 |       **12.19%** |
+|                 2% | `(0.257, 0.606)`, `(0.471, 0.754)`, `(1.038, 0.397)`, `(1.750, 0.241)` |                  1.556% |                     1.599% |              1.3414 |       **15.71%** |
 
-It independently evaluates
+The common Law holdout action is `1.5915`. The equal-reference reduction grows monotonically across the evaluated range, and every one of the nine simultaneous lower bounds remains above zero:
 
-```text
-A_tan,h  = ||delta_tan,h||^2_{q_h},
-A_hid,h  = ||delta_hid,h||^2_{q_h},
-Gamma_h  = A_hid,h / A_full,h,
-<delta_tan,h, delta_hid,h>_{q_h}.
-```
+| Reference |          0.5% allowance |             1% allowance |              2% allowance |
+| :-------- | ----------------------: | -----------------------: | ------------------------: |
+| 0         | 7.97% `[5.52%, 10.43%]` | 11.81% `[9.36%, 14.27%]` | 15.40% `[12.95%, 17.86%]` |
+| 1         | 8.30% `[5.85%, 10.75%]` | 12.35% `[9.90%, 14.80%]` | 15.82% `[13.37%, 18.27%]` |
+| 2         | 8.55% `[6.10%, 11.01%]` | 12.42% `[9.97%, 14.87%]` | 15.91% `[13.46%, 18.37%]` |
 
-`Gamma_h` is reported only because Full feasibility, Tangent feasibility, hidden nullspace, orthogonality, Pythagorean identity, and hierarchy all pass without clipping.
+The independently evaluated Tangent geometries reduce holdout Full action by 5.21%, 5.85%, and 3.45%. These values are useful descriptive comparisons, but Tangent was not included in the primary simultaneous inference family. At 2%, the Tangent improvement weakens while Full reaches its largest confirmed reduction, reinforcing the distinction between matching measured moment rates and reducing complete law-level correction.
 
-## Optimization and selection protocol
+For the complete gate-by-gate result, see [VORTICES_V2_1_C3_64_RESULT.md](VORTICES_V2_1_C3_64_RESULT.md). The canonical machine-readable plotting values and their provenance receipts are in [outputs/published](outputs/published/README.md); the JSON beneath `plots/` is a renderer-produced copy.
 
-Base optimizer settings are 64 generated starts from an oversampled pool of 128. Population, Law, Tangent, and Full receive 100, 50, 50, and 30 optimization steps with learning rates `0.01`, `0.008`, `0.006`, and `0.004`. Constraint penalty is `10,000`, optimization feasibility tolerance is `1e-6`, and invalid penalty is `1,000`.
+## Visualizing the experiment
 
-Population uses eight starts and audits 20 candidates, requiring at least six exact-valid candidates. Law uses six starts, four gradient trials, audits 24 candidates, requires at least eight exact-valid candidates, and permits two anchor-refinement passes with consistency tolerance `1e-5`.
+![Animated hidden population, projected law, and four sensor views](plots/vortices_v2_1_full_2p0.gif)
 
-The repaired Tangent workflow uses four normal starts, four gradient trials, 12 local starts of scale `0.08`, 30 exact audits, and ten exact rescores. Archived candidates, repaired 4%/5% candidates, Full geometries, and the Law geometry are included as seeds and are re-audited; no obsolete Tangent solution is restored.
+*Animation: the confirmed 2% Full geometry over all 21 scientific time nodes.* The left panel is the hidden double-gyre population, which is available to the benchmarker but not to the inverse-design method. The center panel is the information-projected law constrained by the four noisy aggregate moment trajectories and completed by one qualified frozen reference. The four narrow panels isolate the response supported by each sensor. Agreement of the four readings does not force pointwise agreement between the two large panels; the difference is precisely the unresolved part of the moment fiber.
 
-Full uses three normal starts, two proxy gradient trials, ten local starts of scale `0.06`, four-trial prescreening, 30 authoritative exact audits, and eight exact rescores. Candidate seeds at every allowance include the mandatory previous corrected Full incumbent, archived Full candidates, current Tangent candidates, Law, saved audited feasible candidates, and normal multistarts.
+![Confirmed 0.5% Full geometry](plots/vortices_v2_1_full_0p5_paper.png)
 
-The Full sweep is sequential. The 0.5% winner is carried into 1%, and so on through 5%. An incumbent is replaced only by a feasible candidate with lower corrected selection action beyond tolerance `1e-6`. Validation uses 64 disjoint trials only after the stage winner is frozen.
+*Static 0.5% operating point.* Four audited time slices show the least permissive confirmed Full design. The geometry stays close to the Law optimum and uses 58.2% of its selection risk budget, yet its holdout Full action is already 8.28% below Law. The moving lobes expose different sensors at different times, so the design is judged by the complete trajectory rather than a single snapshot.
 
-### Frozen production settings
+![Confirmed 1% Full geometry](plots/vortices_v2_1_full_1p0_paper.png)
 
-| Group | Setting | Value |
-|:---|:---|:---|
-| global | base/reference seed | `20260815` |
-| truth | particles / seed offset | `50000 / 1001` |
-| truth | RK4 substeps per interval | `32` |
-| endpoints | particles / seed offset / RK4 steps | `50000 / 2001 / 512` |
-| reference | rollout particles / seed offset | `32768 / 3001` |
-| reference | RK4 substeps per interval | `16` |
-| randomness | Law/action/validation trials | `16 / 24 / 64` |
-| randomness | selection/validation namespaces | `9890 / 9891` |
-| validity | population/finite calibration | `1e-5 / 1e-3` |
-| validity | minimum ESS / in-domain mass | `0.03 / 0.995` |
-| validity | Poisson relative residual | `2e-7` |
-| exact Tangent | covariance eigenvalue floor / pseudoinverse `rcond` | `1e-6 / 1e-10` |
-| exact Tangent | compatibility tolerance | `1e-7` |
-| scientific Full | grid / time nodes / density floor | `128 x 64 / 21 / 0` |
-| scientific Full | CG tolerance / maximum iterations | `1e-7 / 520` |
-| search proxy | grid / time nodes / operator floor | `64 x 32 / 7 / 2e-5` |
-| search proxy | CG tolerance / maximum iterations | `1e-6 / 360` |
+*Static 1% operating point.* With a slightly larger admissible risk set, the left and middle-right sensors shift enough to reduce holdout Full action by 12.19%. The projected density still matches the four sensor moments to numerical precision; the visible changes away from the sensor centers reflect how the common reference completes unconstrained directions.
 
-The `smoke` block in `config.json` replaces these values with small test values
-and was not used for the authoritative sweep.
+![Confirmed 2% Full geometry](plots/vortices_v2_1_full_2p0_paper.png)
 
-## Corrected authoritative results
+*Static 2% operating point.* This is the largest completed allowance and the geometry used in the animation. It spends 77.8% of the selection allowance and yields a 15.71% holdout Full-action reduction. The result should not be extrapolated to 3%–5%: those designs were never completed or confirmed.
 
-The Full table below uses the frozen 24-trial selection bank for selection action and the independent 64-trial bank for validation. Reduction is the ratio-of-means reduction from the common Law geometry. Values are rounded; machine-readable precision is in `corrected_authoritative_pareto.csv` and `.json`.
+![Relative action and risk use across the confirmed frontier](plots/pareto_0p5_to_2pct.png)
 
-| Allowance | Full centers `(x,y)` | Exact L | Exact R | R increase | Selection A_full | Validation A_full ± SE | Full vs Law | A_tan,h | A_hid,h | Gamma_h |
-|---:|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0.5% | `(1.07263,.39629) (.48624,.76000) (1.76000,.24000) (.27194,.61851)` | .038056816 | .038521091 | .348% | 7.343264 | 7.367562 ± .370033 | 64.98% | .430744 | 6.912520 | .941342 |
-| 1% | `(1.05487,.40255) (.47001,.76000) (1.76000,.24000) (.24000,.61089)` | .038212162 | .038740166 | .919% | 6.688760 | 8.589732 ± 1.744830 | 59.17% | .435773 | 6.252986 | .934850 |
-| 2% | `(1.08327,.43357) (.50729,.74970) (1.76000,.24000) (.28087,.63963)` | .038784770 | .039058745 | 1.749% | 6.510045 | 6.273495 ± .460063 | 70.18% | .430471 | 6.079575 | .933876 |
-| 3% | same as 2% | .038784770 | .039058745 | 1.749% | 6.510045 | 6.273495 ± .460062 | 70.18% | .430471 | 6.079575 | .933876 |
-| 4% | `(1.06371,.45502) (.49854,.74203) (1.75976,.24000) (.24971,.64638)` | .039504166 | .039756850 | 3.567% | 5.748588 | 6.274276 ± .901433 | 70.18% | .417009 | 5.331580 | .927459 |
-| 5% | `(1.05214,.41790) (.50491,.72562) (1.74915,.24688) (.24562,.65249)` | .039821283 | .040072176 | 4.389% | 5.730633 | 6.288513 ± .679615 | 70.11% | .386964 | 5.343669 | .932474 |
+*Relative action and risk-use curves.* Panel A normalizes Full action by the Law action on the same bank, so lower is better and Law is fixed at 100%. Solid lines are selection values; dashed lines are independent holdout values. Full improves monotonically from about 92% to 84% of Law on holdout. Panel B reports the fraction of each Law-relative risk allowance used. Only selection risk is constrained; holdout risk is an independent cross-evaluation. Note this is about *tangent-action cost* where the Tangent law is expected to dominate the Full law.
 
-The corrected Full selection sequence is
+![Absolute Full action and risk use across methods](plots/pareto_methods_full_action_risk_0p5_to_2pct.png)
 
-```text
-7.343264075 >= 6.688759712 >= 6.510045283
-             >= 6.510045283 >= 5.748588139 >= 5.730632961.
-```
+As shown in this picture, however, Full outperforms Tangent under the complete Full-action metric at every evaluated allowance (expected result), despite Tangent directly optimizing its own moment-level objective. The solid/dashed distinction again separates selection from holdout, and the dotted 100% line denotes the full risk allowance rather than a performance target.
 
-The 2% incumbent remains the 3% winner and is reported with the tighter-stage action; its independent repeated solve differed by only `1.63e-7`, below the declared `1e-6` tolerance.
+![Selection frontier and simultaneous confirmation](plots/pareto_frontier_3panel_0p5_to_2pct.png)
 
-The common Law centers are
-`(1.077489,.388963)`, `(.479798,.760000)`, `(1.760000,.240000)`, and
-`(.257336,.602956)`. The complete selected Tangent centers are:
+*Primary Full-result dashboard.* The first panel shows selection-bank certification, the second checks the same frozen geometries on the independent holdout, and the third summarizes the reference-wise simultaneous intervals. The figure links optimization, out-of-sample behavior, and inferential uncertainty without treating holdout risk as a second selection constraint.
 
-| Allowance | Tangent centers `(x,y)` |
-|---:|:---|
-| 0.5% | `(1.072627,.396293) (.486242,.760000) (1.760000,.240000) (.271940,.618506)` |
-| 1% | `(1.054449,.390149) (.451830,.748630) (1.760000,.240000) (.262004,.577847)` |
-| 2%, 3% | `(1.058357,.379515) (.475429,.760000) (1.757857,.240000) (.289138,.571884)` |
-| 4% | `(1.070393,.426616) (.490176,.700052) (1.760000,.240000) (.263510,.629298)` |
-| 5% | `(1.052135,.417897) (.504911,.725622) (1.749147,.246883) (.245617,.652486)` |
+All media are deterministic post-processing of frozen artifacts; rendering does not retrain a reference, change a geometry, or rerun confirmation. The authoritative renderer is [render_v2_1_c3_64_pareto.py](render_v2_1_c3_64_pareto.py), and the snapshot/GIF adapters are [visualize_v2_1_partial_paper.py](visualize_v2_1_partial_paper.py) and [visualize_v2_1_partial_paper_gif.py](visualize_v2_1_partial_paper_gif.py).
 
-Tangent and Full coincide at 0.5% and 5%. The tracked
-[complete method tables](outputs/pareto/pareto_methods_tables.md) contain every
-Law/Tangent/Full selection and independent-validation row, including risk,
-action, SE, reduction, and valid fraction.
+## Reproduce and verify
 
-### Law, Tangent, and Full interpretation
-
-The corrected Full geometry equals the Tangent geometry at 0.5% and 5%. On the validation bank, Tangent has lower Full action at 1% and 4%, while Full has lower action at 2% and 3%. This mixed finite-bank ranking replaces the older simpler story. It does not weaken the central result: every selected Full geometry yields a large positive Full-vs-Law reduction, and the common-raster audit supports a genuine tangent-invisible fraction of roughly `92.7%` to `94.1%` on the selection bank.
-
-The unusually large Law validation mean and SE (`about 21.04 ± 13.50`) reflect a small number of high-action validation realizations. All 64 Law validation trials remain numerically valid; the ratio-of-means reduction and its raw trial summaries are retained for transparency.
-
-## Numerical certification
-
-The tolerance is `1e-6`. Across all 18 final geometries and both banks:
-
-| Certification quantity | Maximum |
-|:---|---:|
-| physical Poisson relative residual | `5.132997e-10` |
-| component compatibility residual | `5.390598e-15` |
-| Full moment-rate residual | `8.004651e-11` |
-| Tangent moment-rate residual | `3.619007e-14` |
-| hidden-nullspace residual | `8.004623e-11` |
-| absolute orthogonality residual | `3.262391e-11` |
-| absolute Pythagorean residual | `6.184564e-11` |
-| maximum raw hierarchy value `A_tan,h - A_full,h` | `-8.561291e-2` |
-
-There are zero aggregate, trial, time/trial, hierarchy, or invalid-trial violations. Every physical solve converged. Moment calibration, ESS, support feasibility, in-domain mass, component compatibility, Full moment feasibility, and decomposition gates remain active. Residuals and hierarchy gaps are raw and unclipped.
-
-## Comparison with the archived sweep
-
-The corrected winner changes at 0.5%, 2%, 3%, 4%, and 5%; the 1% Full geometry is unchanged. Absolute old and corrected actions are not directly comparable as optimization-only changes because the scientific evaluator changed from the earlier regularized formulation to physical `q_h`. The complete coordinates and numbers are in `old_vs_corrected_full_comparison.csv`, `.json`, and `.md`.
-
-The corrected validation reductions by allowance are `64.98%`, `59.17%`, `70.18%`, `70.18%`, `70.18%`, and `70.11%`; these supersede the archived `7.99%`, `15.89%`, `15.89%`, `15.89%`, `26.70%`, and `25.94%` values.
-
-No additional Full or Tangent optimization is required for this declared sweep: all mandated seed families were considered, every selected candidate is exact-feasible and certified, the repaired Tangent search is retained, and the Full curve is nested.
-
-## Figures
-
-![Hidden population, corrected law, and four sensor views](figures/vortices_population_correction_sensors.png)
-
-Each column is a time snapshot from frozen validation trial 0 at the
-authoritative 5% Full geometry. The upper row shows the transported hidden
-population and instantaneous double-gyre streamlines; the middle row shows the
-moment-corrected endpoint reference; the small panels show what each localized
-sensor weights and report its scalar observation. The correction matches four
-moments at each reconstructed time, not the hidden density pointwise. The
-remaining off-sensor differences visualize the underdetermination that the
-Full action measures.
-
-![Corrected Law, Tangent, and Full Pareto curves](outputs/pareto/pareto_methods.png)
-
-Panel A normalizes corrected Full action to the Law value on the same bank;
-solid curves are selection and dashed curves are independent validation. Full
-is below Law at every allowance, while Tangent has a mixed common-action
-ranking—especially at 1–3%—despite minimizing its own particle metric. Panel B
-shows use of the Law-relative risk budget. Every selected point remains below
-the 100% cap; validation risk is shown only as an out-of-sample diagnostic.
-The large selection/validation separation warns that bank dependence matters;
-the table and raw trial summary, rather than this normalized plot, quantify
-the particularly large Law uncertainty.
-
-![Corrected sensor layouts by method and allowance](outputs/pareto/pareto_sensor_layouts.png)
-
-Rows compare Law, Tangent, and Full centers; columns increase the allowance.
-The background is time-averaged particle occupancy, translucent disks show one
-sensor width, and the dashed rectangle is the admissible-center region. Law is
-fixed, whereas Tangent and Full redistribute sensors among the upper-left,
-interior, and right-boundary transport structures. Tangent and Full coincide
-at 0.5% and 5% but follow different intermediate geometries, consistent with
-their mixed validation ranking.
-
-![Double-gyre experiment and four-sensor geometry](outputs/pareto/experiment_sensors.png)
-
-This multi-panel dashboard uses the representative 3% point. Panel A shows the
-hidden double-gyre evolution; panel B compares Population, Law, Tangent, and
-Full geometries; panel C shows the certified selection trade-off; and panel D
-shows all 64 independent trial actions on a log scale. The high Law outlier is
-why its validation mean and SE are much larger than its median. Panel E is a
-timing breakdown for this representative staged run only—it is not the total
-cost of the corrected six-allowance campaign or a cross-platform benchmark.
-
-Regenerate the paper-style observation-mechanism figure from the frozen 5% Full
-geometry and validation/reference banks (both PNG and PDF are always written):
+Run all commands from the repository root in the environment described by the main [Getting Started guide](../../README.md#getting-started). The quick, read-only verification checks the standalone frozen inputs, published Pareto coordinates, certification flags, and tracked media without performing scientific computation:
 
 ```bash
-.venv/bin/python experiments/vortices_percentage/visualize_paper.py
-.venv/bin/python experiments/vortices_percentage/visualize_paper_gif.py
-.venv/bin/python experiments/vortices_percentage/visualize_pareto.py
+.venv/bin/python experiments/vortices_percentage/verify_saved_result.py --json
 ```
 
-These are deterministic post-processing commands over saved results. The paper
-command writes both PNG and PDF; the animation writes the corresponding GIF.
-
-## Reproduction
-
-### Environment and native backend
-
-Python 3.11 or newer is required. From the repository root:
+Regenerate the authoritative Pareto figures from the saved exact receipts:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[skyrmions,tesseract-cpp]'
-
-.venv/bin/cmake \
-  -S native/poisson_tesseract \
-  -B native/poisson_tesseract/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DPython_EXECUTABLE="$PWD/.venv/bin/python"
-.venv/bin/cmake --build native/poisson_tesseract/build -j "$(nproc)"
-
-export JAX_ENABLE_X64=1
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/render_v2_1_c3_64_pareto.py
 ```
 
-The `skyrmions` extra is the repository's shared SciPy/Matplotlib extra; it
-does not change this experiment. See
-[`native/poisson_tesseract/README.md`](../../native/poisson_tesseract/README.md)
-for native tests and backend semantics. Set an explicit `OMP_NUM_THREADS` no
-larger than the number of physical cores and avoid nested OpenMP.
-
-### Level 1: verify the saved authoritative result
+Regenerate the confirmed static snapshots and animation:
 
 ```bash
-.venv/bin/python experiments/vortices_percentage/eval_pareto.py
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/visualize_v2_1_partial_paper.py
+
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/visualize_v2_1_partial_paper_gif.py
 ```
 
-This read-only check verifies the saved hashes, six corrected rows, 1,536
-validation-trial method records, and certification summary. It is the correct
-publication-result verifier. `eval.py` instead displays the older tracked
-base/source run and is retained only as a pipeline diagnostic.
+These commands consume only the exposed files under [inputs](inputs/README.md) and [outputs/published](outputs/published/README.md). They work from a fresh clone and do not need the archived search tree, reference checkpoints, or confirmatory run directories. The manifest-driven verifier checks every required input and receipt by SHA-256 before accepting the saved result.
 
-### Level 2: regenerate a source run
+### Optional full scientific replay
+
+Recomputing the scientific result is a separate, expensive workflow. Train the three frozen references first, verify and freeze their common bandwidth, generate the V2.1 selection bank, and then execute selection:
 
 ```bash
-.venv/bin/python experiments/vortices_percentage/run.py --smoke \
-  --output-dir experiments/vortices_percentage/outputs/reproduction/smoke
-.venv/bin/python experiments/vortices_percentage/run.py \
-  --output-dir experiments/vortices_percentage/outputs/reproduction/source
+for seed in 310000101 310000102 310000103; do
+  PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+    .venv/bin/python experiments/vortices_percentage/run_reference_stage.py --seed "$seed"
+done
+
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/freeze_common_bandwidth.py \
+  --reference-receipt experiments/vortices_percentage/outputs/prospective_v2/references/reference_seed_310000101/qualification_receipt.json \
+  --reference-receipt experiments/vortices_percentage/outputs/prospective_v2/references/reference_seed_310000102/qualification_receipt.json \
+  --reference-receipt experiments/vortices_percentage/outputs/prospective_v2/references/reference_seed_310000103/qualification_receipt.json \
+  --output experiments/vortices_percentage/outputs/prospective_v2/freeze/common_bandwidth_receipt.json
+
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/verify_reference_stage.py
+
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/generate_v2_1_selection_bank.py
+
+PYTHONPATH="$PWD/src:$PWD/experiments:$PWD/experiments/vortices_percentage" \
+  .venv/bin/python experiments/vortices_percentage/execute_v2_1_selection.py
 ```
 
-The smoke command is a small wiring test and does not reproduce production
-statistics. The full command trains the endpoint reference and generates the
-base Population/Law/Tangent/Full run under `config.json`; it is not the later
-corrected nested Pareto search.
+Reference training and exact selection are long GPU/CPU jobs and write checkpoints beneath the ignored `outputs/` tree. Development runs and obsolete logs have been moved to the ignored, recoverable `old_stuff/vortices_percentage_v2_1_development/` archive; no visualization or saved-result verification path depends on that archive. The later confirmatory scripts remain available for protocol auditing, but the published 64-trial result must not be casually overwritten or mixed with a new run; use a separate output root for an independent replication.
 
-### Level 3: replay the corrected sweep
+## Directory map
 
-The ignored pre-correction tree is recoverable from Git commit
-`f4d955a55bebcedc84d2bb858e456dda4f7a66d0`. A shallow clone must fetch that
-commit before running the archive command:
-
-```bash
-vortices_archive=experiments/vortices_percentage/outputs/old/pareto_pre_corrected_full
-test ! -e "$vortices_archive"
-vortices_unpack="$(mktemp -d)"
-git archive f4d955a55bebcedc84d2bb858e456dda4f7a66d0 \
-  experiments/vortices_percentage/outputs/pareto \
-  | tar -x -C "$vortices_unpack"
-mkdir -p "$(dirname "$vortices_archive")"
-mv "$vortices_unpack/experiments/vortices_percentage/outputs/pareto" \
-  "$vortices_archive"
+```text
+experiments/vortices_percentage/
+├── README.md                              # This narrative and reproduction guide
+├── domain.py                              # Time-dependent double gyre and initial law
+├── bounded_reference.py                   # Box-logit reference-flow transformation
+├── experiment.py                          # Reusable observation, risk, and experiment model
+├── base_experiment_config.json            # Frozen physical/observation configuration
+├── config.json                            # Corrected V2 reflected Full-action configuration
+├── inputs/                                # Frozen truth, endpoint, reference, and holdout banks
+├── core.py                                # V2 hard projection, reflected raster, and exact action
+├── run_reference_stage.py                 # Three-seed endpoint-reference training
+├── verify_reference_stage.py              # Reference qualification and common bandwidth
+├── generate_v2_1_selection_bank.py        # Frozen shared selection-bank generation
+├── execute_v2_1_selection.py              # Feasibility-first V2.1 selection
+├── v2_selection_harness.py                # Promoted reusable selection evaluator
+├── run_v2_1_c3_64_confirmatory.py         # Final independent confirmation
+├── verify_saved_result.py                  # Fast read-only published-result check
+├── VORTICES_V2_1_*                        # Frozen protocols, receipts, and result report
+├── plots/                                 # Tracked publication figures, GIF, and rendered data copies
+└── outputs/published/                     # Tracked compact result records and provenance receipts
 ```
 
-Run the nested search into a separate ignored destination so the tracked
-authoritative result is not overwritten, then finalize and independently
-certify its frozen winners:
+## Scope and limitations
 
-```bash
-vortices_replay=experiments/vortices_percentage/outputs/reproduction/pareto
+This is a controlled benchmark with simulator access to a hidden population, not an empirical fluid experiment. The hidden law is used to generate aggregate observations and evaluate scientific risk; FIDE itself receives only those aggregate observations and the independently trained endpoint reference. The three reference models test sensitivity to training randomness, but they share the same architecture, endpoint dataset, and model class.
 
-.venv/bin/python experiments/vortices_percentage/run_pareto.py \
-  --source-run "$vortices_archive/risk_0p5pct" \
-  --output "$vortices_replay" \
-  --seed-pareto "$vortices_archive"
+Most importantly, the confirmed Pareto statement is **partial**. It establishes a positive and increasing Full-action reduction over 0.5%–2%; it does not establish the shape, saturation point, or maximum attainable reduction of the broader frontier. Completing 3%–5%, adding more allowances, increasing reference diversity, and testing other flow regimes are the natural next steps left for future work going beyond this hackathon project.
 
-.venv/bin/python experiments/vortices_percentage/finalize_authoritative_corrected_pareto.py \
-  --pareto-dir "$vortices_replay" \
-  --archive-pareto "$vortices_archive" \
-  --source-run "$vortices_archive/risk_0p5pct"
-```
-
-The finalizer fails closed if nesting, exact candidate certification, or
-common-raster decomposition fails. It does not optimize or alter winners.
-Cross-platform sparse and native solves can differ in their last
-floating-point digits, so the declared tolerances—not byte identity of a fresh
-replay—define scientific success. Existing per-stage timing receipts total
-about 104 minutes over the six source points on the recorded machine, but omit
-later corrected searches and finalization and are not a total-cost benchmark.
-
-## Artifact map
-
-| Path | Purpose |
-|:---|:---|
-| `outputs/pareto/pareto.csv`, `.json` | complete active Pareto sweep |
-| `outputs/pareto/pareto_methods_selection.csv` | exact selection metrics for Law/Tangent/Full |
-| `outputs/pareto/pareto_methods_validation.csv` | independent validation metrics |
-| `outputs/pareto/corrected_authoritative_pareto.*` | final corrected Full table and summary |
-| `outputs/pareto/corrected_authoritative_decomposition_audit.*` | aggregate and per-time/trial common-raster audit |
-| `outputs/pareto/old_vs_corrected_full_comparison.*` | archived-versus-current comparison |
-| `outputs/pareto/validation_trial_summaries.csv` | per-trial validation receipts |
-| `outputs/pareto/authoritative_run_summary.json` | concise certification and scientific conclusions |
-| `outputs/pareto/frozen_inputs/manifest.json` | frozen-input paths and SHA-256 hashes |
-| `outputs/pareto/risk_*pct/` | per-allowance results, candidate audits, timings, banks, and manifests |
-| `outputs/old/pareto_pre_corrected_full/` | ignored historical input reconstructed from the documented Git commit |
-
-Core implementation files are `experiment.py` (experiment/evaluators), `selection.py` (candidate generation and exact selection), `run_pareto.py` (nested sweep), `finalize_authoritative_corrected_pareto.py` (publication audit), and `src/mfsi/poisson.py` (weighted-Poisson solvers).
-
-## Software, provenance, and limitations
-
-The accepted run was documented with Python 3.12.3, NumPy 2.5.1, SciPy 1.18.0,
-JAX/jaxlib 0.8.3, and 64-bit JAX. The frozen-input manifest is authoritative
-for the truth, endpoint, checkpoint, rollout, selection, validation, and
-configuration hashes.
-
-| File | SHA-256 |
-|:---|:---|
-| `experiment.py` | `5bcd5b3c96668cabf6d7a8b2b1944f48f490635763b997172584328551a9a4c4` |
-| `selection.py` | `baf15fceff7b926d25471560e3342fe7fe7aaaa3993998b3f2274af8094d99ed` |
-| `run_pareto.py` | `351b14c5aa3ef41b929ffb548a3c47ab6f2136e7c78494e3043159225cefa62a` |
-| `finalize_authoritative_corrected_pareto.py` | `e5c146dcd176d8c96937536b0c4575afdf659382f8220c30ecb71b6b3f1aaeb0` |
-
-| Authoritative artifact | SHA-256 |
-|:---|:---|
-| Corrected Pareto JSON | `cdf84cd0e8277c8b3f89bf950d82a349f18972fff9986a5b1a217e213fac89aa` |
-| Certification diagnostic | `4bda8b411ed38f5078f22c343ec31f74c38336f1b5876d8d547a19f08f57af7a` |
-| Authoritative run summary | `4414ec8308bd1121ce1d3bea28f4a4bd3bfe68defd15e7ed4ef25edfb8017daa` |
-
-| Frozen input | SHA-256 |
-|:---|:---|
-| `truth_bank.npz` | `d897ff7fc44c0b85d7bb5391c0cc25895b4301e9c2ce00184697a1899d853b5b` |
-| `reference_endpoints.npz` | `ad4006927e268c52f621c16c773f0600d803370bd21fb5e0816d82a70dbdfbba` |
-| `reference.npz` | `63619893b44d49f6fd89f210239e0428d3d41aabfb4789cff616973066d21138` |
-| `reference_bank.npz` | `159515f930ab1b82c0a9ef42706705f192af295ca2c74a9611da1558464a0b2f` |
-| `selection_bank.npz` | `0ae52680ba66f07e36e02a0d85d25847fc11dc2554fcb63f95cb4e7aa0636ef9` |
-| `validation_bank.npz` | `63748a79d00bce58e6307f2070f29c480998de0a7c5c47b4fcb0788696dea894` |
-| `source_manifest.json` | `114610c3422cc791622e94bac36c3f589d77ba0e52a5a48dbe1284cb68de3967` |
-| frozen `config.json` | `8f57f167675718b19d7ffc1741a8175adbe22069ff4043634b62df8dcf100ed0` |
-
-[`reference_seed_sensitivity.md`](reference_seed_sensitivity.md) is a
-historical three-seed audit performed with the earlier evaluator and a fixed
-provenance-seeded Full geometry. Its `50.54%–54.15%` reductions must not be
-mixed with the corrected `59.17%–70.18%` Pareto headline. It supports only the
-narrow conclusion that the tested learned references gave similar conclusions
-under that older controlled setup; it is not a corrected-Pareto rerun.
-
-The authoritative study uses one frozen truth/reference realization and a
-finite validation bank; the heavy-tailed Law action makes a larger independent
-validation bank especially useful. The current result does not establish
-global optimality or sensitivity to particle count, sensor width, detector
-noise, grid resolution, or de-novo searches without archived candidate seeds.
-End-to-end corrected wall time and peak memory were not stored.
-
-## Read-only saved-result evaluation
-
-From the repository root:
-
-```bash
-.venv/bin/python experiments/vortices_percentage/eval.py
-.venv/bin/python experiments/vortices_percentage/eval_pareto.py
-```
-
-The first command displays the older tracked base/source run and is not the
-publication result. The second displays and hash-verifies the corrected
-authoritative Pareto sweep. Neither command runs the experiment or writes
-outputs. Both use the repository-wide saved-evaluator table style, include
-Law/Tangent/Full, and report sample SDs from the saved independent validation
-trials (or from a saved ordinary SE and `n`).
+For the general theory and the analytical example, see the project [README](../../README.md) and [technical report](../../full_report.pdf).

@@ -20,6 +20,10 @@ cmake_install.cmake
 *.so
 
 experiments/**/outputs/
+!experiments/vortices_percentage/outputs/
+experiments/vortices_percentage/outputs/*
+!experiments/vortices_percentage/outputs/published/
+!experiments/vortices_percentage/outputs/published/**
 !experiments/active_nematic_unbalance_percentage/outputs/
 !experiments/skyrmions_galerkin/outputs/
 experiments/ocean_drifters/data/**/*.parquet
@@ -34,30 +38,10 @@ stages_dev/
 
 scripts/notify.py
 
-visual_abstract/
 experiments/skyrmions_deep_ritz/outputs
 !experiments/toy_example_percentage/outputs/pareto/pareto_methods.pdf
 
 run_logs/
 
-# Keep compact Vortices validation-repair receipts; raw checkpoints and banks
-# remain ignored and are deterministically reproducible from the documented run.
-!experiments/vortices_percentage/outputs/
-experiments/vortices_percentage/outputs/*
-!experiments/vortices_percentage/outputs/pareto/
-experiments/vortices_percentage/outputs/pareto/*
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/
-experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/*
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/summary.json
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/fresh_summary.csv
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/fresh_summary.md
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/original_64_trial_summary.csv
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/original_64_trial_summary.md
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/pooled_320_trial_summary.csv
-!experiments/vortices_percentage/outputs/pareto/fresh_validation_tail_audit/pooled_320_trial_summary.md
-!experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/
-experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/*
-!experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/confirmatory_summary.json
-!experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/confirmatory_summary.csv
-!experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/confirmatory_summary.md
-!experiments/vortices_percentage/outputs/pareto/confirmatory_validation_2048/prior_sensitivity_summary.csv
+testing/
+old_stuff

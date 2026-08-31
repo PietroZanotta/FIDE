@@ -28,8 +28,8 @@ from action_decomposition_audit import (
     load_pareto_candidates,
     save_outputs,
 )
-from bounded_reference import BoxTransformedReferenceFlow
-from experiment import ObservationTrialBank, VortexExperiment
+from experiments.vortices_percentage.bounded_reference import BoxTransformedReferenceFlow
+from experiments.vortices_percentage.experiment import ObservationTrialBank, VortexExperiment
 
 
 DEFAULT_PARETO = SCRIPT_DIR / "outputs" / "pareto"

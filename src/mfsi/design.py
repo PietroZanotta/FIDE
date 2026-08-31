@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Sequence
 
 import jax
@@ -148,6 +149,8 @@ def optimize_multistart_candidates(
     canonicalize: Callable[[Array], Array] | None = None,
     project_iterate: Callable[[Array], Array] | None = None,
     vectorize_starts: bool = True,
+    start_batch_size: int | None = None,
+    start_workers: int = 1,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[OptimizeResult]:
     """Optimize every start and return all seed/optimized candidates.
@@ -163,29 +166,74 @@ def optimize_multistart_candidates(
     # memory when all starts are vmapped together.  Keep vectorization for the cheap
     # law/tangent stages, but allow sequential execution with one shared compiled
     # graph for memory-bounded objectives.
+    if start_batch_size is not None and not vectorize_starts:
+        raise ValueError("start_batch_size requires vectorize_starts=True")
+    if start_batch_size is not None and int(start_batch_size) < 1:
+        raise ValueError("start_batch_size must be >= 1")
+    if int(start_workers) < 1:
+        raise ValueError("start_workers must be >= 1")
+    if vectorize_starts and int(start_workers) != 1:
+        raise ValueError("start_workers requires vectorize_starts=False")
+
     if vectorize_starts:
         optimize_batch = jax.jit(
             jax.vmap(lambda eta0: _adam_single(objective, eta0, cfg, project_iterate))
         )
-        optimized = optimize_batch(starts)
-        # Synchronize before reporting completion: JAX dispatch is asynchronous on
-        # accelerators, so merely constructing ``optimized`` is not a useful timing
-        # boundary for callers.
-        if progress_callback is not None:
-            jax.block_until_ready(optimized)
-            progress_callback(int(starts.shape[0]), int(starts.shape[0]))
+        total = int(starts.shape[0])
+        batch_size = total if start_batch_size is None else min(int(start_batch_size), total)
+        if batch_size == total:
+            optimized = optimize_batch(starts)
+            # Synchronize before reporting completion: JAX dispatch is asynchronous on
+            # accelerators, so merely constructing ``optimized`` is not a useful timing
+            # boundary for callers.
+            if progress_callback is not None:
+                jax.block_until_ready(optimized)
+                progress_callback(total, total)
+        else:
+            optimized_rows = []
+            for begin in range(0, total, batch_size):
+                take = min(batch_size, total - begin)
+                batch = starts[begin : begin + take]
+                # Keep one static batch shape so JAX compiles the expensive graph once.
+                # Repeated padding rows are discarded immediately after evaluation.
+                if take < batch_size:
+                    padding = jnp.repeat(batch[-1:], batch_size - take, axis=0)
+                    batch = jnp.concatenate((batch, padding), axis=0)
+                optimized_batch = optimize_batch(batch)
+                jax.block_until_ready(optimized_batch)
+                optimized_rows.append(optimized_batch[:take])
+                if progress_callback is not None:
+                    progress_callback(begin + take, total)
+            optimized = jnp.concatenate(optimized_rows, axis=0)
     else:
         optimize_one = jax.jit(
             lambda eta0: _adam_single(objective, eta0, cfg, project_iterate)
         )
         optimized_rows = []
         total = int(starts.shape[0])
-        for i in range(total):
-            optimized_eta = optimize_one(starts[i])
-            if progress_callback is not None:
-                jax.block_until_ready(optimized_eta)
-                progress_callback(i + 1, total)
-            optimized_rows.append(optimized_eta)
+        if int(start_workers) == 1:
+            for i in range(total):
+                optimized_eta = optimize_one(starts[i])
+                if progress_callback is not None:
+                    jax.block_until_ready(optimized_eta)
+                    progress_callback(i + 1, total)
+                optimized_rows.append(optimized_eta)
+        else:
+            # Compile the original single-start graph once.  Threads call that same
+            # executable, avoiding vmap transformations of numerically sensitive or
+            # native-callback objectives while overlapping independent starts.
+            compiled_one = optimize_one.lower(starts[0]).compile()
+
+            def run_one(eta0: Array) -> Array:
+                value = compiled_one(eta0)
+                jax.block_until_ready(value)
+                return value
+
+            with ThreadPoolExecutor(max_workers=int(start_workers)) as pool:
+                for i, optimized_eta in enumerate(pool.map(run_one, list(starts))):
+                    optimized_rows.append(optimized_eta)
+                    if progress_callback is not None:
+                        progress_callback(i + 1, total)
         optimized = jnp.stack(optimized_rows)
 
     primary_eval = jax.jit(primary)

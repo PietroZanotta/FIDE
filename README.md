@@ -13,6 +13,8 @@ Our work, **Fiber-Informed Differentiable Experimental Design (FIDE)**, asks how
 
 This lets us use trusted endpoint information and trusted observable responses without requiring the complete intermediate microscopic dynamics to be known or trusted.
 
+We evaluate the idea in two complementary experiments: an analytical Gaussian-mixture transport benchmark, where the hidden law is available in closed form, and a nonlinear vortices benchmark, where four sensors observe particles transported by a time-dependent double gyre.
+
 > **Naming convention.** Throughout this README, **FIDE** refers to the complete proposed framework. In experiments and figures, we call the FIDE-selected design **Full**, because it is selected using the **Full action**, our law-level transportability criterion. We therefore use **FIDE** and **Full** interchangeably when referring to the proposed design method; **Full action** refers specifically to its transportability objective. `Law` and `Tangent` denote the corresponding comparison methods.
 
 ## Key Features
@@ -53,11 +55,17 @@ Please refer to our [technical report](full_report.pdf) for further info.
     - [Benchmark: Tesseract versus a full JAX implementation](#benchmark-tesseract-versus-a-full-jax-implementation)
   - [Numerical Experiments](#numerical-experiments)
     - [Analytical Gaussian-mixture transport](#analytical-gaussian-mixture-transport)
-    - [The system](#the-system)
-    - [From hidden dynamics to aggregate observations](#from-hidden-dynamics-to-aggregate-observations)
-    - [Experimental-design comparison](#experimental-design-comparison)
-    - [Results](#results)
-    - [Reading the result figures](#reading-the-result-figures)
+        - [Analytical system](#analytical-system)
+        - [From hidden dynamics to aggregate observations](#from-hidden-dynamics-to-aggregate-observations)
+        - [Analytical experimental-design comparison](#analytical-experimental-design-comparison)
+        - [Analytical results](#analytical-results)
+        - [Reading the analytical result figures](#reading-the-analytical-result-figures)
+    - [Vortices in a time-dependent double gyre](#vortices-in-a-time-dependent-double-gyre)
+        - [Double-gyre system and observations](#double-gyre-system-and-observations)
+        - [Bounded-domain Full action](#bounded-domain-full-action)
+        - [Confirmed partial Pareto result](#confirmed-partial-pareto-result)
+        - [Reading the vortices figures](#reading-the-vortices-figures)
+        - [Why the current frontier stops at 2%](#why-the-current-frontier-stops-at-2)
   - [Structure of this Repository](#structure-of-this-repository)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
@@ -347,7 +355,7 @@ The first numerical experiment is a controlled two-dimensional system for which 
 
 This section gives the visual and conceptual overview. The full specification, optimization protocol, numerical tolerances, and certificates are documented in [Section 6 and Appendix B.2 of the paper](full_report.pdf) and in the [analytical-example README](experiments/toy_example_percentage/README.md). The repository directory retains the historical name `toy_example_percentage`; the paper and this README call it the **analytical Gaussian-mixture experiment**.
 
-### The system
+#### Analytical system
 The state is a point $x=(x_1,x_2)$ in $[-3.2,3.2]^2$. Define an antipodal pair of Gaussian lobes by
 
 $$g_\alpha(x) = \frac{1}{2}\mathcal{N}\left(x;1.5d(\alpha),0.3^2I\right) + \frac{1}{2}\mathcal{N}\left(x;-1.5d(\alpha),0.3^2I\right).$$
@@ -366,7 +374,7 @@ $$\Phi_j(x;\theta_j) = \exp\left(-\frac{\| x-1.5d(\theta_j)\|^2}{2(0.45)^2}\righ
 
 Each sensor returns only the population average of this response. A finite trial observes 100 particles at 11 acquisition times, with detector-noise standard deviation $0.01$. Thus the experiment never observes the complete density shown in the figures below; those densities are available only because this is a validation benchmark.
 
-### From hidden dynamics to aggregate observations
+#### From hidden dynamics to aggregate observations
 ![Animation of the analytical Gaussian-mixture experiment](experiments/toy_example_percentage/figures/toy_population_correction_sensors.gif)
 
 *Animation: hidden population, measurement-implied law, and sensor views.* The left panel follows the analytic hidden population from the horizontal to the vertical endpoint. The center panel shows the law obtained by maximum-entropy information projection of the frozen endpoint reference onto the two reconstructed sensor moments. The two panels on the right isolate the spatial region seen by each sensor and report its scalar response $y$. The colored crosses are sensor centers and the dashed circles indicate one sensor width.
@@ -377,7 +385,7 @@ The corrected law is required to reproduce the two observations; it is not expec
 
 *Static companion: four audited snapshots.* Each column is one time point from a frozen validation trial near the representative nuisance orientation $\alpha=45^\circ$. The top row is the hidden law, the middle row is the sensor-consistent information projection, and the bottom row shows what each sensor contributes to its scalar reading. The figure uses the authoritative 5% Full geometry, with sensor angles approximately $21.7^\circ$ and $72.6^\circ$. At the endpoints, one sensor is naturally more informative than the other; during the transition their roles rebalance as mass moves through their supports.
 
-### Experimental-design comparison
+#### Analytical experimental-design comparison
 The design variable is the pair of sensor angles $\eta=(\theta_1,\theta_2)$. Every candidate uses the same frozen reference, observation protocol, selection bank, and independent validation bank. We compare three ways to choose the sensors:
 
 - **Law** minimizes the finite-data scientific risk and supplies the frozen risk anchor.
@@ -398,7 +406,7 @@ This is an information-first comparison: Full action does not compensate for an 
 
 *Experiment dashboard: what is optimized and what is validated.* Panel A shows the analytic hidden path for the representative $45^\circ$ orientation. Panel B overlays the Law, Tangent, and Full sensor pairs on the admissible ring. Panel C compares their exact selection risk and common Full action at the 3% allowance; the vertical dashed line is the risk limit. Panel D reports independent-validation Full action with 95% normal intervals. The nearby sensor layouts are not dynamically interchangeable: Full sharply reduces the common Full action, whereas the Tangent-selected geometry optimizes a weaker moment-rate quantity and performs worse under the law-level metric.
 
-### Results
+#### Analytical results
 The corrected percentage sweep passes every declared selection and validation gate. The principal independently validated results are:
 
 | Allowed extra risk | Full sensor angles          | Selection risk increase | Validation Full action | Reduction versus Law | Hidden-action fraction $\Gamma_h$ |
@@ -414,7 +422,7 @@ The common Law geometry has validation Full action $29.014\pm1.033$. At the repr
 
 The last column is equally important. Across the sweep, approximately 95.5%–97.4% of the Full correction energy lies outside the two measured moment-rate directions. The Tangent criterion consequently misses most of the law-level correction and does not preserve the Full ranking. This experiment is the concrete numerical example of why matching aggregate moment dynamics is not the same as making the complete inferred law dynamically compatible.
 
-### Reading the result figures
+#### Reading the analytical result figures
 ![Cost and risk across the complete percentage sweep](experiments/toy_example_percentage/outputs/pareto/pareto_methods.png)
 
 *Cost and risk-use curves.* In panel A, 100% is the Full action of the Law geometry on the same bank; lower is better. Solid curves are selection results and dashed curves are independent validation. Full falls from roughly 92% of Law at 0.5% allowance to roughly 65% at 4%–5%. Tangent rises above 100%, so its smaller moment-rate correction does not imply a smaller full-law correction. Panel B shows the fraction of the available Law-relative risk budget actually used. Only the solid selection curves are constrained; dashed validation risk is an out-of-sample diagnostic rather than a second optimization constraint.
@@ -425,93 +433,113 @@ All displayed media are post-processing of frozen artifacts; generating them doe
 
 For reproducibility, numerical details and further information please refer to the [analytical-example README](experiments/toy_example_percentage/README.md) and/or the [technical report](full_report.pdf).
 
+### Vortices in a time-dependent double gyre
+
+The second experiment moves from an analytically prescribed mixture path to a nonlinear bounded flow. A population of particles is stretched and folded inside a rectangular double gyre while four Gaussian sensors provide only noisy population averages. The experiment retains the same FIDE question—among scientifically adequate sensor systems, which geometry implies the most dynamically compatible complete law—but adds moving coherent structures, impermeable walls, four continuously positioned sensors, and sensitivity to the numerical treatment of density and flux at the boundary.
+
+This section summarizes the confirmed V2.1 experiment. Its full physical configuration, frozen protocols, numerical-repair history, standalone reproduction path, and figure-by-figure audit are in the [vortices-experiment README](experiments/vortices_percentage/README.md). The original V1 study is archived in the ignored `old_stuff/` tree; V2.1 is the canonical, standalone implementation under `experiments/vortices_percentage/`.
+
+#### Double-gyre system and observations
+
+The state lies in $[0,2]\times[0,1]$ and follows the standard time-dependent double-gyre velocity with amplitude $A=0.1$, modulation $\epsilon=0.25$, physical period $10$, and horizon $10$. The initial population combines a 10% uniform background with four narrow truncated Gaussian components. As the separatrix oscillates, the flow moves, stretches, and exchanges these concentrations between the two gyres.
+
+Each candidate experiment places four Gaussian sensors of width `0.12` subject to boundary and pairwise-separation constraints of `0.24`. A finite trial observes 2,000 particles at nine acquisition nodes with detector-noise standard deviation `0.005`; bounded endpoint-anchored splines reconstruct the four moment trajectories on the 21-node scientific grid. Scientific risk is a multiscale MMD criterion, and the Full design is considered only if it satisfies the same population screen and a Law-relative risk allowance.
+
+Three endpoint-trained, box-logit neural references are frozen before sensor selection. Their 3 training seeds each supplies a 32,768-particle rollout. A hard empirical information projection then tilts each reference law to match the four reconstructed sensor moments. As in the analytical example, the resulting law is a canonical completion of the aggregate observations, not a pointwise reconstruction claim.
+
+![Animated double-gyre population, measurement-implied law, and four sensor views](experiments/vortices_percentage/plots/vortices_v2_1_full_2p0.gif)
+
+*Animation: hidden double-gyre population, projected law, and the four aggregate sensor views.* The left panel is the simulator population used to generate and benchmark the observations; the center panel is the sensor-consistent information projection of a frozen reference; the right panels show the spatial contribution to each scalar sensor reading. The animation uses the confirmed 2% Full geometry. Differences away from the sensor supports are unresolved directions in the moment fiber, not violations of the measured constraints.
+
+#### Bounded-domain Full action
+
+The bounded rectangle makes the physical Full-action discretization consequential. V2 uses the same cell-integrated, even-reflected Gaussian kernel for density and signed continuity source, a matched reflected reference flux, no artificial floor in the physical projected density, and a homogeneous-Neumann weighted Poisson solve. The exact evaluator uses a `256 × 128` grid at all 21 time nodes and fails closed on mass, compatibility, calibration, covariance, effective-sample-size, and linear-solver gates.
+
+Selection is feasibility-first: exact population and finite-risk checks define the admissible candidate set before Full action is used for ranking. One 128-trial selection bank is shared across all methods and all three references. The final comparison freezes one Law geometry and one Full geometry per allowance, then evaluates them on a fresh shared 64-trial holdout using all three references. Tangent is also cross-evaluated on that bank as a supplementary descriptive comparison, but it is not part of the primary Law–Full simultaneous inference family.
+
+#### Confirmed Pareto result
+
+The confirmed scope is intentionally limited to allowances of 0.5%, 1%, and 2% rather than 0.5%-5% due to limited hackathon time. Across the four designs, three references, and 64 trials, all ordered exact evaluations pass every numerical gate. The Full/FIDE designs produce the following independent holdout results:
+
+| Allowed extra risk | Selection risk increase | Holdout risk change vs Law | Holdout Full action | Reduction versus Law |
+| -----------------: | ----------------------: | -------------------------: | ------------------: | -------------------: |
+|               0.5% |                  0.291% |                     0.303% |              1.4598 |            **8.28%** |
+|                 1% |                  0.810% |                     0.850% |              1.3974 |           **12.19%** |
+|                 2% |                  1.556% |                     1.599% |              1.3414 |           **15.71%** |
+
+The common Law holdout action is `1.5915`. All nine reference-by-allowance simultaneous 95% lower bounds for the Full-versus-Law reduction are strictly positive; the common max-deviation half-width is `2.454` percentage points and the maximum within-reference relative standard error is `2.442%`. The confirmed effect therefore grows from 8.28% to 15.71% over the completed range without relying on a single reference replicate.
+
+The Tangent geometries reduce holdout Full action by 5.21%, 5.85%, and 3.45% at the same allowances. That descriptive curve is weaker and nonmonotone under the Full metric, especially at 2%, illustrating again that a geometry optimized for visible moment-rate correction need not minimize the correction of the complete projected law.
+
+#### Reading the vortices figures
+
+![Static snapshots for the confirmed 2% Full geometry](experiments/vortices_percentage/plots/vortices_v2_1_full_2p0_paper.png)
+
+*Four audited snapshots at the largest completed allowance.* Each column is one scientific time, with the hidden population above, the four-moment information projection in the middle, and the sensor-supported contributions below. The sensor centers adapt to different moving structures, while the projected law remains moment-consistent to numerical precision. This is the geometry that yields the 15.71% holdout action reduction; it should not be interpreted as a completed design for allowances above 2%.
+
+![Cost and risk use along the vortices risk–allowance frontier](experiments/vortices_percentage/plots/pareto_methods_full_action_risk_0p5_to_2pct.png)
+
+*Action cost and risk use in the same visual language as the analytical experiment.* In panel A, Law is 100% and lower is better; Full remains below both Law and Tangent on selection and holdout at every evaluated allowance. Panel B shows the percentage of the available Law-relative risk budget used. Solid curves are selection values and dashed curves are independent holdout cross-evaluations; only the solid selection risks are constrained.
+
+![Vortices selection and independent-confirmation dashboard](experiments/vortices_percentage/plots/pareto_frontier_3panel_0p5_to_2pct.png)
+
+*From selected frontier to independent confirmation.* The panels connect the frozen selection certificates, the fresh holdout Pareto coordinates, and the reference-wise simultaneous intervals. The positive intervals show that the Full reduction is not driven by one reference seed, while the holdout panel confirms that the selected risk/action tradeoff persists out of sample.
+
+#### Why the current frontier stops at 2%
+
+The original plan included 3%, 4%, and 5% allowances, but the exact three-reference `256 × 128` evaluation was too expensive to complete within the hackathon window. We therefore paused those branches and froze a reduced confirmatory protocol for the already completed 0.5%–2% geometries before inspecting their action results. The earlier 1,024-trial confirmation was retired outcome-blind; the accepted fresh 64-trial bank was then generated and evaluated under prespecified precision and validity gates.
+
+This is a scope decision, not evidence that the Pareto curve saturates at 2%. Future work will complete a broader allowance sweep and test whether more permissive scientific-risk budgets reveal a larger Full-action reduction. Until then, no 3%–5% vortices claim is made.
+
+All displayed media are deterministic post-processing of frozen artifacts. The [saved-result verifier](experiments/vortices_percentage/verify_saved_result.py), [standalone publication bundle](experiments/vortices_percentage/outputs/published/README.md), and [full result report](experiments/vortices_percentage/VORTICES_V2_1_C3_64_RESULT.md) provide progressively deeper audit surfaces. The tracked inputs and compact published outputs are sufficient to regenerate every vortices plot and GIF from a fresh clone without rerunning selection or confirmation.
+
+See more details in the [technical writeup](full_report.pdf)
+and in the [vortices-example README](experiments/vortices_percentage/README.md).
 ## Structure of this Repository
-For the current hackathon project, due to lack of time, the documented repository surface is intentionally limited to the analytical Gaussian-mixture experiment. The directories below contain the reusable FIDE implementation, the experiment-specific workflow, the two Tesseract backends used by that workflow, and its verification suite:
+The documented project surface now contains two experiments: the analytical Gaussian-mixture benchmark and the confirmed V2.1 double-gyre vortices benchmark. Both use the reusable FIDE implementation under `src/mfsi/`; the analytical workflow additionally exercises the two native Tesseract solvers directly during differentiable design.
 
 ```text
-
 .
-
 ├── README.md                              # Project overview, results, and quick start
-
-├── full_report.pdf                         # Technical paper and mathematical details
-
-├── pyproject.toml                          # Python package and optional analytical/Tesseract dependencies
-
-├── src/mfsi/                               # Reusable JAX implementation of the FIDE pipeline
-
-│   ├── measurements.py, moments.py         # Sensor maps and moment-trajectory reconstruction
-
-│   ├── reference.py, flow_matching.py      # Endpoint-trained reference flow
-
-│   ├── projection.py                       # Empirical information projection
-
-│   ├── projection_tesseract.py             # JAX adapter for the native I-projection Tesseract
-
-│   ├── poisson.py                          # Weighted-Poisson Full-action formulation
-
-│   ├── poisson_tesseract.py                # JAX adapter for the native Poisson Tesseract
-
-│   └── design.py, selection.py, ...        # Optimization, feasibility, rasterization, and diagnostics
-
+├── full_report.pdf                        # Technical paper and mathematical details
+├── pyproject.toml                         # Python package and optional dependency groups
+├── src/mfsi/                              # Reusable JAX implementation of the FIDE pipeline
+│   ├── measurements.py, moments.py        # Sensor maps and moment-trajectory reconstruction
+│   ├── reference.py, flow_matching.py     # Endpoint-trained reference flow
+│   ├── projection.py                      # Empirical information projection
+│   ├── projection_tesseract.py            # JAX adapter for the native I-projection Tesseract
+│   ├── poisson.py                         # Weighted-Poisson Full-action formulation
+│   ├── poisson_tesseract.py               # JAX adapter for the native Poisson Tesseract
+│   └── design.py, selection.py, ...       # Optimization, feasibility, rasterization, and diagnostics
 ├── experiments/
-
-│   └── toy_example_percentage/            # Analytical Gaussian-mixture experiment
-
-│       ├── README.md                       # Complete scientific and reproduction guide
-
-│       ├── config.json                     # Frozen production and smoke-test configuration
-
-│       ├── domain.py                       # Analytic population and endpoint laws
-
-│       ├── experiment.py                   # End-to-end experiment implementation
-
-│       ├── run.py                          # Smoke and base-run command-line entry point
-
-│       ├── run_corrected_nested_full_sweep.py # Checkpointed corrected percentage-sweep replay
-
-│       ├── eval_pareto.py                  # Read-only verification of the saved authoritative result
-
-│       ├── visualize_*.py                  # Figures and animation
-
-│       ├── figures/                        # Tracked explanatory media
-
-│       └── outputs/
-
-│           ├── run/                        # Frozen reference, banks, and base-run artifacts
-
-│           └── pareto/                     # Authoritative corrected sweep and result figures
-
+│   ├── toy_example_percentage/           # Analytical Gaussian-mixture experiment
+│   │   ├── README.md                      # Complete scientific and reproduction guide
+│   │   ├── config.json                    # Frozen production and smoke configuration
+│   │   ├── domain.py, experiment.py       # Analytic law and end-to-end workflow
+│   │   ├── run*.py, eval_pareto.py        # Execution and read-only result verification
+│   │   └── figures/, outputs/pareto/      # Explanatory and authoritative result media
+│   └── vortices_percentage/              # Canonical standalone V2.1 vortices experiment
+│       ├── README.md                      # Detailed scientific and reproduction guide
+│       ├── domain.py, experiment.py       # Double gyre, observations, and scientific risk
+│       ├── base_experiment_config.json    # Frozen physical and observation configuration
+│       ├── inputs/                        # Frozen truth, endpoint, reference, and holdout banks
+│       ├── core.py, config.json           # Reflected V2 Full-action method
+│       ├── run_reference_stage.py         # Three endpoint-reference training runs
+│       ├── execute_v2_1_selection.py      # Feasibility-first sensor selection
+│       ├── verify_saved_result.py         # Fast read-only published-result verification
+│       ├── VORTICES_V2_1_*               # Frozen protocols and result report
+│       ├── plots/                         # Tracked figures, GIF, and rendered data copies
+│       └── outputs/published/             # Compact result records and provenance receipts
 ├── native/
-
-│   ├── iprojection_tesseract/              # C++17/OpenMP batched information-projection solver
-
-│   └── poisson_tesseract/                  # C++17/OpenMP batched weighted-Poisson solver
-
-└── tests/                                  # Analytical-workflow verification
-
-    ├── test_projection*.py                  # Information-projection values and derivatives
-
-    ├── test_poisson*.py                     # Weighted-Poisson values and derivatives
-
-    ├── test_*decomposition*.py              # Tangent/hidden-action identities and audits
-
-    ├── test_design.py                      # Design constraints and optimization helpers
-
-    ├── test_measurements.py                # Sensor definitions
-
-    ├── test_moments.py                     # Moment-trajectory reconstruction
-
-    └── test_saved_experiment_evaluators.py  # Integrity checks for the frozen result
-
+│   ├── iprojection_tesseract/             # C++17/OpenMP batched information projection
+│   └── poisson_tesseract/                 # C++17/OpenMP batched weighted Poisson solver
+└── tests/                                 # Shared and analytical-workflow verification
 ```
 
-The dependency direction is `experiments/toy_example_percentage/` → `src/mfsi/` → the two native adapters when Tesseract acceleration is enabled. The experiment owns the scientific model, frozen configuration, orchestration, and result artifacts; `src/mfsi/` contains reusable numerical components; and `native/` contains only the accelerated implicit solvers exposed back to JAX. Start with the [analytical-example README](experiments/toy_example_percentage/README.md) for a file-by-file reproduction path, or continue below for the shortest verified setup.
-
-Other experiment directories are development work and are deliberately omitted from this documented structure. They are not dependencies of the analytical workflow and should not be interpreted as part of the current result; they can be added to this map later if they become part of the project release.
+Each experiment owns its scientific model, frozen configuration, orchestration, and evidence. `src/mfsi/` contains reusable numerical components, while `native/` contains the accelerated implicit solvers exposed to JAX. The vortices directory includes the frozen visualization inputs, compact published outputs, and promoted execution harnesses it needs, so it has no runtime dependency on either ignored vortices archive. Raw V2.1 search/checkpoint trees and obsolete logs remain recoverable under `old_stuff/vortices_percentage_v2_1_development/`; other experiment directories remain development work and are not part of the two-result release documented here.
 
 ## Getting Started
-Run the commands below from the repository root. The documented development environment is Linux under WSL2; the Python package is portable, but the native Tesseract build assumes a C++17 compiler and OpenMP. The fastest path verifies the tracked result in the [technical report](full_report.pdf) without retraining the reference or rerunning optimization.
+Run the commands below from the repository root. This quick-start intentionally covers only the analytical Gaussian-mixture experiment, which is the shortest way to verify the implementation and exercise both Tesseract backends. The vortices workflow is standalone but substantially more expensive; its staged commands and saved-result verifier are documented in the [vortices README](experiments/vortices_percentage/README.md#reproduce-and-verify). The documented development environment is Linux under WSL2; the Python package is portable, but the native Tesseract build assumes a C++17 compiler and OpenMP.
 
 ### Prerequisites
 - Python 3.11 or newer;
@@ -688,6 +716,8 @@ The authoritative replay has three deliberately distinct levels: fast saved-arti
 
 ## Future Work
 Future work will focus on:
+
+- **Completing the vortices Pareto frontier.** The current confirmed result covers 0.5%–2% because exact three-reference evaluation was limited by the hackathon schedule. Completing 3%–5%, adding finer allowances, and testing whether a broader risk budget produces a larger Full-action reduction are immediate priorities.
 
 - **Scaling to many-body systems.** Extend the current benchmark suite beyond low-dimensional transport problems to interacting many-body systems, with magnetic skyrmion dynamics as a first target.
 
