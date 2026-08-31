@@ -103,7 +103,7 @@ In practice these quantities may themselves be observed sparsely and noisily, so
 
 The central difficulty is that finitely many aggregate measurements do **not** uniquely identify the underlying law. At each time they instead define a **moment fiber**
 
-$$\mathcal{F}_\eta(\hat c_\eta(t)) = \left\{ Q : \mathbb{E}_{Q}[\Phi_\eta(X)] = \hat c_\eta(t) \right\},$$
+$$\mathcal{F}_\eta(\hat c_\eta(t)) = \{ Q : \mathbb{E}_{Q}[\Phi_\eta(X)] = \hat c_\eta(t) \},$$
 
 containing all population laws that reproduce the measured observables.
 
