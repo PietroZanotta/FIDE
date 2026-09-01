@@ -1479,11 +1479,6 @@ ocean-drifters = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
-skyrmions = [
-    { name = "matplotlib" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
 tesseract-cpp = [
     { name = "cmake" },
     { name = "pybind11" },
@@ -1499,7 +1494,6 @@ requires-dist = [
     { name = "jax", specifier = ">=0.4,<0.9" },
     { name = "matplotlib", marker = "extra == 'analytical'", specifier = ">=3.9" },
     { name = "matplotlib", marker = "extra == 'ocean-drifters'", specifier = ">=3.9" },
-    { name = "matplotlib", marker = "extra == 'skyrmions'", specifier = ">=3.9" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", marker = "extra == 'ocean-drifters'", specifier = ">=2.2" },
     { name = "pyarrow", marker = "extra == 'ocean-drifters'", specifier = ">=18" },
@@ -1508,11 +1502,10 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'ocean-drifters'", specifier = ">=6" },
     { name = "scipy", marker = "extra == 'analytical'", specifier = ">=1.14" },
     { name = "scipy", marker = "extra == 'ocean-drifters'", specifier = ">=1.14" },
-    { name = "scipy", marker = "extra == 'skyrmions'", specifier = ">=1.14" },
     { name = "tesseract-core", extras = ["runtime"], marker = "extra == 'tesseract-cpp'", specifier = ">=1.11,<1.12" },
     { name = "tesseract-jax", marker = "extra == 'tesseract-cpp'", specifier = ">=0.2.3" },
 ]
-provides-extras = ["analytical", "skyrmions", "ocean-drifters", "tesseract-cpp"]
+provides-extras = ["analytical", "ocean-drifters", "tesseract-cpp"]
 
 [[package]]
 name = "ml-dtypes"

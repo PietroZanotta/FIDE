@@ -11,14 +11,8 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CASES = (
-    ("skyrmions_deep_ritz", "eval.py", ("Tangent", "0.230970", "30.44%")),
-    ("skyrmions_deep_ritz", "eval_pareto.py", ("Tangent", "0.068152", "32.24%")),
-    ("skyrmions_galerkin", "eval.py", ("Tangent", "0.028388", "21.82%")),
-    ("skyrmions_galerkin", "eval_pareto.py", ("Tangent", "0.038079", "-5.13%")),
     ("toy_example_percentage", "eval.py", ("Tangent", "95.498884", "18.55%")),
     ("toy_example_percentage", "eval_pareto.py", ("Tangent", "26.618646", "34.47%")),
-    ("vortices_percentage", "eval.py", ("Tangent", "0.293596", "25.94%")),
-    ("vortices_percentage", "eval_pareto.py", ("Tangent", "107.999874", "70.18%")),
 )
 
 

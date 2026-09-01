@@ -358,7 +358,7 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
-The `analytical` extra does not install or opt into the skyrmion experiment. Native build details and backend tests are in the [`iprojection_tesseract`](../../native/iprojection_tesseract/README.md) and [`poisson_tesseract`](../../native/poisson_tesseract/README.md) READMEs. For reproducible CPU scheduling, also set an explicit `OMP_NUM_THREADS` no larger than the number of physical cores and avoid nested OpenMP.
+The `analytical` extra installs only the dependencies needed by this experiment. Native build details and backend tests are in the [`iprojection_tesseract`](../../native/iprojection_tesseract/README.md) and [`poisson_tesseract`](../../native/poisson_tesseract/README.md) READMEs. For reproducible CPU scheduling, also set an explicit `OMP_NUM_THREADS` no larger than the number of physical cores and avoid nested OpenMP.
 
 ### Level 1: verify the saved authoritative result
 

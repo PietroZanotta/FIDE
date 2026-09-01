@@ -6,8 +6,8 @@
 
 This project was ideated and evaluated by [Pietro Zanotta](https://github.com/PietroZanotta) as part of the [Tesseract Hackathon 2026](https://pasteurlabs.ai/tesseract-hackathon-2026/) for **Track 1: Inverse Design & Shape Optimization**.
 
-### Contact
-- Pietro Zanotta: pzanott1@jhu.edu
+- **Contact**: Pietro Zanotta: pzanott1@jhu.edu
+- **Technical writeup**: the following README is a distillation of out [technical_writeup](technical_writeup.pdf), which contains all the theorems, proofs and numerical details
 
 Our work, **Fiber-Informed Differentiable Experimental Design (FIDE)**, asks how to design measurements when experiments reveal only **aggregate information** about an evolving population. Among measurement systems that are already good enough for the scientific task, FIDE favors those whose implied full population dynamics remain most compatible with a shared frozen reference model.
 
@@ -42,7 +42,6 @@ Please refer to our [technical report](full_report.pdf) for further info.
 
 ## Table of Contents
 - [FIDE: Fiber-Informed Differentiable Experimental Design](#fide-fiber-informed-differentiable-experimental-design)
-    - [Contact](#contact)
   - [Key Features](#key-features)
   - [Table of Contents](#table-of-contents)
   - [Motivation](#motivation)
@@ -335,21 +334,16 @@ We benchmarked each native component against its equivalent compiled JAX impleme
 | Complete differentiable I-projection stage | Sensor response, reconstruction, trajectory, value + gradient | 104.88 ms |                      31.43 ms |                **3.34×** |
 | Weighted Poisson, forward                  | 28 systems of size `41 × 41`                                  |  21.25 ms |                       1.59 ms |               **13.40×** |
 | Weighted Poisson, value + gradient         | Same workload, including adjoint solve and VJP                |  50.33 ms |                       8.97 ms |                **5.61×** |
-| Galerkin assembly, forward only            | `[256, 280, 16, 2]` fixed-feature chunk                       |         — |                             — | **0.21x** (4.79× slower) |
 
 The I-projection result is the strongest reason not to implement the complete pipeline only in JAX. Its workload consists of many small, sequentially warm-started Newton solves: a poor fit for accelerator control flow, but a good fit for the batched C++/OpenMP implementation. The weighted-Poisson systems also benefit  substantially from the native matrix-free PCG and implicit adjoint. Because both operations occur inside repeated sensor-objective and gradient evaluations, these measured reductions affect the expensive inner loop rather than a one-time setup stage.
-
-The Galerkin result is deliberately included even though it goes the other way. Its dense contraction is well suited to the GPU; for this tested shape, the transfer-inclusive native CPU assembler is `4.79×` slower. We therefore do **not** use the Galerkin Tesseract merely on the assumption that native code must be faster. JAX should remain the performance default for this workload unless a different platform, memory constraint, or larger study demonstrates an advantage. The author also acknowledge the Galerkin result might be confounded by the amount of time spent optimizing that specific Tesseract. Further work on that component might deliver better results.
 
 The comparisons also verify numerical and derivative agreement:
 
 - I-projection: all native systems converged, maximum calibration residual `9.95e-8`, and trajectory-gradient relative difference `9.76e-6`;
 
-- weighted Poisson: all native systems converged to the configured `1e-6` tolerance, with forward relative difference `5.01e-8` and relative gradient difference `1.25e-7`; and
+- weighted Poisson: all native systems converged to the configured `1e-6` tolerance, with forward relative difference `5.01e-8` and relative gradient difference `1.25e-7`.
 
-- Galerkin: maximum absolute discrepancy `1.78e-13`.
-
-These numbers justify a **selective heterogeneous implementation**: Tesseract is load-bearing for the I-projection and weighted-Poisson solvers, where it preserves gradients and remains faster even after crossing the CPU/GPU boundary. It is not a blanket replacement for JAX, as the Galerkin counterexample makes clear. Reproducible benchmark details are stored in the [I-projection results](experiments/toy_example_percentage/outputs/iprojection_backend_benchmark.json), [Poisson results](experiments/toy_example_percentage/outputs/poisson_backend_benchmark.json), and [Galerkin benchmark driver](native/galerkin_tesseract/benchmark.py).
+These numbers justify a **selective heterogeneous implementation**: Tesseract is load-bearing for the I-projection and weighted-Poisson solvers, where it preserves gradients and remains faster even after crossing the CPU/GPU boundary. Reproducible benchmark details are stored in the [I-projection results](experiments/toy_example_percentage/outputs/iprojection_backend_benchmark.json) and [Poisson results](experiments/toy_example_percentage/outputs/poisson_backend_benchmark.json).
 
 Finally, the differentiable proxy is used for **candidate generation**, not as a substitute for scientific validation. Promising sensor geometries are re-evaluated with the authoritative physical-density Full solver on the frozen selection bank, using a `101 x 101` raster and all `21` scientific time nodes. Only after the geometry is frozen is it evaluated on the disjoint `128`-trial validation bank. Tesseract makes the heterogeneous search differentiable; the higher-resolution, fail-closed audit protects the reported scientific result.
 
@@ -823,7 +817,7 @@ Future work will focus on:
 
 - **Completing the vortices Pareto frontier.** The current confirmed result covers 0.5%–2% because exact three-reference evaluation was limited by the hackathon schedule. Completing 3%–5%, adding finer allowances, and testing whether a broader risk budget produces a larger Full-action reduction are immediate priorities.
 
-- **Scaling to many-body systems.** Extend the current benchmark suite beyond low-dimensional transport problems to interacting many-body systems, with magnetic skyrmion dynamics as a first target.
+- **Scaling to many-body systems.** Extend the current benchmark suite beyond low-dimensional transport problems to interacting many-body systems.
 
 - **Empirically validating the unbalanced formulation.** The current experiments evaluate the balanced probability-law setting. A natural next step is to test the move–reaction extension on systems in which mass is created, destroyed, or exchanged, such as active nematics.
 
