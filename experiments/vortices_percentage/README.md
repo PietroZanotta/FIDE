@@ -222,4 +222,4 @@ This is a controlled benchmark with simulator access to a hidden population, not
 
 Most importantly, the confirmed Pareto statement is **partial**. It establishes a positive and increasing Full-action reduction over 0.5%–2%; it does not establish the shape, saturation point, or maximum attainable reduction of the broader frontier. Completing 3%–5%, adding more allowances, increasing reference diversity, and testing other flow regimes are the natural next steps left for future work going beyond this hackathon project.
 
-For the general theory and the analytical example, see the project [README](../../README.md) and [technical report](../../full_report.pdf).
+For the general theory and the analytical example, see the project [README](../../README.md) and [Sections 3–6 and Appendix B.2 of the technical writeup](../../technical_writeup.pdf).

@@ -646,4 +646,4 @@ steps.
 
 For the general FIDE formulation and the retrospective benchmark, see the
 project [README](../../README.md), the [Vortices README](../vortices_percentage/README.md),
-and the [technical report](../../full_report.pdf).
+and [Sections 3–6 and Appendices B.3–B.4 of the technical writeup](../../technical_writeup.pdf).

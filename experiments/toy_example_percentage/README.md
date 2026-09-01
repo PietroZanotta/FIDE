@@ -1,6 +1,6 @@
 # Analytical Gaussian-Mixture Transport: Percentage-Risk Sensor Design
 
-> **Naming convention.** This directory retains its historical repository name, `toy_example_percentage`. In the [project README](../../README.md) and the [paper](../../full_report.pdf), it is the **analytical Gaussian-mixture experiment**. **FIDE** denotes the complete design framework; **Full** is the FIDE-selected method in tables and figures because it minimizes the Full law-level action. Law and Tangent are the comparison methods.
+> **Naming convention.** This directory retains its historical repository name, `toy_example_percentage`. In the [project README](../../README.md) and [Appendix B.2 of the technical writeup](../../technical_writeup.pdf), it is the **analytical Gaussian-mixture experiment**. **FIDE** denotes the complete design framework; **Full** is the FIDE-selected method in tables and figures because it minimizes the Full law-level action. Law and Tangent are the comparison methods.
 
 This controlled benchmark asks where to place two localized sensors when the experiment reveals only aggregate information about an evolving population. Among sensor pairs that remain near-optimal for the finite-data scientific task, FIDE favors the pair whose complete measurement-implied law is easiest to realize relative to one shared, frozen endpoint-trained reference flow.
 

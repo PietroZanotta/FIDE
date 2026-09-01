@@ -7,7 +7,7 @@
 This project was ideated and evaluated by [Pietro Zanotta](https://github.com/PietroZanotta) as part of the [Tesseract Hackathon 2026](https://pasteurlabs.ai/tesseract-hackathon-2026/) for **Track 1: Inverse Design & Shape Optimization**.
 
 - **Contact**: Pietro Zanotta: pzanott1@jhu.edu
-- **Technical writeup**: the following README is a distillation of out [technical_writeup](technical_writeup.pdf), which contains all the theorems, proofs and numerical details
+- **Technical writeup**: this README is a distillation of our [technical writeup](technical_writeup.pdf), which contains the theorems, proofs, and numerical details.
 
 Our work, **Fiber-Informed Differentiable Experimental Design (FIDE)**, asks how to design measurements when experiments reveal only **aggregate information** about an evolving population. Among measurement systems that are already good enough for the scientific task, FIDE favors those whose implied full population dynamics remain most compatible with a shared frozen reference model.
 
@@ -38,7 +38,7 @@ We evaluate the idea in two complementary experiments: an analytical Gaussian-mi
 
 - **Supports differentiable experimental design.** When sensor locations or measurement parameters vary continuously, both the calibrated information projection and the Full action can be differentiated with respect to the design using Tesseract, allowing for faster convergence.
 
-Please refer to our [technical report](full_report.pdf) for further info.
+For the formal formulation, method, and proofs, see [Sections 3–5 and Appendix A of the technical writeup](technical_writeup.pdf). The experimental overview and reproducibility details are in Section 6 and Appendix B.
 
 ## Table of Contents
 - [FIDE: Fiber-Informed Differentiable Experimental Design](#fide-fiber-informed-differentiable-experimental-design)
@@ -134,7 +134,7 @@ $$\eta_{\mathrm{Full}} \in \arg\min_{\eta:\,R(\eta)\leq R_{\max}} A(\eta).$$
 
 where $A(\eta)$ is the **Full action**: the minimum dynamical correction required to realize the complete law path implied by the measurements.
 
-Please refer to our [technical report](full_report.pdf) for further info on the problem statement.
+See [Section 3 of the technical writeup](technical_writeup.pdf) for the formal problem formulation.
 
 ## Methodology
 ![FIDE workflow: from measurements to dynamically compatible laws](visual_abstract/output_png/fide_diag3.png)
@@ -203,7 +203,7 @@ In short, the FIDE pipeline is
 
 The optimization therefore searches for measurements that remain useful for the scientific task while inducing a complete law-level reconstruction that is as dynamically compatible as possible with the common reference.
 
-Please refer to our [technical report](full_report.pdf) for further info on the methodology.
+See [Sections 4–5 and Appendix A of the technical writeup](technical_writeup.pdf) for the formal methodology, theoretical results, and proofs.
 
 ## Where Does Tesseract Enter the Picture?
 FIDE's mathematical pipeline contains two implicit numerical problems inside every differentiable Full-action search evaluation: an **information-projection problem** and a **density-weighted Poisson problem**. In the analytical example, both must be solved repeatedly as the two sensor angles change, and the derivative of the final action must pass through both solutions to reach those angles.
@@ -327,13 +327,13 @@ The frozen reference contains `2,592` weighted particles and each candidate desi
 ### Benchmark: Tesseract versus a full JAX implementation
 We benchmarked each native component against its equivalent compiled JAX implementation on the laptop configuration reported below. Here we retain the original practical timing boundary: the Tesseract measurements include the Python/native call and host–device transfer costs, while JAX inputs remain on the GPU. Compilation and one-time setup are excluded from both paths. Times are steady-state medians after warm-up; the I-projection and Poisson results use five timed repetitions.
 
-| Component and path                         | Workload                                                      |   JAX GPU | Tesseract, transfer-inclusive |          JAX / Tesseract |
-| :----------------------------------------- | :------------------------------------------------------------ | --------: | ----------------------------: | -----------------------: |
-| I-projection trajectory, forward           | `4 × 7` projections, 2,592 particles, 2 moments               |  84.48 ms |                       5.64 ms |               **14.99×** |
-| I-projection trajectory, value + gradient  | Same workload, including implicit VJP                         |  93.73 ms |                      16.24 ms |                **5.77×** |
-| Complete differentiable I-projection stage | Sensor response, reconstruction, trajectory, value + gradient | 104.88 ms |                      31.43 ms |                **3.34×** |
-| Weighted Poisson, forward                  | 28 systems of size `41 × 41`                                  |  21.25 ms |                       1.59 ms |               **13.40×** |
-| Weighted Poisson, value + gradient         | Same workload, including adjoint solve and VJP                |  50.33 ms |                       8.97 ms |                **5.61×** |
+| Component and path                         | Workload                                                      |   JAX GPU | Tesseract, transfer-inclusive | JAX / Tesseract |
+| :----------------------------------------- | :------------------------------------------------------------ | --------: | ----------------------------: | --------------: |
+| I-projection trajectory, forward           | `4 × 7` projections, 2,592 particles, 2 moments               |  84.48 ms |                       5.64 ms |      **14.99×** |
+| I-projection trajectory, value + gradient  | Same workload, including implicit VJP                         |  93.73 ms |                      16.24 ms |       **5.77×** |
+| Complete differentiable I-projection stage | Sensor response, reconstruction, trajectory, value + gradient | 104.88 ms |                      31.43 ms |       **3.34×** |
+| Weighted Poisson, forward                  | 28 systems of size `41 × 41`                                  |  21.25 ms |                       1.59 ms |      **13.40×** |
+| Weighted Poisson, value + gradient         | Same workload, including adjoint solve and VJP                |  50.33 ms |                       8.97 ms |       **5.61×** |
 
 The I-projection result is the strongest reason not to implement the complete pipeline only in JAX. Its workload consists of many small, sequentially warm-started Newton solves: a poor fit for accelerator control flow, but a good fit for the batched C++/OpenMP implementation. The weighted-Poisson systems also benefit  substantially from the native matrix-free PCG and implicit adjoint. Because both operations occur inside repeated sensor-objective and gradient evaluations, these measured reductions affect the expensive inner loop rather than a one-time setup stage.
 
@@ -351,7 +351,7 @@ Finally, the differentiable proxy is used for **candidate generation**, not as a
 ### Analytical Gaussian-mixture transport
 The first numerical experiment is a controlled two-dimensional system for which the hidden population path is available analytically to the benchmarker. It is deliberately simple enough to inspect, but it contains the central difficulty addressed by FIDE: two experiments can have almost the same finite-data scientific risk while implying very different complete law-level dynamics relative to the same frozen reference.
 
-This section gives the visual and conceptual overview. The full specification, optimization protocol, numerical tolerances, and certificates are documented in [Section 6 and Appendix B.2 of the paper](full_report.pdf) and in the [analytical-example README](experiments/toy_example_percentage/README.md). The repository directory retains the historical name `toy_example_percentage`; the paper and this README call it the **analytical Gaussian-mixture experiment**.
+This section gives the visual and conceptual overview. The full specification, optimization protocol, numerical tolerances, and certificates are documented in [Section 6 and Appendix B.2 of the paper](technical_writeup.pdf) and in the [analytical-example README](experiments/toy_example_percentage/README.md). The repository directory retains the historical name `toy_example_percentage`; the paper and this README call it the **analytical Gaussian-mixture experiment**.
 
 #### Analytical system
 The state is a point $x=(x_1,x_2)$ in $[-3.2,3.2]^2$. Define an antipodal pair of Gaussian lobes by
@@ -429,7 +429,7 @@ Together, the animation and figures separate four ideas that should not be confl
 
 All displayed media are post-processing of frozen artifacts; generating them does not retrain the reference or rerun sensor optimization. The source scripts are [`visualize_paper_gif.py`](experiments/toy_example_percentage/visualize_paper_gif.py), [`visualize_paper.py`](experiments/toy_example_percentage/visualize_paper.py), and [`visualize_pareto.py`](experiments/toy_example_percentage/visualize_pareto.py).
 
-For reproducibility, numerical details and further information please refer to the [analytical-example README](experiments/toy_example_percentage/README.md) and/or the [technical report](full_report.pdf).
+For reproducibility and numerical details, see the [analytical-example README](experiments/toy_example_percentage/README.md) and [Appendix B.2 of the technical writeup](technical_writeup.pdf).
 
 ### Vortices
 
@@ -491,8 +491,8 @@ This is a scope decision, not evidence that the Pareto curve saturates at 2%. Fu
 
 All displayed media are deterministic post-processing of frozen artifacts. The [saved-result verifier](experiments/vortices_percentage/verify_saved_result.py), [standalone publication bundle](experiments/vortices_percentage/outputs/published/README.md), and [full result report](experiments/vortices_percentage/VORTICES_V2_1_C3_64_RESULT.md) provide progressively deeper audit surfaces. The tracked inputs and compact published outputs are sufficient to regenerate every vortices plot and GIF from a fresh clone without rerunning selection or confirmation.
 
-See more detailin the [technical writeup](full_report.pdf)
-and in the [vortices-example README](experiments/vortices_percentage/README.md).
+See [Section 6 and Appendix B.3 of the technical writeup](technical_writeup.pdf)
+and the [vortices-example README](experiments/vortices_percentage/README.md) for more detail.
 
 ### Vortices Prospective
 
@@ -585,13 +585,16 @@ and [visualization manifest](experiments/vortices_prospective/plots/visualizatio
 provide progressively deeper audit surfaces. No result beyond 2% and no
 multi-seed prospective robustness claim is made.
 
+The paper-level overview is in [Section 6 of the technical writeup](technical_writeup.pdf),
+with the complete prospective specification and results in Appendix B.4.
+
 ## Structure of this Repository
 The documented project surface now contains three experiments: the analytical Gaussian-mixture benchmark, the retrospective V2.1 Vortices benchmark, and the aggregate-only Vortices Prospective benchmark. All use the reusable FIDE implementation under `src/mfsi/`; the analytical workflow additionally exercises the two native Tesseract solvers directly during differentiable design.
 
 ```text
 .
 ├── README.md                              # Project overview, results, and quick start
-├── full_report.pdf                        # Technical paper and mathematical details
+├── technical_writeup.pdf                        # Technical paper and mathematical details
 ├── pyproject.toml                         # Python package and optional dependency groups
 ├── src/mfsi/                              # Reusable JAX implementation of the FIDE pipeline
 │   ├── measurements.py, moments.py        # Sensor maps and moment-trajectory reconstruction
