@@ -55,21 +55,21 @@ Please refer to our [technical report](full_report.pdf) for further info.
     - [Benchmark: Tesseract versus a full JAX implementation](#benchmark-tesseract-versus-a-full-jax-implementation)
   - [Numerical Experiments](#numerical-experiments)
     - [Analytical Gaussian-mixture transport](#analytical-gaussian-mixture-transport)
-        - [Analytical system](#analytical-system)
-        - [From hidden dynamics to aggregate observations](#from-hidden-dynamics-to-aggregate-observations)
-        - [Analytical experimental-design comparison](#analytical-experimental-design-comparison)
-        - [Analytical results](#analytical-results)
-        - [Reading the analytical result figures](#reading-the-analytical-result-figures)
+      - [Analytical system](#analytical-system)
+      - [From hidden dynamics to aggregate observations](#from-hidden-dynamics-to-aggregate-observations)
+      - [Analytical experimental-design comparison](#analytical-experimental-design-comparison)
+      - [Analytical results](#analytical-results)
+      - [Reading the analytical result figures](#reading-the-analytical-result-figures)
     - [Vortices](#vortices)
-        - [Double-gyre system and observations](#double-gyre-system-and-observations)
-        - [Bounded-domain Full action](#bounded-domain-full-action)
-        - [Confirmed Pareto result](#confirmed-pareto-result)
-        - [Reading the vortices figures](#reading-the-vortices-figures)
-        - [Why the current frontier stops at 2%](#why-the-current-frontier-stops-at-2)
+      - [Double-gyre system and observations](#double-gyre-system-and-observations)
+      - [Bounded-domain Full action](#bounded-domain-full-action)
+      - [Confirmed Pareto result](#confirmed-pareto-result)
+      - [Reading the vortices figures](#reading-the-vortices-figures)
+      - [Why the current frontier stops at 2%](#why-the-current-frontier-stops-at-2)
     - [Vortices Prospective](#vortices-prospective)
-        - [What changes in the prospective experiment](#what-changes-in-the-prospective-experiment)
-        - [Prospective held-out result](#prospective-held-out-result)
-        - [Reading the prospective figures](#reading-the-prospective-figures)
+      - [What changes in the prospective experiment](#what-changes-in-the-prospective-experiment)
+      - [Final repaired prospective result](#final-repaired-prospective-result)
+      - [Reading the prospective figures](#reading-the-prospective-figures)
   - [Structure of this Repository](#structure-of-this-repository)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
@@ -520,14 +520,14 @@ canonical directory has no runtime or test import from that archive.
 
 #### What changes in the prospective experiment
 
-| Property | Vortices | Vortices Prospective |
-| :-- | :-- | :-- |
-| Selection information | Frozen microscopic target/reference banks | Endpoints plus aggregate predictive fields only |
-| Selection references | Three frozen seeds | One frozen D0 seed |
-| Validation references | Same three references on a fresh 64-trial holdout | Fresh independent E1 seed trained only after the repaired frontier freeze |
-| Risk allowances | 0.5%, 1%, 2% | 0.5%, 1%, 2% |
-| Main uncertainty claim | Simultaneous reference-by-allowance intervals | Paired trial interval for the strict 2% effect conditional on held-out E1 |
-| Scientific purpose | Robust retrospective confirmation | Aggregate-only prospective transfer test |
+| Property               | Vortices                                          | Vortices Prospective                                                      |
+| :--------------------- | :------------------------------------------------ | :------------------------------------------------------------------------ |
+| Selection information  | Frozen microscopic target/reference banks         | Endpoints plus aggregate predictive fields only                           |
+| Selection references   | Three frozen seeds                                | One frozen D0 seed                                                        |
+| Validation references  | Same three references on a fresh 64-trial holdout | Fresh independent E1 seed trained only after the repaired frontier freeze |
+| Risk allowances        | 0.5%, 1%, 2%                                      | 0.5%, 1%, 2%                                                              |
+| Main uncertainty claim | Simultaneous reference-by-allowance intervals     | Paired trial interval for the strict 2% effect conditional on held-out E1 |
+| Scientific purpose     | Robust retrospective confirmation                 | Aggregate-only prospective transfer test                                  |
 
 The final prospective freeze order is one-way: reuse aggregate inputs and D0,
 freeze the reoptimized Law anchor, rerun Full at 0.5% and 1%, adopt the audited
@@ -541,37 +541,31 @@ regimes.
 
 ![Animated prospective double-gyre population, measurement-implied law, and sensor views](experiments/vortices_prospective/plots/vortices_prospective_full_2p0.gif)
 
-*Animation: the repaired prospective 2% Full geometry on held-out E1 trial 0,
+*Animation: the repaired prospective 2% Full geometry on held-out trial 0,
 using the same visual grammar as Vortices Percentage.* The hidden
 population at left was sealed during selection. The middle panel is the law
-completed from four aggregate observations and the frozen E1 endpoint
+completed from four aggregate observations and the frozen endpoint
 reference; the narrow panels show what each sensor sees. As in the other
 experiments, pointwise differences away from the sensor supports are unresolved
 moment-fiber directions rather than failed measurement constraints.
 
 #### Final repaired prospective result
 
-After a stronger D0 Law audit, Full was rerun at 0.5% and 1%; the saved
-authoritative feasible finalist was adopted at 2%. A fresh E1 reference and 64
+After a stronger Law audit, Full was rerun at 0.5% and 1%; the saved
+authoritative feasible finalist was adopted at 2%. A fresh reference and 64
 fresh paired hidden trials were generated only after that repaired freeze:
 
-| Allowed extra risk | E1 Law action | E1 Full action | Reduction versus Law | E1 Law risk | E1 Full risk | Paired action-difference 95% CI | Result |
-| -----------------: | ------------: | -------------: | -------------------: | ----------: | -----------: | :----------------------------- | :----: |
-|               0.5% | 1.70295 | 1.70295 | 0.00% | 1.15612 | 1.15612 | `[0, 0]` | no benefit |
-|                 1% | 1.70295 | 1.70295 | 0.00% | 1.15612 | 1.15612 | `[0, 0]` | no benefit |
-|                 2% | 1.70295 | 1.42700 | **16.20%** | 1.15612 | 1.17102 | `[-0.31510, -0.23681]` | **PASS** |
+| Allowed extra risk | E1 Law action | E1 Full action | Reduction versus Law | E1 Law risk | E1 Full risk | Paired action-difference 95% CI |   Result   |
+| -----------------: | ------------: | -------------: | -------------------: | ----------: | -----------: | :------------------------------ | :--------: |
+|               0.5% |       1.70295 |        1.70295 |                0.00% |     1.15612 |      1.15612 | `[0, 0]`                        | no benefit |
+|                 1% |       1.70295 |        1.70295 |                0.00% |     1.15612 |      1.15612 | `[0, 0]`                        | no benefit |
+|                 2% |       1.70295 |        1.42700 |           **16.20%** |     1.15612 |      1.17102 | `[-0.31510, -0.23681]`          |  **PASS**  |
 
-All three points pass E1 risk and numerical gates. The tight points select Law
-itself, so they certify feasibility but no benefit. At 2%, observed E1 risk is
+All three points pass the repaired risk and numerical gates. The tight points select Law
+itself, so they certify feasibility but no benefit. At 2%, observed repaired risk is
 1.29% above Law—inside the 2% allowance—and Full action is 16.20% lower with a
 strictly negative paired interval. Tangent is omitted because there was not
-enough time to rerun it after repairing Law.
-
-![Toy-style repaired prospective frontier](experiments/vortices_prospective/plots/pareto_frontier_repaired_e1.png)
-
-*The Toy experiment's three-panel visual grammar applied to the repaired
-prospective result:* certified D0 selection at left, independent E1 transfer in
-the middle, and benefit versus allowance at right.
+enough time to rerun it after repairing Law due to limited time.
 
 #### Reading the prospective figures
 

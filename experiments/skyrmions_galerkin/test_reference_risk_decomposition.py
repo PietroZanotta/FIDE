@@ -132,7 +132,7 @@ class ReferenceRiskDecompositionTests(unittest.TestCase):
                 self.assertTrue((study.REPO_ROOT / relative).exists(), relative)
 
     def test_14_active_nematic_counts_come_from_config_and_artifact(self):
-        cfg = json.loads((study.REPO_ROOT / "experiments/active_nematic_unbalance_percentage/config.json").read_text())
+        cfg = json.loads((study.REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/config.json").read_text())
         audit = json.loads(study.ACTIVE_AUDIT_PATH.read_text())
         self.assertEqual(audit["reference_seeds"], cfg["reference_training"]["seeds"])
         self.assertEqual(audit["physical_view_count"], cfg["robust_selection"]["design_views"])

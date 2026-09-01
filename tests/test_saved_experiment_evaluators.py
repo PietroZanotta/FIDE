@@ -11,8 +11,6 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CASES = (
-    ("active_nematic_unbalance_percentage", "eval.py", ("Tangent", "1.291508", "16.56%")),
-    ("active_nematic_unbalance_percentage", "eval_pareto.py", ("Tangent", "8.968947", "-2.14%")),
     ("skyrmions_deep_ritz", "eval.py", ("Tangent", "0.230970", "30.44%")),
     ("skyrmions_deep_ritz", "eval_pareto.py", ("Tangent", "0.068152", "32.24%")),
     ("skyrmions_galerkin", "eval.py", ("Tangent", "0.028388", "21.82%")),

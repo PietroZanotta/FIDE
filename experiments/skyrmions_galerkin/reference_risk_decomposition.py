@@ -169,13 +169,13 @@ def _source_paths() -> list[Path]:
         REPO_ROOT / "experiments/vortices_percentage/outputs/reference_seed_sensitivity/summary.json",
         REPO_ROOT / "experiments/vortices_percentage/reference_seed_sensitivity.md",
         REPO_ROOT / "experiments/skyrmions_deep_ritz/README.md",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/config.json",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/run.py",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/robust_selection.py",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/percentage_selection.py",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/run_pareto.py",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/finalize_authoritative_pareto.py",
-        REPO_ROOT / "experiments/active_nematic_unbalance_percentage/experimenta_setup.md",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/config.json",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/run.py",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/robust_selection.py",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/percentage_selection.py",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/run_pareto.py",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/finalize_authoritative_pareto.py",
+        REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/experimenta_setup.md",
     ]
     paths.extend(_checkpoint_path(label) for label in MODEL_LABELS)
     for label in MODEL_LABELS:
@@ -233,7 +233,7 @@ def verify_and_seal_sources() -> dict[str, Any]:
 
 
 def _active_nematic_law_rows() -> list[dict[str, Any]]:
-    path = REPO_ROOT / "experiments/active_nematic_unbalance_percentage/experimenta_setup.md"
+    path = REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/experimenta_setup.md"
     text = path.read_text(encoding="utf-8")
     section = text.split("### 14.4 Per-view risk receipt", 1)[1].split("## 15.", 1)[0]
     pattern = re.compile(
@@ -258,7 +258,7 @@ def _active_nematic_law_rows() -> list[dict[str, Any]]:
 
 
 def build_cross_benchmark_audit() -> tuple[dict[str, Any], dict[str, Any]]:
-    active_cfg_path = REPO_ROOT / "experiments/active_nematic_unbalance_percentage/config.json"
+    active_cfg_path = REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/config.json"
     active_cfg = _json(active_cfg_path)
     active_seeds = list(map(int, active_cfg["reference_training"]["seeds"]))
     active_rows = _active_nematic_law_rows()
@@ -270,7 +270,7 @@ def build_cross_benchmark_audit() -> tuple[dict[str, Any], dict[str, Any]]:
     interaction = matrix - fold_means[:, None] - seed_means[None, :] + matrix.mean()
     active_audit = {
         "schema_version": 1,
-        "row_source": _relative(REPO_ROOT / "experiments/active_nematic_unbalance_percentage/experimenta_setup.md"),
+        "row_source": _relative(REPO_ROOT / "old_stuff/active_nematic_unbalance_percentage/experimenta_setup.md"),
         "seed_source": _relative(active_cfg_path),
         "reference_seeds": active_seeds,
         "physical_view_count": int(active_cfg["robust_selection"]["design_views"]),
@@ -395,12 +395,12 @@ def build_cross_benchmark_audit() -> tuple[dict[str, Any], dict[str, Any]]:
             "reference_uncertainty_in_reported_uncertainty": "averaged within fold, not a separate uncertainty component",
             "direct_transfer": "partial: cross-reference all-view logic transfers, relative normalization alone does not guard absolute skyrmion Law quality",
             "code_evidence": evidence(
-                "experiments/active_nematic_unbalance_percentage/config.json",
-                "experiments/active_nematic_unbalance_percentage/robust_selection.py",
-                "experiments/active_nematic_unbalance_percentage/percentage_selection.py",
-                "experiments/active_nematic_unbalance_percentage/finalize_authoritative_pareto.py",
+                "old_stuff/active_nematic_unbalance_percentage/config.json",
+                "old_stuff/active_nematic_unbalance_percentage/robust_selection.py",
+                "old_stuff/active_nematic_unbalance_percentage/percentage_selection.py",
+                "old_stuff/active_nematic_unbalance_percentage/finalize_authoritative_pareto.py",
             ),
-            "report_evidence": evidence("experiments/active_nematic_unbalance_percentage/experimenta_setup.md"),
+            "report_evidence": evidence("old_stuff/active_nematic_unbalance_percentage/experimenta_setup.md"),
         },
     ]
     payload = {
