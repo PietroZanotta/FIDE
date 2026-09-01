@@ -12,7 +12,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-for path in (HERE, REPO / "src", HERE.parent / "vortices_percentage"):
+for path in (HERE, REPO / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -104,6 +104,37 @@ def test_response_interpolation_agrees_with_direct_aggregate():
     direct = np.asarray(gaussian_response_direct(states, centers, 0.12))
     assert np.max(np.abs(predicted - direct)) < 2.5e-3
     assert np.all(second >= mean * mean - 1.0e-12)
+
+
+def test_response_table_recovers_cross_sensor_second_moments():
+    rng = np.random.default_rng(23)
+    states = rng.uniform([0.0, 0.0], [2.0, 1.0], size=(2, 1200, 2))
+    x_grid = np.linspace(0.0, 2.0, 97)
+    y_grid = np.linspace(0.0, 1.0, 49)
+    width = 0.12
+    mean, second = _response_fields(states, x_grid, y_grid, width, 300)
+    data = TargetProspectiveData(
+        endpoint_path=Path("endpoint.npz"),
+        aggregate_path=Path("aggregate.npz"),
+        endpoint_ensemble_0=states[0],
+        endpoint_ensemble_1=states[-1],
+        times=np.asarray([0.0, 1.0]),
+        x_grid=x_grid,
+        y_grid=y_grid,
+        response_mean_field=mean,
+        response_second_field=second,
+        scientific_qoi_predictions=np.zeros((2, 5)),
+        qoi_scales=np.ones(5),
+        metadata={},
+    )
+    centers = np.asarray([[0.71, 0.46], [0.88, 0.53], [1.42, 0.67]])
+    predicted = np.asarray(data.response_cross_second(centers, width))
+    delta = states[:, :, None, :] - centers[None, None, :, :]
+    phi = np.exp(-0.5 * np.sum(delta * delta, axis=-1) / width**2)
+    direct = np.einsum("tnj,tnk->tjk", phi, phi) / phi.shape[1]
+    assert np.max(np.abs(predicted - direct)) < 2.5e-3
+    assert np.allclose(predicted, np.swapaxes(predicted, -1, -2))
+    assert np.max(np.abs(predicted[:, 0, 1])) > 1.0e-3
 
 
 def test_endpoint_source_exposes_endpoints_only():

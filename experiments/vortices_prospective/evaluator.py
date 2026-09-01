@@ -16,8 +16,17 @@ from mfsi.measurements import GaussianPointSensors2D
 from mfsi.moments import AnchoredCubicSplineConfig, AnchoredCubicSplineReconstructor
 from mfsi.poisson import PoissonConfig, solve_weighted_poisson_physical_direct_batch
 from mfsi.projection import EmpiricalIProjector, IProjectionConfig
-from mfsi.raster import RasterConfig, rasterize_projected_particles_rect
+from mfsi.raster import (
+    RasterConfig,
+    rasterize_projected_particles_reflected_rect,
+)
 from prospective_data import TargetProspectiveData
+from reflected_raster import (
+    build_reflected_raster_plan,
+    common_reference_scott_bandwidth,
+    rasterize_reflected_with_plan,
+    reference_scott_bandwidth,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -69,10 +78,85 @@ def _summarize(values: np.ndarray) -> dict[str, Any]:
     }
 
 
+def _smooth_bound_moment_curve(values, derivatives, lower, upper, transition_width):
+    """Match the percentage experiment's C2 bounded moment transformation."""
+    values = jnp.asarray(values, dtype=jnp.float64)
+    derivatives = jnp.asarray(derivatives, dtype=jnp.float64)
+    width = float(transition_width)
+
+    def blend(s):
+        return s**3 * (6.0 - 8.0 * s + 3.0 * s**2)
+
+    def blend_derivative(s):
+        return s**2 * (18.0 - 32.0 * s + 15.0 * s**2)
+
+    lower_s = jnp.clip((values - float(lower)) / width, 0.0, 1.0)
+    upper_s = jnp.clip((float(upper) - values) / width, 0.0, 1.0)
+    lower_transition = float(lower) + width * blend(lower_s)
+    upper_transition = float(upper) - width * blend(upper_s)
+    in_lower_transition = (values > float(lower)) & (values < float(lower) + width)
+    in_upper_transition = (values > float(upper) - width) & (values < float(upper))
+    bounded_values = jnp.where(
+        values <= float(lower),
+        float(lower),
+        jnp.where(
+            in_lower_transition,
+            lower_transition,
+            jnp.where(
+                values >= float(upper),
+                float(upper),
+                jnp.where(in_upper_transition, upper_transition, values),
+            ),
+        ),
+    )
+    derivative_scale = jnp.where(
+        values <= float(lower),
+        0.0,
+        jnp.where(
+            in_lower_transition,
+            blend_derivative(lower_s),
+            jnp.where(
+                values >= float(upper),
+                0.0,
+                jnp.where(in_upper_transition, blend_derivative(upper_s), 1.0),
+            ),
+        ),
+    )
+    return bounded_values, derivative_scale * derivatives
+
+
+def _correlated_sampling_delta(response_mean, response_cross_second, finite_n, sampling_z):
+    """Gaussian finite-population error with the full sensor covariance."""
+    mean = jnp.asarray(response_mean, dtype=jnp.float64)
+    cross = jnp.asarray(response_cross_second, dtype=jnp.float64)
+    covariance = cross - mean[..., :, None] * mean[..., None, :]
+    covariance = 0.5 * (covariance + jnp.swapaxes(covariance, -1, -2))
+    eigenvalues = jnp.linalg.eigvalsh(covariance)
+    diagonal_scale = jnp.maximum(
+        jnp.max(jnp.diagonal(covariance, axis1=-2, axis2=-1), axis=-1),
+        1.0e-12,
+    )
+    stabilization = jax.lax.stop_gradient(
+        jnp.maximum(-jnp.min(eigenvalues, axis=-1), 0.0)
+        + 1.0e-12 * diagonal_scale
+    )
+    eye = jnp.eye(mean.shape[-1], dtype=jnp.float64)
+    root = jnp.linalg.cholesky(covariance + stabilization[..., None, None] * eye)
+    root = root / jnp.sqrt(float(finite_n))
+    return jnp.einsum("tij,btj->bti", root, jnp.asarray(sampling_z, dtype=jnp.float64))
+
+
 class ProspectiveEvaluator:
     """Evaluate aggregate-implied laws without any target microscopic trajectory."""
 
-    def __init__(self, cfg: dict[str, Any], data: TargetProspectiveData, rollout_path: str | Path):
+    def __init__(
+        self,
+        cfg: dict[str, Any],
+        data: TargetProspectiveData,
+        rollout_path: str | Path,
+        *,
+        raster_bandwidth: float | None = None,
+    ):
         self.cfg = cfg
         self.data = data
         with np.load(rollout_path, allow_pickle=False) as ref:
@@ -116,38 +200,99 @@ class ProspectiveEvaluator:
         )
         self.raster_cfg = RasterConfig()
         self.reference_qois = qoi_features(self.nodes)
+        reflected = cfg.get("raster", {}).get("reflected", {})
+        self.reflected_image_pairs = int(reflected.get("image_pairs", 4))
+        if self.reflected_image_pairs != 4:
+            raise ValueError("the adapted prospective method requires four reflected image pairs")
+        own_bandwidth, self.reference_scott_by_time = reference_scott_bandwidth(
+            self.nodes, self.base_weights
+        )
+        self.reference_scott_bandwidth = float(own_bandwidth)
+        self.authoritative_raster_bandwidth = float(
+            own_bandwidth if raster_bandwidth is None else raster_bandwidth
+        )
+        if not self.authoritative_raster_bandwidth > 0.0:
+            raise ValueError("a positive frozen physical raster bandwidth is required")
+        self.authoritative_raster_bandwidth_rule = (
+            "single_reference_median_scott_2d"
+            if raster_bandwidth is None
+            else "common_median_of_reference_median_scott_2d"
+        )
+        # Compatibility attribute for older report code.  The new experiment
+        # never uses the column-normalized positive-support repair.
+        self.authoritative_positive_raster = False
+
+    def _raster_authoritative(self, x, weights, forcing):
+        return rasterize_projected_particles_reflected_rect(
+            x,
+            weights,
+            forcing,
+            self.grid,
+            bandwidth=float(self.authoritative_raster_bandwidth),
+            image_pairs=self.reflected_image_pairs,
+        )
 
     def prospective_population(self, eta):
         centers = self.sensors.centers(jnp.asarray(eta, dtype=jnp.float64))
         return self.data.response(centers), self.data.response_second(centers)
 
-    def reconstruct(self, response_mean, response_second, bank: AggregateObservationBank):
+    def prospective_cross_second(self, eta):
+        centers = self.sensors.centers(jnp.asarray(eta, dtype=jnp.float64))
+        return self.data.response_cross_second(centers, float(self.sensors.width))
+
+    def reconstruct(
+        self,
+        response_mean,
+        response_second,
+        bank: AggregateObservationBank,
+        response_cross_second=None,
+    ):
         mean = jnp.asarray(response_mean, dtype=jnp.float64)
         second = jnp.asarray(response_second, dtype=jnp.float64)
         acq_mean = mean[self.acq_idx]
         acq_second = second[self.acq_idx]
         variance = jnp.maximum(acq_second - acq_mean * acq_mean, 0.0)
-        finite_se = jnp.sqrt(variance / float(self.cfg["measurement"]["finite_n"]))
+        finite_n = float(self.cfg["measurement"]["finite_n"])
+        if response_cross_second is None:
+            sampling_delta = (
+                jnp.sqrt(variance / finite_n)[None, :, :]
+                * jnp.asarray(bank.sampling_z)
+            )
+        else:
+            sampling_delta = _correlated_sampling_delta(
+                acq_mean,
+                jnp.asarray(response_cross_second, dtype=jnp.float64)[self.acq_idx],
+                finite_n,
+                bank.sampling_z,
+            )
         y = (
             acq_mean[None, :, :]
-            + finite_se[None, :, :] * jnp.asarray(bank.sampling_z)
+            + sampling_delta
             + float(self.cfg["measurement"]["noise_std"]) * jnp.asarray(bank.detector_z)
         )
         endpoint = (self.acq_idx == 0) | (self.acq_idx == len(self.times) - 1)
         y = jnp.where(endpoint[None, :, None], acq_mean[None, :, :], y)
         margin = float(self.cfg["moment_reconstruction"]["clip_margin"])
-        y = jnp.clip(y, margin, 1.0 - margin)
 
         def one(observations):
             fit = self.reconstructor.reconstruct(observations, acq_mean[0], acq_mean[-1])
-            inside = (fit.c > margin) & (fit.c < 1.0 - margin)
-            return jnp.clip(fit.c, margin, 1.0 - margin), jnp.where(inside, fit.c_dot, 0.0), fit.residual_sum_squares
+            bounded, bounded_dot = _smooth_bound_moment_curve(
+                fit.c, fit.c_dot, margin, 1.0 - margin, margin
+            )
+            return bounded, bounded_dot, fit.residual_sum_squares
 
         return jax.vmap(one)(y)
 
-    def _project(self, eta, response_mean, response_second, bank):
+    def _project(
+        self, eta, response_mean, response_second, bank, response_cross_second=None
+    ):
         eta = jnp.asarray(eta, dtype=jnp.float64)
-        targets, targets_dot, spline_rss = self.reconstruct(response_mean, response_second, bank)
+        targets, targets_dot, spline_rss = self.reconstruct(
+            response_mean,
+            response_second,
+            bank,
+            response_cross_second=response_cross_second,
+        )
         phi = self.sensors.features(self.nodes, eta)
         grad = self.sensors.feature_gradients(self.nodes, eta)
         projection = self.projector.project_trajectory(phi, self.base_weights, targets)
@@ -182,9 +327,14 @@ class ProspectiveEvaluator:
         bank: AggregateObservationBank,
         *,
         compute_full: bool,
+        response_cross_second=None,
     ) -> dict[str, Any]:
         projection, weights, forcing, tangent, spline_rss = self._project(
-            eta, response_mean, response_second, bank
+            eta,
+            response_mean,
+            response_second,
+            bank,
+            response_cross_second=response_cross_second,
         )
         projected_qoi = jnp.einsum("btn,tnk->btk", weights, self.reference_qois)
         qoi_error = (projected_qoi - jnp.asarray(qoi_targets)[None, :, :]) / jnp.asarray(self.data.qoi_scales)[None, None, :]
@@ -206,37 +356,63 @@ class ProspectiveEvaluator:
         compatibility = np.full(bank.trials, np.nan, dtype=np.float64)
         full_moment_residual = np.full(bank.trials, np.nan, dtype=np.float64)
         solver_converged = np.zeros(bank.trials, dtype=bool)
+        streamed_raster_peak_bytes = 0
         if compute_full:
-            def raster_trial(w_trial, f_trial):
-                return jax.vmap(
-                    lambda x, w, f: rasterize_projected_particles_rect(x, w, f, self.grid, self.raster_cfg)
-                )(self.nodes, w_trial, f_trial)
-
-            rasters = jax.vmap(raster_trial)(weights, forcing)
-            leading = rasters.q.shape[:2]
-            solved = solve_weighted_poisson_physical_direct_batch(
-                np.asarray(rasters.q).reshape((-1,) + self.grid.shape),
-                np.asarray(rasters.h).reshape((-1,) + self.grid.shape),
-                self.poisson_cfg,
-            )
-            actions = np.asarray(solved.action).reshape(leading)
+            time_count = int(self.nodes.shape[0])
+            actions = np.empty((bank.trials, time_count), dtype=np.float64)
+            poisson_by_time = np.empty_like(actions)
+            compatibility_by_time = np.empty_like(actions)
+            converged_by_time = np.empty(actions.shape, dtype=bool)
+            moment_by_time = np.empty_like(actions)
+            grid_features = self.sensors.features(self.grid.points(), jnp.asarray(eta))
+            # The authoritative 128x64 matrices are roughly 50 MB per time and
+            # reference at N=32768.  Stream a single time node so three-reference
+            # validation does not retain multi-gigabyte kernel plans.
+            for time_index in range(time_count):
+                plan = build_reflected_raster_plan(
+                    self.nodes[time_index : time_index + 1],
+                    self.grid,
+                    bandwidth=float(self.authoritative_raster_bandwidth),
+                    image_pairs=self.reflected_image_pairs,
+                )
+                streamed_raster_peak_bytes = max(
+                    streamed_raster_peak_bytes, plan.estimated_bytes
+                )
+                raster = rasterize_reflected_with_plan(
+                    weights[:, time_index : time_index + 1],
+                    forcing[:, time_index : time_index + 1],
+                    plan,
+                )
+                q = np.asarray(raster.q[:, 0], dtype=np.float64)
+                h = np.asarray(raster.h[:, 0], dtype=np.float64)
+                solved = solve_weighted_poisson_physical_direct_batch(
+                    q, h, self.poisson_cfg
+                )
+                actions[:, time_index] = np.asarray(solved.action)
+                poisson_by_time[:, time_index] = np.asarray(solved.relative_residual)
+                compatibility_by_time[:, time_index] = np.asarray(
+                    solved.maximum_component_compatibility_residual
+                )
+                converged_by_time[:, time_index] = np.asarray(solved.solver_converged)
+                decomposition = raster_tangent_projection(
+                    jnp.asarray(solved.potential),
+                    jnp.asarray(q),
+                    jnp.asarray(h),
+                    grid_features,
+                    dx=float(self.poisson_cfg.dx),
+                    cell_area=float(self.grid.cell_area),
+                    pinv_rcond=1.0e-10,
+                    operator_floor_rel=0.0,
+                    gauge_strength=0.0,
+                )
+                moment_by_time[:, time_index] = np.linalg.norm(
+                    np.asarray(decomposition.full_moment_residual), axis=-1
+                )
             full_by_trial = np.sum(actions * np.asarray(self.time_weights)[None, :], axis=1)
-            poisson_by_time = np.asarray(solved.relative_residual).reshape(leading)
-            compatibility_by_time = np.asarray(solved.maximum_component_compatibility_residual).reshape(leading)
-            converged_by_time = np.asarray(solved.solver_converged).reshape(leading)
             poisson_residual = np.max(poisson_by_time, axis=1)
             compatibility = np.max(compatibility_by_time, axis=1)
             solver_converged = np.all(converged_by_time, axis=1)
-            potentials = jnp.asarray(solved.potential).reshape(rasters.q.shape)
-            grid_features = self.sensors.features(self.grid.points(), jnp.asarray(eta))
-            decomposition = raster_tangent_projection(
-                potentials, rasters.q, rasters.h, grid_features,
-                dx=float(self.poisson_cfg.dx), cell_area=float(self.grid.cell_area),
-                pinv_rcond=1.0e-10, operator_floor_rel=0.0, gauge_strength=0.0,
-            )
-            full_moment_residual = np.max(
-                np.linalg.norm(np.asarray(decomposition.full_moment_residual), axis=-1), axis=1
-            )
+            full_moment_residual = np.max(moment_by_time, axis=1)
             valid &= (
                 np.isfinite(full_by_trial)
                 & (poisson_residual <= float(self.cfg["validity"]["max_poisson_relative_residual"]))
@@ -268,16 +444,35 @@ class ProspectiveEvaluator:
         return {
             "valid": bool(np.all(valid)),
             "valid_fraction": float(np.mean(valid)),
+            "authoritative_raster": {
+                "scheme": "direct_cell_integrated_even_reflection_neumann",
+                "positive_support": True,
+                "source_column_normalization": False,
+                "density_floor": 0.0,
+                "bandwidth": self.authoritative_raster_bandwidth,
+                "bandwidth_rule": self.authoritative_raster_bandwidth_rule,
+                "reference_own_bandwidth": self.reference_scott_bandwidth,
+                "reflected_image_pairs": self.reflected_image_pairs,
+                "execution": "streamed_one_time_kernel_plan",
+                "peak_reflection_plan_bytes": streamed_raster_peak_bytes,
+            },
             "risk": _summarize(risk_np),
             "tangent_proxy": _summarize(tangent_np),
             "full_action": _summarize(full_np),
             "trials": rows,
         }
 
+
     def evaluate_prospective(self, eta, bank: AggregateObservationBank, *, compute_full: bool):
         mean, second = self.prospective_population(eta)
         return self.evaluate_population(
-            eta, mean, second, self.data.scientific_qoi_predictions, bank, compute_full=compute_full
+            eta,
+            mean,
+            second,
+            self.data.scientific_qoi_predictions,
+            bank,
+            compute_full=compute_full,
+            response_cross_second=self.prospective_cross_second(eta),
         )
 
     def evaluate_full_proxy(self, eta, bank: AggregateObservationBank) -> dict[str, Any]:
@@ -287,7 +482,13 @@ class ProspectiveEvaluator:
             np.asarray(bank.sampling_z[:trial_n]), np.asarray(bank.detector_z[:trial_n])
         )
         mean, second = self.prospective_population(eta)
-        projection, weights, forcing, _, _ = self._project(eta, mean, second, proxy_bank)
+        projection, weights, forcing, _, _ = self._project(
+            eta,
+            mean,
+            second,
+            proxy_bank,
+            response_cross_second=self.prospective_cross_second(eta),
+        )
         time_n = min(int(self.cfg["search"]["full_proxy_time_nodes"]), len(self.times))
         time_idx = np.unique(
             np.rint(np.linspace(0, len(self.times) - 1, time_n)).astype(np.int32)
@@ -306,7 +507,14 @@ class ProspectiveEvaluator:
 
         def raster_trial(w_trial, f_trial):
             return jax.vmap(
-                lambda x, w, f: rasterize_projected_particles_rect(x, w, f, grid, self.raster_cfg)
+                lambda x, w, f: rasterize_projected_particles_reflected_rect(
+                    x,
+                    w,
+                    f,
+                    grid,
+                    bandwidth=float(self.authoritative_raster_bandwidth),
+                    image_pairs=self.reflected_image_pairs,
+                )
             )(nodes, w_trial[time_idx], f_trial[time_idx])
 
         rasters = jax.vmap(raster_trial)(weights, forcing)
@@ -348,9 +556,26 @@ class ProspectiveEvaluator:
         }
 
 
+def make_common_reference_evaluators(
+    cfg: dict[str, Any],
+    data: TargetProspectiveData,
+    rollout_paths,
+) -> tuple[float, list[ProspectiveEvaluator]]:
+    """Construct an ensemble sharing one reference-only physical bandwidth."""
+    paths = [Path(path) for path in rollout_paths]
+    bandwidth, _ = common_reference_scott_bandwidth(paths)
+    return bandwidth, [
+        ProspectiveEvaluator(cfg, data, path, raster_bandwidth=bandwidth)
+        for path in paths
+    ]
+
+
 __all__ = [
     "AggregateObservationBank",
     "ProspectiveEvaluator",
     "ensure_observation_bank",
     "make_observation_bank",
+    "_correlated_sampling_delta",
+    "_smooth_bound_moment_curve",
+    "make_common_reference_evaluators",
 ]

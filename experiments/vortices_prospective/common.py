@@ -11,7 +11,7 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-VORTICES_DIR = SCRIPT_DIR.parent / "vortices_percentage"
+VORTICES_DIR = SCRIPT_DIR
 for _path in (SRC_DIR, VORTICES_DIR, SCRIPT_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
@@ -115,6 +115,7 @@ def experiment_source_hash() -> str:
         "evaluator.py",
         "physical.py",
         "prospective_data.py",
+        "reflected_raster.py",
         "select.py",
         "train_reference.py",
         "validate.py",

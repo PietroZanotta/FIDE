@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-for path in (HERE, HERE.parent.parent / "src", HERE.parent / "vortices_percentage"):
+for path in (HERE, HERE.parent.parent / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

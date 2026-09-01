@@ -111,6 +111,29 @@ class TargetProspectiveData:
             self.response_second_field, self.x_grid, self.y_grid, centers
         )
 
+    def response_cross_second(self, centers, width: float):
+        """Return ``E[Phi_j Phi_k]`` from the frozen second-response table.
+
+        For equal-width Gaussian sensors, the product of two responses is a
+        known distance factor times a squared response at their midpoint.  This
+        recovers the complete joint finite-sampling covariance without exposing
+        target particles to selection.
+        """
+        centers = jnp.asarray(centers, dtype=jnp.float64)
+        if centers.ndim != 2 or centers.shape[-1] != 2:
+            raise ValueError("centers must have shape [sensor, 2]")
+        if not float(width) > 0.0:
+            raise ValueError("sensor width must be positive")
+        midpoint = 0.5 * (centers[:, None, :] + centers[None, :, :])
+        delta = centers[:, None, :] - centers[None, :, :]
+        distance_factor = jnp.exp(
+            -jnp.sum(delta * delta, axis=-1) / (4.0 * float(width) ** 2)
+        )
+        count = int(centers.shape[0])
+        midpoint_second = self.response_second(midpoint.reshape((-1, 2))).reshape(
+            (len(self.times), count, count)
+        )
+        return midpoint_second * distance_factor[None, :, :]
+
 
 __all__ = ["TargetProspectiveData", "_bilinear_table"]
-

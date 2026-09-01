@@ -21,10 +21,50 @@ from common import nested_indices, trap_weights
 from evaluator import AggregateObservationBank, ProspectiveEvaluator
 from mfsi.grid import RectangularGrid2D
 from mfsi.poisson import PoissonConfig, solve_weighted_poisson
-from mfsi.raster import rasterize_projected_particles_rect
 from prospective_data import TargetProspectiveData
+from reflected_raster import (
+    ReflectedRasterPlan,
+    build_reflected_raster_plan,
+    rasterize_reflected_with_plan,
+)
 
 jax.config.update("jax_enable_x64", True)
+
+
+# All Pareto points share one frozen rollout and the same fidelity grids. Keep
+# one resident plan per unique key instead of rebuilding/retaining another copy
+# for Law, Tangent, Full, and every allowance.
+_REFLECTED_PLAN_CACHE: dict[tuple[Any, ...], ReflectedRasterPlan] = {}
+
+
+def _cached_reflected_plan(
+    rollout_path: str | Path,
+    nodes,
+    time_indices: np.ndarray,
+    grid: RectangularGrid2D,
+    *,
+    bandwidth: float,
+    image_pairs: int,
+) -> ReflectedRasterPlan:
+    path = Path(rollout_path).resolve()
+    key = (
+        str(path),
+        tuple(int(value) for value in time_indices),
+        int(grid.nx),
+        int(grid.ny),
+        float(bandwidth),
+        int(image_pairs),
+    )
+    plan = _REFLECTED_PLAN_CACHE.get(key)
+    if plan is None:
+        plan = build_reflected_raster_plan(
+            nodes,
+            grid,
+            bandwidth=float(bandwidth),
+            image_pairs=int(image_pairs),
+        )
+        _REFLECTED_PLAN_CACHE[key] = plan
+    return plan
 
 
 @dataclass(frozen=True)
@@ -109,6 +149,7 @@ class FullFidelity:
     time_weights: jax.Array
     grid: RectangularGrid2D
     poisson: PoissonConfig
+    raster_plan: ReflectedRasterPlan
 
 
 class V4DifferentiableObjective:
@@ -119,6 +160,8 @@ class V4DifferentiableObjective:
         cfg: dict[str, Any],
         data: TargetProspectiveData,
         rollout_path: str | Path,
+        *,
+        raster_bandwidth: float | None = None,
     ):
         self.cfg = cfg
         # Native authoritative projection is retained for final evaluation.  The
@@ -126,7 +169,12 @@ class V4DifferentiableObjective:
         # VJP rather than differentiating through Newton iterations.
         gradient_cfg = copy.deepcopy(cfg)
         gradient_cfg["projection"]["backend"] = "jax"
-        self.evaluator = ProspectiveEvaluator(gradient_cfg, data, rollout_path)
+        self.evaluator = ProspectiveEvaluator(
+            gradient_cfg,
+            data,
+            rollout_path,
+            raster_bandwidth=raster_bandwidth,
+        )
         self.beta = float(cfg["v4"]["robustness_beta"])
         self._fidelities: dict[str, FullFidelity] = {}
         for name, block in cfg["v4"]["full_fidelities"].items():
@@ -145,6 +193,14 @@ class V4DifferentiableObjective:
                 gauge_strength=1.0,
             )
             weights = trap_weights(np.asarray(self.evaluator.times)[time_idx])
+            raster_plan = _cached_reflected_plan(
+                rollout_path,
+                self.evaluator.nodes[jnp.asarray(time_idx, dtype=jnp.int32)],
+                time_idx,
+                grid,
+                bandwidth=float(self.evaluator.authoritative_raster_bandwidth),
+                image_pairs=int(self.evaluator.reflected_image_pairs),
+            )
             self._fidelities[name] = FullFidelity(
                 name=name,
                 trials=int(block["trials"]),
@@ -152,6 +208,7 @@ class V4DifferentiableObjective:
                 time_weights=jnp.asarray(weights, dtype=jnp.float64),
                 grid=grid,
                 poisson=poisson,
+                raster_plan=raster_plan,
             )
 
     def fidelity(self, name: str) -> FullFidelity:
@@ -162,9 +219,10 @@ class V4DifferentiableObjective:
 
     def _project(self, eta, sampling_z, detector_z):
         mean, second = self.evaluator.prospective_population(eta)
+        cross_second = self.evaluator.prospective_cross_second(eta)
         bank = AggregateObservationBank(sampling_z, detector_z)
         projection, weights, forcing, tangent, spline_rss = self.evaluator._project(
-            eta, mean, second, bank
+            eta, mean, second, bank, response_cross_second=cross_second
         )
         projected_qoi = jnp.einsum(
             "btn,tnk->btk", weights, self.evaluator.reference_qois
@@ -191,6 +249,7 @@ class V4DifferentiableObjective:
             mean,
             second,
             AggregateObservationBank(sampling_z, detector_z),
+            response_cross_second=self.evaluator.prospective_cross_second(eta),
         )
 
     def full_trials(self, eta, sampling_z, detector_z, fidelity_name: str):
@@ -199,18 +258,11 @@ class V4DifferentiableObjective:
             eta, sampling_z, detector_z
         )
         idx = jnp.asarray(fidelity.time_indices, dtype=jnp.int32)
-        nodes = self.evaluator.nodes[idx]
         weights = weights[:, idx]
         forcing = forcing[:, idx]
-
-        def raster_trial(w_trial, f_trial):
-            return jax.vmap(
-                lambda x, w, f: rasterize_projected_particles_rect(
-                    x, w, f, fidelity.grid, self.evaluator.raster_cfg
-                )
-            )(nodes, w_trial, f_trial)
-
-        rasters = jax.vmap(raster_trial)(weights, forcing)
+        rasters = rasterize_reflected_with_plan(
+            weights, forcing, fidelity.raster_plan
+        )
         solved = jax.vmap(
             jax.vmap(lambda q, h: solve_weighted_poisson(q, h, fidelity.poisson))
         )(rasters.q, rasters.h)
@@ -322,14 +374,14 @@ def distribution(values) -> dict[str, Any]:
 
 
 def canonical_geometry_key(eta, decimals: int = 7) -> tuple[float, ...]:
-    centers = np.asarray(eta, dtype=np.float64).reshape((-1, 2))
-    order = np.lexsort((centers[:, 1], centers[:, 0]))
-    return tuple(np.round(centers[order].reshape(-1), int(decimals)))
+    # Point sensors are labelled throughout optimization and finite-CRN
+    # evaluation.  Permuting centers is therefore not a cache-safe identity.
+    return tuple(np.round(np.asarray(eta, dtype=np.float64).reshape(-1), int(decimals)))
 
 
 def acquisition_reparameterization_formula(cfg: dict[str, Any]) -> dict[str, Any]:
     return {
-        "finite_sampling": "mean + sqrt(max(second-mean^2,0)/finite_n) * fixed_sampling_z",
+        "finite_sampling": "mean + chol(full_sensor_covariance/finite_n) * fixed_sampling_z",
         "detector_noise": "noise_std * fixed_detector_z",
         "endpoint_policy": "exact predicted population endpoints; stochastic perturbations disabled",
         "finite_n": int(cfg["measurement"]["finite_n"]),

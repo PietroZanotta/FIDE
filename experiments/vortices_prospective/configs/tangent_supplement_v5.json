@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "v5_preregistered_tangent_supplement",
+  "mode": "prospective",
+  "primary_config": "configs/production_v5.json",
+  "primary_output": "outputs/prospective_v5_robust_full_replication",
+  "starts": 24,
+  "law_perturbation_starts": 6,
+  "law_perturbation_scale": 0.025,
+  "start_oversample": 256,
+  "crn_trials": 8,
+  "steps": 60,
+  "batch_size": 4,
+  "learning_rate": 0.008,
+  "beta1": 0.9,
+  "beta2": 0.999,
+  "eps": 1e-8,
+  "seeds": {
+    "global_starts": 20265501,
+    "law_perturbations": 20265502,
+    "batch_schedule": 20265503,
+    "validation_bootstrap": 20265504
+  },
+  "interpretation": "Preregistered supplemental Tangent arm. Selection and its receipt must exist before v5 hidden validation is generated."
+}

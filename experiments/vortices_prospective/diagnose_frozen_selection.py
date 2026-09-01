@@ -300,6 +300,7 @@ def run_diagnostics(config_path: Path, manifest_path: Path, output_dir: Path | N
         eta = selected[name]
         centers = eta.reshape((-1, 2))
         predicted_mean, predicted_second = evaluator.prospective_population(eta)
+        predicted_cross_second = evaluator.prospective_cross_second(eta)
         predicted_mean = np.asarray(predicted_mean, dtype=np.float64)
         predicted_second = np.asarray(predicted_second, dtype=np.float64)
         phi_hidden = np.asarray(
@@ -322,14 +323,20 @@ def run_diagnostics(config_path: Path, manifest_path: Path, output_dir: Path | N
             evaluator, oracle_mean
         )
         selection_c, selection_c_dot, _ = evaluator.reconstruct(
-            predicted_mean, predicted_second, selection_bank
+            predicted_mean,
+            predicted_second,
+            selection_bank,
+            response_cross_second=predicted_cross_second,
         )
         selection_sample_only_bank = AggregateObservationBank(
             np.asarray(selection_bank.sampling_z),
             np.zeros_like(selection_bank.detector_z),
         )
         selection_sample_c, selection_sample_c_dot, _ = evaluator.reconstruct(
-            predicted_mean, predicted_second, selection_sample_only_bank
+            predicted_mean,
+            predicted_second,
+            selection_sample_only_bank,
+            response_cross_second=predicted_cross_second,
         )
         sample_bank, observed_bank, _, _ = realized_observation_banks(
             evaluator, phi_hidden, sample_indices, detector_z
@@ -583,7 +590,10 @@ def run_diagnostics(config_path: Path, manifest_path: Path, output_dir: Path | N
         else:
             predicted_mean, predicted_second = evaluator.prospective_population(eta)
             pred_c, pred_dot, _ = evaluator.reconstruct(
-                predicted_mean, predicted_second, selection_bank
+                predicted_mean,
+                predicted_second,
+                selection_bank,
+                response_cross_second=evaluator.prospective_cross_second(eta),
             )
             predicted_eval = evaluate_explicit_moments(evaluator, eta, pred_c, pred_dot)
             phi_hidden = np.asarray(
@@ -993,10 +1003,8 @@ def _render_report(
         "",
         "New diagnostic outputs: " + ", ".join(f"`{name}`" for name in output_files) + ".",
         "",
-        "The completion-time tracked `git diff --stat` is `8 files changed, 560 insertions(+), 34 deletions(-)`; "
-        "all eight tracked paths are pre-existing unrelated skyrmion/shared-projection work. The entire "
-        "`experiments/vortices_prospective/` tree is currently untracked, so Git's tracked diff stat does not "
-        "enumerate these diagnostic additions. No unrelated experiment was changed by this task.",
+        "The diagnostic is read-only with respect to selection, reference training, and validation. "
+        "It writes only the explicitly requested diagnostic output directory.",
         "",
         f"Machine-readable diagnostics and plots are in `{output_dir}`.",
     ])

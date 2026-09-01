@@ -57,8 +57,15 @@ def _project_conditions(
     response_mean: np.ndarray,
     response_second: np.ndarray,
     bank: AggregateObservationBank,
+    response_cross_second=None,
 ) -> list[dict[str, Any]]:
-    projection, *_ = evaluator._project(eta, response_mean, response_second, bank)
+    projection, *_ = evaluator._project(
+        eta,
+        response_mean,
+        response_second,
+        bank,
+        response_cross_second=response_cross_second,
+    )
     return _condition_rows(
         np.asarray(projection.covariance),
         float(evaluator.cfg["particle_mfsi"]["covariance_ridge"]),
@@ -124,7 +131,12 @@ def certify(cfg: dict[str, Any], output_dir: str | Path) -> dict[str, Any]:
         eta = np.asarray(candidate["eta"], dtype=np.float64)
         mean, second = evaluator.prospective_population(jnp.asarray(eta))
         rows = _project_conditions(
-            evaluator, eta, np.asarray(mean), np.asarray(second), selection_bank
+            evaluator,
+            eta,
+            np.asarray(mean),
+            np.asarray(second),
+            selection_bank,
+            response_cross_second=evaluator.prospective_cross_second(eta),
         )
         selection_rows.append(
             {

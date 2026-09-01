@@ -60,12 +60,16 @@ Please refer to our [technical report](full_report.pdf) for further info.
         - [Analytical experimental-design comparison](#analytical-experimental-design-comparison)
         - [Analytical results](#analytical-results)
         - [Reading the analytical result figures](#reading-the-analytical-result-figures)
-    - [Vortices in a time-dependent double gyre](#vortices-in-a-time-dependent-double-gyre)
+    - [Vortices](#vortices)
         - [Double-gyre system and observations](#double-gyre-system-and-observations)
         - [Bounded-domain Full action](#bounded-domain-full-action)
-        - [Confirmed partial Pareto result](#confirmed-partial-pareto-result)
+        - [Confirmed Pareto result](#confirmed-pareto-result)
         - [Reading the vortices figures](#reading-the-vortices-figures)
         - [Why the current frontier stops at 2%](#why-the-current-frontier-stops-at-2)
+    - [Vortices Prospective](#vortices-prospective)
+        - [What changes in the prospective experiment](#what-changes-in-the-prospective-experiment)
+        - [Prospective held-out result](#prospective-held-out-result)
+        - [Reading the prospective figures](#reading-the-prospective-figures)
   - [Structure of this Repository](#structure-of-this-repository)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
@@ -433,7 +437,7 @@ All displayed media are post-processing of frozen artifacts; generating them doe
 
 For reproducibility, numerical details and further information please refer to the [analytical-example README](experiments/toy_example_percentage/README.md) and/or the [technical report](full_report.pdf).
 
-### Vortices in a time-dependent double gyre
+### Vortices
 
 The second experiment moves from an analytically prescribed mixture path to a nonlinear bounded flow. A population of particles is stretched and folded inside a rectangular double gyre while four Gaussian sensors provide only noisy population averages. The experiment retains the same FIDE question—among scientifically adequate sensor systems, which geometry implies the most dynamically compatible complete law—but adds moving coherent structures, impermeable walls, four continuously positioned sensors, and sensitivity to the numerical treatment of density and flux at the boundary.
 
@@ -493,10 +497,108 @@ This is a scope decision, not evidence that the Pareto curve saturates at 2%. Fu
 
 All displayed media are deterministic post-processing of frozen artifacts. The [saved-result verifier](experiments/vortices_percentage/verify_saved_result.py), [standalone publication bundle](experiments/vortices_percentage/outputs/published/README.md), and [full result report](experiments/vortices_percentage/VORTICES_V2_1_C3_64_RESULT.md) provide progressively deeper audit surfaces. The tracked inputs and compact published outputs are sufficient to regenerate every vortices plot and GIF from a fresh clone without rerunning selection or confirmation.
 
-See more details in the [technical writeup](full_report.pdf)
+See more detailin the [technical writeup](full_report.pdf)
 and in the [vortices-example README](experiments/vortices_percentage/README.md).
+
+### Vortices Prospective
+
+The third experiment keeps the same bounded double gyre, four Gaussian sensors,
+finite observation model, and reflected Full-action solver, but changes the
+information boundary before selection. **Vortices** above is a retrospective
+percentage-risk study: it selects against frozen microscopic simulation banks
+and uses three endpoint-reference seeds. **Vortices Prospective** receives only
+endpoint ensembles, aggregate sensor-response fields, their complete
+finite-sampling covariance, and aggregate scientific-QoI predictions. No
+intermediate target particles or simulator path are available until all sensor
+geometries have been frozen.
+
+The complete protocol, numerical details, visual audit, staged replay, and
+limitations are documented in the standalone
+[Vortices Prospective README](experiments/vortices_prospective/README.md). The
+retired prospective implementation is archived under `old_stuff/`; the
+canonical directory has no runtime or test import from that archive.
+
+#### What changes in the prospective experiment
+
+| Property | Vortices | Vortices Prospective |
+| :-- | :-- | :-- |
+| Selection information | Frozen microscopic target/reference banks | Endpoints plus aggregate predictive fields only |
+| Selection references | Three frozen seeds | One frozen D0 seed |
+| Validation references | Same three references on a fresh 64-trial holdout | Fresh independent E1 seed trained only after the repaired frontier freeze |
+| Risk allowances | 0.5%, 1%, 2% | 0.5%, 1%, 2% |
+| Main uncertainty claim | Simultaneous reference-by-allowance intervals | Paired trial interval for the strict 2% effect conditional on held-out E1 |
+| Scientific purpose | Robust retrospective confirmation | Aggregate-only prospective transfer test |
+
+The final prospective freeze order is one-way: reuse aggregate inputs and D0,
+freeze the reoptimized Law anchor, rerun Full at 0.5% and 1%, adopt the audited
+authoritative 2% escape hatch, freeze all three points, then train E1 and create
+fresh hidden validation. E1 is validation-only and is never folded back into
+optimization.
+
+`D0` and `E1` are internal optimization-artifact labels for the selection and
+fresh validation reference seeds; they do not denote different physical
+regimes.
+
+![Animated prospective double-gyre population, measurement-implied law, and sensor views](experiments/vortices_prospective/plots/vortices_prospective_full_2p0.gif)
+
+*Animation: the repaired prospective 2% Full geometry on held-out E1 trial 0,
+using the same visual grammar as Vortices Percentage.* The hidden
+population at left was sealed during selection. The middle panel is the law
+completed from four aggregate observations and the frozen E1 endpoint
+reference; the narrow panels show what each sensor sees. As in the other
+experiments, pointwise differences away from the sensor supports are unresolved
+moment-fiber directions rather than failed measurement constraints.
+
+#### Final repaired prospective result
+
+After a stronger D0 Law audit, Full was rerun at 0.5% and 1%; the saved
+authoritative feasible finalist was adopted at 2%. A fresh E1 reference and 64
+fresh paired hidden trials were generated only after that repaired freeze:
+
+| Allowed extra risk | E1 Law action | E1 Full action | Reduction versus Law | E1 Law risk | E1 Full risk | Paired action-difference 95% CI | Result |
+| -----------------: | ------------: | -------------: | -------------------: | ----------: | -----------: | :----------------------------- | :----: |
+|               0.5% | 1.70295 | 1.70295 | 0.00% | 1.15612 | 1.15612 | `[0, 0]` | no benefit |
+|                 1% | 1.70295 | 1.70295 | 0.00% | 1.15612 | 1.15612 | `[0, 0]` | no benefit |
+|                 2% | 1.70295 | 1.42700 | **16.20%** | 1.15612 | 1.17102 | `[-0.31510, -0.23681]` | **PASS** |
+
+All three points pass E1 risk and numerical gates. The tight points select Law
+itself, so they certify feasibility but no benefit. At 2%, observed E1 risk is
+1.29% above Law—inside the 2% allowance—and Full action is 16.20% lower with a
+strictly negative paired interval. Tangent is omitted because there was not
+enough time to rerun it after repairing Law.
+
+![Toy-style repaired prospective frontier](experiments/vortices_prospective/plots/pareto_frontier_repaired_e1.png)
+
+*The Toy experiment's three-panel visual grammar applied to the repaired
+prospective result:* certified D0 selection at left, independent E1 transfer in
+the middle, and benefit versus allowance at right.
+
+#### Reading the prospective figures
+
+![Prospective held-out Pareto dashboard](experiments/vortices_prospective/plots/prospective_pareto_validation.png)
+
+*Held-out action, risk, and geometry.* Panel A normalizes Full action by the
+common E1 Law action and includes paired 95% intervals. Panel B compares the
+allowed positive risk change with observed E1 change. Panel C shows that 0.5%
+and 1% repeat Law while the 2% geometry is distinct.
+
+![Prospective 2% four-snapshot audit](experiments/vortices_prospective/plots/vortices_prospective_full_2p0_paper.png)
+
+*Four held-out snapshots at the largest preregistered allowance.* The first row
+shows hidden double-gyre truth, the second the complete measurement-implied law,
+and the third the four sensor-supported views. The projected law matches the
+four aggregate trajectories to numerical precision while the frozen reference
+completes everything those moments do not identify.
+
+All prospective media are deterministic post-processing of the completed E1
+artifacts. The compact [validation summary](experiments/vortices_prospective/results/validation_summary.json),
+[saved-result verifier](experiments/vortices_prospective/verify_saved_result.py),
+and [visualization manifest](experiments/vortices_prospective/plots/visualization_manifest.json)
+provide progressively deeper audit surfaces. No result beyond 2% and no
+multi-seed prospective robustness claim is made.
+
 ## Structure of this Repository
-The documented project surface now contains two experiments: the analytical Gaussian-mixture benchmark and the confirmed V2.1 double-gyre vortices benchmark. Both use the reusable FIDE implementation under `src/mfsi/`; the analytical workflow additionally exercises the two native Tesseract solvers directly during differentiable design.
+The documented project surface now contains three experiments: the analytical Gaussian-mixture benchmark, the retrospective V2.1 Vortices benchmark, and the aggregate-only Vortices Prospective benchmark. All use the reusable FIDE implementation under `src/mfsi/`; the analytical workflow additionally exercises the two native Tesseract solvers directly during differentiable design.
 
 ```text
 .
@@ -518,7 +620,7 @@ The documented project surface now contains two experiments: the analytical Gaus
 │   │   ├── domain.py, experiment.py       # Analytic law and end-to-end workflow
 │   │   ├── run*.py, eval_pareto.py        # Execution and read-only result verification
 │   │   └── figures/, outputs/pareto/      # Explanatory and authoritative result media
-│   └── vortices_percentage/              # Canonical standalone V2.1 vortices experiment
+│   ├── vortices_percentage/              # Retrospective three-reference Vortices experiment
 │       ├── README.md                      # Detailed scientific and reproduction guide
 │       ├── domain.py, experiment.py       # Double gyre, observations, and scientific risk
 │       ├── base_experiment_config.json    # Frozen physical and observation configuration
@@ -530,16 +632,24 @@ The documented project surface now contains two experiments: the analytical Gaus
 │       ├── VORTICES_V2_1_*               # Frozen protocols and result report
 │       ├── plots/                         # Tracked figures, GIF, and rendered data copies
 │       └── outputs/published/             # Compact result records and provenance receipts
+│   └── vortices_prospective/             # Aggregate-only prospective Vortices experiment
+│       ├── README.md                      # Detailed scientific and reproduction guide
+│       ├── prospective_data.py            # Enforced selection information boundary
+│       ├── reflected_raster.py            # Local matched reflected density/source solver
+│       ├── run_v6a_risk_study.py          # One-seed, three-allowance staged workflow
+│       ├── verify_saved_result.py          # Fast compact-result and media verification
+│       ├── render_results.py               # Deterministic snapshots, dashboard, and GIF
+│       └── results/, plots/                # Held-out summary and tracked media
 ├── native/
 │   ├── iprojection_tesseract/             # C++17/OpenMP batched information projection
 │   └── poisson_tesseract/                 # C++17/OpenMP batched weighted Poisson solver
 └── tests/                                 # Shared and analytical-workflow verification
 ```
 
-Each experiment owns its scientific model, frozen configuration, orchestration, and evidence. `src/mfsi/` contains reusable numerical components, while `native/` contains the accelerated implicit solvers exposed to JAX. The vortices directory includes the frozen visualization inputs, compact published outputs, and promoted execution harnesses it needs, so it has no runtime dependency on either ignored vortices archive. Raw V2.1 search/checkpoint trees and obsolete logs remain recoverable under `old_stuff/vortices_percentage_v2_1_development/`; other experiment directories remain development work and are not part of the two-result release documented here.
+Each experiment owns its scientific model, frozen configuration, orchestration, and evidence. `src/mfsi/` contains reusable numerical components, while `native/` contains the accelerated implicit solvers exposed to JAX. Neither canonical vortices experiment imports its ignored predecessor. Raw V2.1 development trees remain under `old_stuff/vortices_percentage_v2_1_development/`; the former prospective implementation and successor-development notes remain under `old_stuff/vortices_prospective_legacy/`.
 
 ## Getting Started
-Run the commands below from the repository root. This quick-start intentionally covers only the analytical Gaussian-mixture experiment, which is the shortest way to verify the implementation and exercise both Tesseract backends. The vortices workflow is standalone but substantially more expensive; its staged commands and saved-result verifier are documented in the [vortices README](experiments/vortices_percentage/README.md#reproduce-and-verify). The documented development environment is Linux under WSL2; the Python package is portable, but the native Tesseract build assumes a C++17 compiler and OpenMP.
+Run the commands below from the repository root. This quick-start intentionally covers only the analytical Gaussian-mixture experiment, which is the shortest way to verify the implementation and exercise both Tesseract backends. Both vortices workflows are standalone but substantially more expensive; use the [Vortices reproduction guide](experiments/vortices_percentage/README.md#reproduce-and-verify) or the [Vortices Prospective reproduction guide](experiments/vortices_prospective/README.md#reproduce-and-verify) for their saved-result verifiers and staged commands. The documented development environment is Linux under WSL2; the Python package is portable, but the native Tesseract build assumes a C++17 compiler and OpenMP.
 
 ### Prerequisites
 - Python 3.11 or newer;

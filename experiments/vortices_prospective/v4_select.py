@@ -155,6 +155,9 @@ def _adam_multistart(
     *,
     schedule_seed: int,
     stage: str,
+    start_batch_size: int = 1,
+    completed_rows: list[dict[str, Any]] | None = None,
+    chunk_callback: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> list[dict[str, Any]]:
     steps = int(settings["steps"])
     schedule = jnp.asarray(
@@ -203,32 +206,90 @@ def _adam_multistart(
         final, trace = jax.lax.scan(step, initial, schedule)
         return final[0], trace
 
-    compiled = jax.jit(optimize_one)
-    rows = []
-    for index, (eta0, source) in enumerate(zip(starts, provenance), start=1):
-        started = time.perf_counter()
-        eta_final, trace = compiled(jnp.asarray(eta0, dtype=jnp.float64))
-        eta_final, trace = jax.device_get((eta_final, trace))
-        trace = np.asarray(trace, dtype=np.float64)
-        rows.append(
-            {
-                "run": index,
-                "stage": stage,
-                "provenance": source,
-                "initial_eta": np.asarray(eta0).tolist(),
-                "final_eta": np.asarray(eta_final).tolist(),
-                "initial_penalized_objective": float(trace[0, 0]),
-                "final_penalized_objective": float(trace[-1, 0]),
-                "final_gradient_norm": float(trace[-1, 1]),
-                "iterations": steps,
-                "convergence_triggered": False,
-                "numerical_invalid_steps": int(np.sum(trace[:, 2] < 0.5)),
-                "runtime_seconds": time.perf_counter() - started,
-                "trace_objective": trace[:, 0].tolist(),
-                "trace_gradient_norm": trace[:, 1].tolist(),
-            }
+    requested_batch_size = int(start_batch_size)
+    if requested_batch_size < 1:
+        raise ValueError("start_batch_size must be >= 1")
+    effective_batch_size = min(requested_batch_size, len(starts))
+    compiled = jax.jit(
+        optimize_one
+        if effective_batch_size == 1
+        else jax.vmap(optimize_one)
+    )
+    rows = list(completed_rows or [])
+    completed_count = len(rows)
+    if completed_count > len(starts):
+        raise ValueError("completed_rows contains more rows than starts")
+    if completed_count < len(starts) and completed_count % effective_batch_size:
+        raise ValueError("completed_rows must end at an execution-chunk boundary")
+    for index, row in enumerate(rows, start=1):
+        if int(row.get("run", -1)) != index:
+            raise ValueError("completed_rows run indices are not sequential")
+        if not np.array_equal(
+            np.asarray(row.get("initial_eta"), dtype=np.float64),
+            np.asarray(starts[index - 1], dtype=np.float64),
+        ):
+            raise ValueError("completed_rows do not match the ordered starts")
+    for begin in range(completed_count, len(starts), effective_batch_size):
+        take = min(effective_batch_size, len(starts) - begin)
+        eta0_batch = jnp.asarray(
+            starts[begin : begin + take], dtype=jnp.float64
         )
-        print(f"[{stage}] gradient start {index}/{len(starts)}", flush=True)
+        if effective_batch_size == 1:
+            compiled_input = eta0_batch[0]
+        else:
+            # Preserve one static executable shape for a short final chunk.
+            if take < effective_batch_size:
+                eta0_batch = jnp.concatenate(
+                    (
+                        eta0_batch,
+                        jnp.repeat(
+                            eta0_batch[-1:], effective_batch_size - take, axis=0
+                        ),
+                    ),
+                    axis=0,
+                )
+            compiled_input = eta0_batch
+        started = time.perf_counter()
+        eta_final_batch, trace_batch = compiled(compiled_input)
+        eta_final_batch, trace_batch = jax.device_get(
+            (eta_final_batch, trace_batch)
+        )
+        chunk_seconds = time.perf_counter() - started
+        if effective_batch_size == 1:
+            eta_final_batch = np.asarray(eta_final_batch)[None, :]
+            trace_batch = np.asarray(trace_batch)[None, :, :]
+        else:
+            eta_final_batch = np.asarray(eta_final_batch)[:take]
+            trace_batch = np.asarray(trace_batch)[:take]
+        for offset in range(take):
+            index = begin + offset + 1
+            eta0 = starts[begin + offset]
+            source = provenance[begin + offset]
+            trace = np.asarray(trace_batch[offset], dtype=np.float64)
+            rows.append(
+                {
+                    "run": index,
+                    "stage": stage,
+                    "provenance": source,
+                    "initial_eta": np.asarray(eta0).tolist(),
+                    "final_eta": np.asarray(eta_final_batch[offset]).tolist(),
+                    "initial_penalized_objective": float(trace[0, 0]),
+                    "final_penalized_objective": float(trace[-1, 0]),
+                    "final_gradient_norm": float(trace[-1, 1]),
+                    "iterations": steps,
+                    "convergence_triggered": False,
+                    "numerical_invalid_steps": int(np.sum(trace[:, 2] < 0.5)),
+                    "runtime_seconds": chunk_seconds / take,
+                    "execution_chunk_seconds": chunk_seconds,
+                    "execution_chunk_size": take,
+                    "execution_batch_size": effective_batch_size,
+                    "trace_objective": trace[:, 0].tolist(),
+                    "trace_gradient_norm": trace[:, 1].tolist(),
+                }
+            )
+            print(f"[{stage}] gradient start {index}/{len(starts)}", flush=True)
+        if chunk_callback is not None:
+            chunk_callback(rows)
     return rows
 
 

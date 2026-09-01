@@ -26,6 +26,9 @@ jax.config.update("jax_enable_x64", True)
 
 
 V4_SOURCE_FILES = (
+    "evaluator.py",
+    "prospective_data.py",
+    "reflected_raster.py",
     "v4_objective.py",
     "v4_protocol.py",
     "v4_select.py",
